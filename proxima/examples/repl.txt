@@ -1,0 +1,62 @@
+# Запуск REPL
+$ proxima repl
+
+Proxima REPL v1.0.0
+Type 'help' for available commands.
+Type 'exit' to quit.
+
+Примеры:
+  >> x = 1:100          # создание вектора
+  >> show x             # визуализация
+  >> m = rand(10, 10)   # матрица
+  >> whos               # список переменных
+
+>> # Код Proxima выполняется напрямую
+>> x = 1:10
+x = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+Execution time: 0.15 ms
+
+>> # Визуализация через IDE (language.txt #46)
+>> show x
+Opening visualizer for 'x' (plot)...
+
+>> # Матричные операции
+>> m = rand(3, 3)
+m = matrix<double>[3x3]
+Execution time: 0.23 ms
+
+>> show m
+Opening visualizer for 'm' (image)...
+
+>> # Информация о переменных
+>> whos
+Variable Name    Type          Size      Bytes
+=============    ====          ====      =====
+x                vector        10        80
+m                matrix        9         72
+pi               double        1         8
+
+Total: 3 variables
+
+>> whois x
+Variable Information
+====================
+Name: x
+Type: vector<double>
+Size: 10
+Bytes: 80
+Modified: 2024-01-15 14:30:25
+Value: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+>> # Загрузка файла Proxima
+>> load script.prx
+Loading script.prx...
+File loaded successfully.
+
+>> # Сохранение workspace
+>> save workspace.prx
+Workspace saved to workspace.prx.
+
+>> # Выход
+>> exit
+Exiting REPL...

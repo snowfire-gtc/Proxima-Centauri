@@ -11,6 +11,8 @@ namespace proxima {
 struct CompilerConfig {
     RunMode mode;
     int verboseLevel;
+    bool enableInterpreter;      // Новый флаг
+    bool enableJIT;              // Существующий
     size_t maxMemory;
     bool enableCUDA;
     bool enableAVX2;
@@ -65,6 +67,8 @@ public:
     void resume();
     bool isRunning() const { return running; }
     bool isPaused() const { return paused; }
+    
+    void interpret(Project* project, const CompilerConfig& config);
     
     // Debugging
     void stepOver();

@@ -1,366 +1,1122 @@
 #include "LLMAssistantDialog.h"
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QGroupBox>
-#include <QMessageBox>
-#include "utils/Logger.h"
+#include <QSettings>
+#include <QStandardPaths>
+#include <QFileDialog>
+#include <QTextStream>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QFile>
+#include <QDateTime>
+#include <QDesktopServices>
+#include <QUrl>
+#include <QToolTip>
+#include <QMenu>
+#include <QCompleter>
+#include <QSyntaxHighlighter>
+#include <QRegularExpression>
+#include <QDiff>
 
 namespace proxima {
 
-LLMAssistantDialog::LLMAssistantDialog(QWidget *parent)
-    : QDialog(parent)
-    , selectionStart(0)
-    , selectionEnd(0)
-    , isProcessing(false)
-    , llmService(new LLMService(this)) {
+// ============================================================================
+// ModificationItemWidget Implementation
+// ============================================================================
+
+ModificationItemWidget::ModificationItemWidget(const CodeModification& mod, QWidget *parent)
+    : QWidget(parent)
+    , modification(mod) {
     
-    setWindowTitle(tr("LLM Code Assistant"));
-    setMinimumSize(1000, 700);
-    setModal(true);
+    // Настройка шрифта
+    consoleFont = QFont("Consolas", 9);
+    consoleFont.setStyleHint(QFont::Monospace);
     
-    connect(llmService, &LLMService::suggestionsReady, this, &LLMAssistantDialog::onLLMResponse);
-    connect(llmService, &LLMService::errorOccurred, this, &LLMAssistantDialog::onLLMError);
-    connect(llmService, &LLMService::processingStarted, this, &LLMAssistantDialog::onProcessingStarted);
-    connect(llmService, &LLMService::processingFinished, this, &LLMAssistantDialog::onProcessingFinished);
+    // Инициализация цветов категорий
+    categoryColors["optimization"] = QColor(78, 201, 176);    // #4EC9B0
+    categoryColors["bugfix"] = QColor(244, 71, 71);           // #F44747
+    categoryColors["refactoring"] = QColor(86, 156, 214);     // #569CD6
+    categoryColors["documentation"] = QColor(106, 153, 85);   // #6A9955
+    categoryColors["style"] = QColor(197, 134, 192);          // #C586C0
+    categoryColors["security"] = QColor(206, 167, 0);         // #CEA700
+    categoryColors["other"] = QColor(150, 150, 150);          // #969696
     
     setupUI();
+    setupConnections();
+    
+    // Установка начальных значений
+    setModification(mod);
 }
 
-LLMAssistantDialog::~LLMAssistantDialog() {}
+ModificationItemWidget::~ModificationItemWidget() {
+}
+
+void ModificationItemWidget::setupUI() {
+    // Главная компоновка
+    QVBoxLayout* mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(10, 10, 10, 10);
+    mainLayout->setSpacing(8);
+    
+    // Заголовок блока
+    headerWidget = new QWidget(this);
+    QHBoxLayout* headerLayout = new QHBoxLayout(headerWidget);
+    headerLayout->setContentsMargins(0, 0, 0, 0);
+    headerLayout->setSpacing(10);
+    
+    // Чекбокс принятия
+    checkBox = new QCheckBox(this);
+    checkBox->setToolTip("Принять это изменение");
+    headerLayout->addWidget(checkBox);
+    
+    // Категория
+    categoryLabel = new QLabel(this);
+    categoryLabel->setFont(QFont("Segoe UI", 9, QFont::Bold));
+    categoryLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    headerLayout->addWidget(categoryLabel);
+    
+    // Уверенность
+    confidenceLabel = new QLabel(this);
+    confidenceLabel->setFont(QFont("Segoe UI", 9));
+    confidenceLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    headerLayout->addWidget(confidenceLabel);
+    
+    // Диапазон строк
+    linesLabel = new QLabel(this);
+    linesLabel->setFont(QFont("Segoe UI", 9));
+    linesLabel->setStyleSheet("color: #808080;");
+    headerLayout->addWidget(linesLabel);
+    
+    headerLayout->addStretch();
+    
+    mainLayout->addWidget(headerWidget);
+    
+    // Объяснение
+    explanationEdit = new QTextEdit(this);
+    explanationEdit->setReadOnly(true);
+    explanationEdit->setMaximumHeight(60);
+    explanationEdit->setFont(QFont("Segoe UI", 9));
+    explanationEdit->setStyleSheet(
+        "QTextEdit { "
+        "  background-color: #2d2d2d; "
+        "  color: #d4d4d4; "
+        "  border: 1px solid #3e3e3e; "
+        "  border-radius: 3px; "
+        "  padding: 5px; "
+        "}"
+    );
+    mainLayout->addWidget(explanationEdit);
+    
+    // Кнопки действий
+    QHBoxLayout* buttonLayout = new QHBoxLayout();
+    buttonLayout->setSpacing(5);
+    
+    viewOriginalBtn = new QPushButton("Оригинал", this);
+    viewOriginalBtn->setToolTip("Просмотреть оригинальный код");
+    buttonLayout->addWidget(viewOriginalBtn);
+    
+    viewSuggestedBtn = new QPushButton("Предложение", this);
+    viewSuggestedBtn->setToolTip("Просмотреть предлагаемый код");
+    buttonLayout->addWidget(viewSuggestedBtn);
+    
+    showDiffBtn = new QPushButton("Различия", this);
+    showDiffBtn->setToolTip("Показать различия между оригиналом и предложением");
+    buttonLayout->addWidget(showDiffBtn);
+    
+    buttonLayout->addStretch();
+    
+    mainLayout->addLayout(buttonLayout);
+    
+    // Стиль виджета
+    setStyleSheet(
+        "QWidget { "
+        "  background-color: #1e1e1e; "
+        "  border: 1px solid #3e3e3e; "
+        "  border-radius: 5px; "
+        "}"
+        "QWidget:hover { "
+        "  border: 1px solid #007acc; "
+        "}"
+        "QCheckBox { "
+        "  color: #d4d4d4; "
+        "  spacing: 5px; "
+        "}"
+        "QPushButton { "
+        "  background-color: #2d2d2d; "
+        "  color: #d4d4d4; "
+        "  border: 1px solid #3e3e3e; "
+        "  border-radius: 3px; "
+        "  padding: 5px 10px; "
+        "}"
+        "QPushButton:hover { "
+        "  background-color: #3e3e3e; "
+        "  border: 1px solid #007acc; "
+        "}"
+    );
+}
+
+void ModificationItemWidget::setupConnections() {
+    connect(checkBox, &QCheckBox::toggled, this, &ModificationItemWidget::onCheckBoxToggled);
+    connect(viewOriginalBtn, &QPushButton::clicked, this, &ModificationItemWidget::onViewOriginalClicked);
+    connect(viewSuggestedBtn, &QPushButton::clicked, this, &ModificationItemWidget::onViewSuggestedClicked);
+    connect(showDiffBtn, &QPushButton::clicked, this, &ModificationItemWidget::onShowDiffClicked);
+}
+
+void ModificationItemWidget::setModification(const CodeModification& mod) {
+    modification = mod;
+    
+    // Обновление UI
+    checkBox->setChecked(mod.accepted);
+    checkBox->setEnabled(!mod.applied);
+    
+    // Категория
+    categoryLabel->setText(mod.category.isEmpty() ? "Другое" : mod.category);
+    categoryLabel->setStyleSheet("color: " + getCategoryColor(mod.category).name() + ";");
+    
+    // Уверенность
+    confidenceLabel->setText(formatConfidence(mod.confidence));
+    confidenceLabel->setStyleSheet("color: " + getConfidenceColor(mod.confidence).name() + ";");
+    confidenceLabel->setToolTip(getConfidenceTooltip(mod.confidence));
+    
+    // Диапазон строк
+    linesLabel->setText(QString("Строки %1-%2").arg(mod.startLine).arg(mod.endLine));
+    
+    // Объяснение
+    explanationEdit->setPlainText(mod.explanation);
+    
+    // Стиль для применённых изменений
+    if (mod.applied) {
+        setStyleSheet(
+            "QWidget { "
+            "  background-color: #1a3a1a; "
+            "  border: 1px solid #4a7a4a; "
+            "  border-radius: 5px; "
+            "}"
+        );
+        checkBox->setEnabled(false);
+    } else if (mod.accepted) {
+        setStyleSheet(
+            "QWidget { "
+            "  background-color: #1e3a1e; "
+            "  border: 1px solid #4a7a4a; "
+            "  border-radius: 5px; "
+            "}"
+        );
+    } else {
+        setStyleSheet(
+            "QWidget { "
+            "  background-color: #1e1e1e; "
+            "  border: 1px solid #3e3e3e; "
+            "  border-radius: 5px; "
+            "}"
+            "QWidget:hover { "
+            "  border: 1px solid #007acc; "
+            "}"
+        );
+    }
+}
+
+void ModificationItemWidget::setAccepted(bool accepted) {
+    checkBox->setChecked(accepted);
+    modification.accepted = accepted;
+    setModification(modification);
+}
+
+void ModificationItemWidget::highlightDifferences() {
+    // В полной реализации - подсветка различий в коде
+}
+
+void ModificationItemWidget::showDiff() {
+    emit showDiffRequested(modification.blockId);
+}
+
+void ModificationItemWidget::onCheckBoxToggled(bool checked) {
+    modification.accepted = checked;
+    emit acceptanceChanged(modification.blockId, checked);
+    setModification(modification);
+}
+
+void ModificationItemWidget::onViewOriginalClicked() {
+    emit viewOriginalRequested(modification.blockId);
+}
+
+void ModificationItemWidget::onViewSuggestedClicked() {
+    emit viewSuggestedRequested(modification.blockId);
+}
+
+void ModificationItemWidget::onShowDiffClicked() {
+    emit showDiffRequested(modification.blockId);
+}
+
+QString ModificationItemWidget::formatConfidence(double confidence) const {
+    return QString("%1%").arg(static_cast<int>(confidence * 100));
+}
+
+QColor ModificationItemWidget::getCategoryColor(const QString& category) const {
+    return categoryColors.value(category.toLower(), categoryColors["other"]);
+}
+
+QString ModificationItemWidget::getCategoryIcon(const QString& category) const {
+    if (category == "optimization") return "⚡";
+    if (category == "bugfix") return "🐛";
+    if (category == "refactoring") return "♻️";
+    if (category == "documentation") return "📝";
+    if (category == "style") return "🎨";
+    if (category == "security") return "🔒";
+    return "📌";
+}
+
+// ============================================================================
+// LLMAssistantDialog Implementation
+// ============================================================================
+
+LLMAssistantDialog::LLMAssistantDialog(QWidget *parent)
+    : QDialog(parent)
+    , llmService(nullptr)
+    , selectionStart(0)
+    , selectionEnd(0)
+    , autoApply(false)
+    , minConfidence(0.5)
+    , isProcessing(false)
+    , currentBlockId(0)
+    , timeout(30000)
+    , acceptedCount(0)
+    , appliedCount(0)
+    , averageConfidence(0.0) {
+    
+    // Путь к настройкам
+    settingsPath = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + 
+                   "/llm_assistant_settings.json";
+    
+    setupUI();
+    setupConnections();
+    setupCategoryFilters();
+    loadSettings();
+    
+    LOG_INFO("LLMAssistantDialog created");
+}
+
+LLMAssistantDialog::~LLMAssistantDialog() {
+    saveSettings();
+    LOG_INFO("LLMAssistantDialog destroyed");
+}
 
 void LLMAssistantDialog::setupUI() {
+    setWindowTitle("LLM Assistant - Selective Code Modification");
+    setMinimumSize(1200, 800);
+    resize(1400, 900);
+    
+    // Главная компоновка
     QVBoxLayout* mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(10, 10, 10, 10);
+    mainLayout->setSpacing(10);
     
-    // Prompt section
-    setupPromptGroup();
-    mainLayout->addWidget(promptGroup);
+    // Табы
+    mainTabWidget = new QTabWidget(this);
+    mainLayout->addWidget(mainTabWidget, 1);
     
-    // Main content splitter
-    QSplitter* mainSplitter = new QSplitter(Qt::Horizontal, this);
+    // Вкладка запроса
+    setupRequestPanel();
+    mainTabWidget->addTab(requestTab, "Запрос");
     
-    // Suggestions section
-    setupSuggestionsGroup();
-    mainSplitter->addWidget(suggestionsGroup);
+    // Вкладка предложений
+    setupSuggestionsPanel();
+    mainTabWidget->addTab(suggestionsTab, "Предложения");
     
-    // Preview section
-    setupPreviewGroup();
-    mainSplitter->addWidget(previewGroup);
+    // Вкладка предпросмотра
+    setupPreviewPanel();
+    mainTabWidget->addTab(previewTab, "Предпросмотр");
     
-    mainSplitter->setStretchFactor(0, 1);
-    mainSplitter->setStretchFactor(1, 2);
+    // Панель управления
+    setupControlPanel();
+    mainLayout->addWidget(controlPanel);
     
-    mainLayout->addWidget(mainSplitter, 1);
-    
-    // Progress section
-    QWidget* progressWidget = new QWidget(this);
-    QHBoxLayout* progressLayout = new QHBoxLayout(progressWidget);
-    progressLayout->setContentsMargins(0, 0, 0, 0);
+    // Прогресс и статус
+    QHBoxLayout* statusLayout = new QHBoxLayout();
     
     progressBar = new QProgressBar(this);
-    progressBar->setRange(0, 0);
+    progressBar->setRange(0, 0);  // Indeterminate
     progressBar->setVisible(false);
-    progressLayout->addWidget(progressBar);
+    progressBar->setStyleSheet(
+        "QProgressBar { "
+        "  background-color: #2d2d2d; "
+        "  border: 1px solid #3e3e3e; "
+        "  border-radius: 3px; "
+        "  text-align: center; "
+        "}"
+        "QProgressBar::chunk { "
+        "  background-color: #007acc; "
+        "}"
+    );
+    statusLayout->addWidget(progressBar, 1);
     
-    statusLabel = new QLabel(tr("Ready"), this);
-    progressLayout->addWidget(statusLabel);
+    statusLabel = new QLabel("Готов к работе", this);
+    statusLabel->setFont(QFont("Segoe UI", 9));
+    statusLayout->addWidget(statusLabel);
     
-    progressLayout->addStretch();
+    statisticsLabel = new QLabel(this);
+    statisticsLabel->setFont(QFont("Segoe UI", 9));
+    statisticsLabel->setStyleSheet("color: #808080;");
+    statusLayout->addWidget(statisticsLabel);
     
-    mainLayout->addWidget(progressWidget);
+    mainLayout->addLayout(statusLayout);
     
-    // Button section
-    setupButtonGroup();
-    mainLayout->addWidget(buttonGroup);
+    // Таймаут таймер
+    timeoutTimer = new QTimer(this);
+    timeoutTimer->setSingleShot(true);
+    connect(timeoutTimer, &QTimer::timeout, this, &LLMAssistantDialog::onTimeout);
 }
 
-void LLMAssistantDialog::setupPromptGroup() {
-    promptGroup = new QGroupBox(tr("Request"), this);
-    QVBoxLayout* layout = new QVBoxLayout(promptGroup);
+void LLMAssistantDialog::setupRequestPanel() {
+    requestTab = new QWidget(this);
+    QVBoxLayout* layout = new QVBoxLayout(requestTab);
+    layout->setSpacing(10);
     
-    // Prompt template
+    // Шаблон запроса
     QHBoxLayout* templateLayout = new QHBoxLayout();
-    templateLayout->addWidget(new QLabel(tr("Template:"), this));
+    templateLayout->addWidget(new QLabel("Шаблон:", this));
     
     promptTemplateCombo = new QComboBox(this);
-    promptTemplateCombo->addItem("Optimize Code", "optimize");
-    promptTemplateCombo->addItem("Fix Bugs", "fix_bugs");
-    promptTemplateCombo->addItem("Add Comments", "add_comments");
-    promptTemplateCombo->addItem("Refactor", "refactor");
-    promptTemplateCombo->addItem("Add Tests", "add_tests");
-    promptTemplateCombo->addItem("Custom", "custom");
-    connect(promptTemplateCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, &LLMAssistantDialog::onPromptChanged);
+    promptTemplateCombo->addItem("Оптимизация кода", "optimize");
+    promptTemplateCombo->addItem("Исправление ошибок", "fix_bugs");
+    promptTemplateCombo->addItem("Добавление комментариев", "add_comments");
+    promptTemplateCombo->addItem("Рефакторинг", "refactor");
+    promptTemplateCombo->addItem("Добавление тестов", "add_tests");
+    promptTemplateCombo->addItem("Улучшение читаемости", "improve_readability");
+    promptTemplateCombo->addItem("Безопасность", "security_check");
+    promptTemplateCombo->addItem("Пользовательский", "custom");
+    
+    connect(promptTemplateCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), 
+            this, [this](int index) {
+        if (index == promptTemplateCombo->count() - 1) {
+            promptEdit->setPlaceholderText("Введите ваш запрос...");
+        } else {
+            QString templateText;
+            switch (index) {
+                case 0: templateText = "Оптимизируй этот код для повышения производительности. Учитывай возможность использования векторизации и параллельных вычислений."; break;
+                case 1: templateText = "Найди и исправь потенциальные ошибки в этом коде. Обрати внимание на граничные случаи и обработку ошибок."; break;
+                case 2: templateText = "Добавь подробные комментарии к этому коду, объясняющие его назначение и логику работы."; break;
+                case 3: templateText = "Выполни рефакторинг этого кода для улучшения его структуры и читаемости, сохраняя функциональность."; break;
+                case 4: templateText = "Создай комплексные тесты для этого кода, включая тесты на граничные случаи."; break;
+                case 5: templateText = "Улучши читаемость этого кода, следуя лучшим практикам программирования."; break;
+                case 6: templateText = "Проверь код на потенциальные уязвимости безопасности и предложи исправления."; break;
+            }
+            promptEdit->setPlainText(templateText);
+        }
+    });
+    
     templateLayout->addWidget(promptTemplateCombo);
     templateLayout->addStretch();
-    
     layout->addLayout(templateLayout);
     
-    // Prompt text
+    // Поле ввода запроса
     promptEdit = new QTextEdit(this);
-    promptEdit->setPlaceholderText(tr("Describe what you want the AI to do with the selected code..."));
-    promptEdit->setMinimumHeight(80);
-    connect(promptEdit, &QTextEdit::textChanged, this, &LLMAssistantDialog::onPromptChanged);
+    promptEdit->setPlaceholderText("Выберите шаблон или введите свой запрос...");
+    promptEdit->setFont(QFont("Consolas", 10));
+    promptEdit->setMaximumHeight(150);
+    promptEdit->setStyleSheet(
+        "QTextEdit { "
+        "  background-color: #2d2d2d; "
+        "  color: #d4d4d4; "
+        "  border: 1px solid #3e3e3e; "
+        "  border-radius: 3px; "
+        "  padding: 5px; "
+        "}"
+        "QTextEdit:focus { "
+        "  border: 1px solid #007acc; "
+        "}"
+    );
     layout->addWidget(promptEdit);
     
-    // Options
-    QHBoxLayout* optionsLayout = new QHBoxLayout();
+    // Опции
+    QGroupBox* optionsGroup = new QGroupBox("Опции", this);
+    QVBoxLayout* optionsLayout = new QVBoxLayout(optionsGroup);
     
-    includeContextCheck = new QCheckBox(tr("Include surrounding context"), this);
+    includeContextCheck = new QCheckBox("Включить контекст файла", this);
     includeContextCheck->setChecked(true);
     optionsLayout->addWidget(includeContextCheck);
     
-    includeCommentsCheck = new QCheckBox(tr("Include existing comments"), this);
+    includeCommentsCheck = new QCheckBox("Включить существующие комментарии", this);
     includeCommentsCheck->setChecked(true);
     optionsLayout->addWidget(includeCommentsCheck);
     
-    optionsLayout->addStretch();
-    layout->addLayout(optionsLayout);
+    QHBoxLayout* confidenceLayout = new QHBoxLayout();
+    confidenceLayout->addWidget(new QLabel("Минимальная уверенность:", this));
     
-    // Request buttons
+    confidenceSlider = new QSlider(Qt::Horizontal, this);
+    confidenceSlider->setRange(0, 100);
+    confidenceSlider->setValue(50);
+    confidenceSlider->setToolTip("Минимальная уверенность LLM для отображения предложений");
+    confidenceLayout->addWidget(confidenceSlider);
+    
+    confidenceLabel = new QLabel("50%", this);
+    confidenceLabel->setFixedWidth(50);
+    confidenceLayout->addWidget(confidenceLabel);
+    
+    connect(confidenceSlider, &QSlider::valueChanged, this, [this](int value) {
+        confidenceLabel->setText(QString("%1%").arg(value));
+        minConfidence = value / 100.0;
+    });
+    
+    optionsLayout->addLayout(confidenceLayout);
+    layout->addWidget(optionsGroup);
+    
+    // Кнопки
     QHBoxLayout* buttonLayout = new QHBoxLayout();
+    buttonLayout->addStretch();
     
-    requestButton = new QPushButton(tr("Request Assistance"), this);
+    requestButton = new QPushButton("Запросить помощь", this);
     requestButton->setIcon(QIcon(":/icons/llm.svg"));
-    connect(requestButton, &QPushButton::clicked, this, &LLMAssistantDialog::onRequestAssistance);
+    requestButton->setMinimumWidth(150);
     buttonLayout->addWidget(requestButton);
     
-    cancelButton = new QPushButton(tr("Cancel"), this);
+    cancelButton = new QPushButton("Отмена", this);
     cancelButton->setEnabled(false);
-    connect(cancelButton, &QPushButton::clicked, this, &LLMAssistantDialog::onCancelRequest);
+    cancelButton->setMinimumWidth(150);
     buttonLayout->addWidget(cancelButton);
     
-    buttonLayout->addStretch();
     layout->addLayout(buttonLayout);
+    layout->addStretch();
 }
 
-void LLMAssistantDialog::setupSuggestionsGroup() {
-    suggestionsGroup = new QGroupBox(tr("Suggestions"), this);
-    QVBoxLayout* layout = new QVBoxLayout(suggestionsGroup);
+void LLMAssistantDialog::setupSuggestionsPanel() {
+    suggestionsTab = new QWidget(this);
+    QVBoxLayout* layout = new QVBoxLayout(suggestionsTab);
+    layout->setSpacing(10);
     
-    suggestionsList = new QListWidget(this);
-    connect(suggestionsList, &QListWidget::currentRowChanged, this, &LLMAssistantDialog::onModificationSelected);
-    layout->addWidget(suggestionsList);
+    // Фильтры
+    QGroupBox* filterGroup = new QGroupBox("Фильтры", this);
+    QVBoxLayout* filterLayout = new QVBoxLayout(filterGroup);
     
-    // Confidence indicator
-    QHBoxLayout* confidenceLayout = new QHBoxLayout();
-    confidenceLayout->addWidget(new QLabel(tr("Confidence:"), this));
-    confidenceLabel = new QLabel(this);
-    confidenceLayout->addWidget(confidenceLabel);
-    confidenceLayout->addStretch();
-    layout->addLayout(confidenceLayout);
+    // Текстовый фильтр
+    QHBoxLayout* textFilterLayout = new QHBoxLayout();
+    textFilterLayout->addWidget(new QLabel("Поиск:", this));
     
-    // Explanation
-    QHBoxLayout* explanationLayout = new QHBoxLayout();
-    explanationLayout->addWidget(new QLabel(tr("Explanation:"), this));
-    explanationLabel = new QLabel(this);
-    explanationLabel->setWordWrap(true);
-    explanationLayout->addWidget(explanationLabel);
-    layout->addLayout(explanationLayout);
+    filterEdit = new QLineEdit(this);
+    filterEdit->setPlaceholderText("Фильтр по тексту...");
+    connect(filterEdit, &QLineEdit::textChanged, this, &LLMAssistantDialog::onFilterChanged);
+    textFilterLayout->addWidget(filterEdit);
+    filterLayout->addLayout(textFilterLayout);
+    
+    // Фильтр по категории
+    QHBoxLayout* categoryFilterLayout = new QHBoxLayout();
+    categoryFilterLayout->addWidget(new QLabel("Категория:", this));
+    
+    categoryFilterCombo = new QComboBox(this);
+    categoryFilterCombo->addItem("Все категории", "all");
+    categoryFilterCombo->addItem("Оптимизация", "optimization");
+    categoryFilterCombo->addItem("Исправление ошибок", "bugfix");
+    categoryFilterCombo->addItem("Рефакторинг", "refactoring");
+    categoryFilterCombo->addItem("Документация", "documentation");
+    categoryFilterCombo->addItem("Стиль", "style");
+    categoryFilterCombo->addItem("Безопасность", "security");
+    categoryFilterCombo->addItem("Другое", "other");
+    
+    connect(categoryFilterCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this](int index) {
+        onCategoryFilterChanged(categoryFilterCombo->itemData(index).toString());
+    });
+    
+    categoryFilterLayout->addWidget(categoryFilterCombo);
+    filterLayout->addLayout(categoryFilterLayout);
+    
+    layout->addWidget(filterGroup);
+    
+    // Список предложений
+    modificationsScroll = new QScrollArea(this);
+    modificationsScroll->setWidgetResizable(true);
+    modificationsScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    modificationsScroll->setStyleSheet(
+        "QScrollArea { "
+        "  background-color: #1e1e1e; "
+        "  border: 1px solid #3e3e3e; "
+        "  border-radius: 3px; "
+        "}"
+    );
+    
+    modificationsContainer = new QWidget();
+    modificationsLayout = new QVBoxLayout(modificationsContainer);
+    modificationsLayout->setSpacing(10);
+    modificationsLayout->addStretch();
+    
+    modificationsScroll->setWidget(modificationsContainer);
+    layout->addWidget(modificationsScroll, 1);
 }
 
-void LLMAssistantDialog::setupPreviewGroup() {
-    previewGroup = new QGroupBox(tr("Preview"), this);
-    QVBoxLayout* layout = new QVBoxLayout(previewGroup);
+void LLMAssistantDialog::setupPreviewPanel() {
+    previewTab = new QWidget(this);
+    QVBoxLayout* layout = new QVBoxLayout(previewTab);
+    layout->setSpacing(10);
     
-    previewSplitter = new QSplitter(Qt::Vertical, this);
+    // Сплиттер для предпросмотра
+    previewSplitter = new QSplitter(Qt::Horizontal, this);
+    
+    // Оригинальный код
+    QWidget* originalWidget = new QWidget(this);
+    QVBoxLayout* originalLayout = new QVBoxLayout(originalWidget);
+    originalLayout->addWidget(new QLabel("Оригинальный код:", this));
     
     originalPreview = new QTextEdit(this);
     originalPreview->setReadOnly(true);
-    originalPreview->setPlaceholderText(tr("Original code will appear here"));
     originalPreview->setFont(QFont("Consolas", 10));
+    originalPreview->setStyleSheet(
+        "QTextEdit { "
+        "  background-color: #1e1e1e; "
+        "  color: #d4d4d4; "
+        "  border: 1px solid #3e3e3e; "
+        "  border-radius: 3px; "
+        "}"
+    );
+    originalLayout->addWidget(originalPreview);
+    
+    // Предлагаемый код
+    QWidget* suggestedWidget = new QWidget(this);
+    QVBoxLayout* suggestedLayout = new QVBoxLayout(suggestedWidget);
+    suggestedLayout->addWidget(new QLabel("Предлагаемый код:", this));
     
     suggestedPreview = new QTextEdit(this);
     suggestedPreview->setReadOnly(true);
-    suggestedPreview->setPlaceholderText(tr("Suggested code will appear here"));
     suggestedPreview->setFont(QFont("Consolas", 10));
+    suggestedPreview->setStyleSheet(
+        "QTextEdit { "
+        "  background-color: #1e1e1e; "
+        "  color: #d4d4d4; "
+        "  border: 1px solid #3e3e3e; "
+        "  border-radius: 3px; "
+        "}"
+    );
+    suggestedLayout->addWidget(suggestedPreview);
     
-    previewSplitter->addWidget(originalPreview);
-    previewSplitter->addWidget(suggestedPreview);
+    // Различия
+    QWidget* diffWidget = new QWidget(this);
+    QVBoxLayout* diffLayout = new QVBoxLayout(diffWidget);
+    diffLayout->addWidget(new QLabel("Различия:", this));
+    
+    diffPreview = new QTextEdit(this);
+    diffPreview->setReadOnly(true);
+    diffPreview->setFont(QFont("Consolas", 10));
+    diffPreview->setStyleSheet(
+        "QTextEdit { "
+        "  background-color: #1e1e1e; "
+        "  color: #d4d4d4; "
+        "  border: 1px solid #3e3e3e; "
+        "  border-radius: 3px; "
+        "}"
+    );
+    diffLayout->addWidget(diffPreview);
+    
+    previewSplitter->addWidget(originalWidget);
+    previewSplitter->addWidget(suggestedWidget);
+    previewSplitter->addWidget(diffWidget);
     previewSplitter->setStretchFactor(0, 1);
     previewSplitter->setStretchFactor(1, 1);
+    previewSplitter->setStretchFactor(2, 1);
     
-    layout->addWidget(previewSplitter);
+    layout->addWidget(previewSplitter, 1);
 }
 
-void LLMAssistantDialog::setupButtonGroup() {
-    buttonGroup = new QWidget(this);
-    QHBoxLayout* layout = new QHBoxLayout(buttonGroup);
+void LLMAssistantDialog::setupControlPanel() {
+    controlPanel = new QWidget(this);
+    QHBoxLayout* layout = new QHBoxLayout(controlPanel);
     layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(5);
     
-    acceptButton = new QPushButton(tr("Accept"), this);
-    connect(acceptButton, &QPushButton::clicked, this, &LLMAssistantDialog::onAcceptModification);
-    acceptButton->setEnabled(false);
-    layout->addWidget(acceptButton);
+    applySelectedButton = new QPushButton("Применить выбранное", this);
+    applySelectedButton->setIcon(QIcon(":/icons/apply.svg"));
+    connect(applySelectedButton, &QPushButton::clicked, this, &LLMAssistantDialog::onApplySelected);
+    layout->addWidget(applySelectedButton);
     
-    rejectButton = new QPushButton(tr("Reject"), this);
-    connect(rejectButton, &QPushButton::clicked, this, &LLMAssistantDialog::onRejectModification);
-    rejectButton->setEnabled(false);
-    layout->addWidget(rejectButton);
+    applyAllButton = new QPushButton("Применить всё", this);
+    connect(applyAllButton, &QPushButton::clicked, this, &LLMAssistantDialog::onApplyAll);
+    layout->addWidget(applyAllButton);
     
-    acceptAllButton = new QPushButton(tr("Accept All"), this);
+    acceptAllButton = new QPushButton("Принять всё", this);
     connect(acceptAllButton, &QPushButton::clicked, this, &LLMAssistantDialog::onAcceptAll);
-    acceptAllButton->setEnabled(false);
     layout->addWidget(acceptAllButton);
     
-    rejectAllButton = new QPushButton(tr("Reject All"), this);
+    rejectAllButton = new QPushButton("Отклонить всё", this);
     connect(rejectAllButton, &QPushButton::clicked, this, &LLMAssistantDialog::onRejectAll);
-    rejectAllButton->setEnabled(false);
     layout->addWidget(rejectAllButton);
     
     layout->addStretch();
     
-    applyButton = new QPushButton(tr("Apply Selected"), this);
-    applyButton->setIcon(QIcon(":/icons/apply.svg"));
-    connect(applyButton, &QPushButton::clicked, this, &LLMAssistantDialog::onApplySelected);
-    applyButton->setEnabled(false);
-    layout->addWidget(applyButton);
+    selectAllButton = new QPushButton("Выделить всё", this);
+    connect(selectAllButton, &QPushButton::clicked, this, &LLMAssistantDialog::onSelectAll);
+    layout->addWidget(selectAllButton);
     
-    closeButton = new QPushButton(tr("Close"), this);
-    connect(closeButton, &QPushButton::clicked, this, &QDialog::accept);
+    deselectAllButton = new QPushButton("Снять выделение", this);
+    connect(deselectAllButton, &QPushButton::clicked, this, &LLMAssistantDialog::onDeselectAll);
+    layout->addWidget(deselectAllButton);
+    
+    invertSelectionButton = new QPushButton("Инвертировать", this);
+    connect(invertSelectionButton, &QPushButton::clicked, this, &LLMAssistantDialog::onInvertSelection);
+    layout->addWidget(invertSelectionButton);
+    
+    layout->addStretch();
+    
+    exportButton = new QPushButton("Экспорт", this);
+    connect(exportButton, &QPushButton::clicked, this, &LLMAssistantDialog::onExportSuggestions);
+    layout->addWidget(exportButton);
+    
+    importButton = new QPushButton("Импорт", this);
+    connect(importButton, &QPushButton::clicked, this, &LLMAssistantDialog::onImportSuggestions);
+    layout->addWidget(importButton);
+    
+    closeButton = new QPushButton("Закрыть", this);
+    connect(closeButton, &QPushButton::clicked, this, &QDialog::reject);
     layout->addWidget(closeButton);
+    
+    updateButtonStates();
 }
+
+void LLMAssistantDialog::setupConnections() {
+    connect(requestButton, &QPushButton::clicked, this, &LLMAssistantDialog::onRequestAssistance);
+    connect(cancelButton, &QPushButton::clicked, this, &LLMAssistantDialog::onCancelRequest);
+    
+    if (llmService) {
+        connect(llmService, &LLMService::suggestionsReady, this, &LLMAssistantDialog::onLLMResponse);
+        connect(llmService, &LLMService::errorOccurred, this, &LLMAssistantDialog::onLLMError);
+        connect(llmService, &LLMService::processingStarted, this, &LLMAssistantDialog::onLLMProcessingStarted);
+        connect(llmService, &LLMService::processingFinished, this, &LLMAssistantDialog::onLLMProcessingFinished);
+    }
+}
+
+void LLMAssistantDialog::setupCategoryFilters() {
+    // Инициализация фильтров категорий
+    categoryFilter = QStringList();
+}
+
+void LLMAssistantDialog::loadSettings() {
+    QFile file(settingsPath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        return;
+    }
+    
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+    file.close();
+    
+    if (doc.isObject()) {
+        QJsonObject obj = doc.object();
+        if (obj.contains("minConfidence")) {
+            minConfidence = obj["minConfidence"].toDouble();
+            confidenceSlider->setValue(static_cast<int>(minConfidence * 100));
+        }
+        if (obj.contains("autoApply")) {
+            autoApply = obj["autoApply"].toBool();
+        }
+        if (obj.contains("timeout")) {
+            timeout = obj["timeout"].toInt();
+        }
+    }
+}
+
+void LLMAssistantDialog::saveSettings() {
+    QJsonObject obj;
+    obj["minConfidence"] = minConfidence;
+    obj["autoApply"] = autoApply;
+    obj["timeout"] = timeout;
+    
+    QFile file(settingsPath);
+    if (file.open(QIODevice::WriteOnly)) {
+        file.write(QJsonDocument(obj).toJson());
+        file.close();
+    }
+}
+
+// ============================================================================
+// Публичные слоты
+// ============================================================================
 
 void LLMAssistantDialog::setFile(const QString& file) {
-    currentFile = file;
+    filePath = file;
 }
 
-void LLMAssistantDialog::setSelection(int startLine, int endLine, const QString& code) {
-    selectionStart = startLine;
-    selectionEnd = endLine;
+void LLMAssistantDialog::setSelection(int start, int end, const QString& code) {
+    selectionStart = start;
+    selectionEnd = end;
     selectedCode = code;
-    originalPreview->setPlainText(code);
+    
+    // Отображение в предпросмотре
+    originalPreview->setPlainText(formatCodeForDisplay(code));
 }
 
-void LLMAssistantDialog::setPrompt(const QString& prompt) {
-    promptEdit->setPlainText(prompt);
+void LLMAssistantDialog::setPrompt(const QString& p) {
+    prompt = p;
+    promptEdit->setPlainText(p);
+}
+
+void LLMAssistantDialog::setLLMService(LLMService* service) {
+    llmService = service;
+    
+    if (llmService) {
+        setupConnections();
+    }
+}
+
+void LLMAssistantDialog::setAutoApply(bool enable) {
+    autoApply = enable;
+}
+
+void LLMAssistantDialog::setMinConfidence(double confidence) {
+    minConfidence = confidence;
+    confidenceSlider->setValue(static_cast<int>(confidence * 100));
+}
+
+void LLMAssistantDialog::setCategoryFilter(const QStringList& categories) {
+    categoryFilter = categories;
 }
 
 void LLMAssistantDialog::onRequestAssistance() {
-    if (isProcessing) return;
-    
-    QString prompt = buildPrompt();
-    if (prompt.isEmpty()) {
-        QMessageBox::warning(this, tr("Warning"), tr("Please enter a prompt"));
+    if (!llmService) {
+        QMessageBox::warning(this, "Warning", "LLM service not initialized");
         return;
     }
     
-    isProcessing = true;
-    modifications.clear();
-    suggestionsList->clear();
-    suggestedPreview->clear();
+    if (selectedCode.isEmpty()) {
+        QMessageBox::warning(this, "Warning", "No code selected");
+        return;
+    }
     
-    requestButton->setEnabled(false);
-    cancelButton->setEnabled(true);
-    acceptButton->setEnabled(false);
-    rejectButton->setEnabled(false);
-    acceptAllButton->setEnabled(false);
-    rejectAllButton->setEnabled(false);
-    applyButton->setEnabled(false);
-    
-    progressBar->setVisible(true);
-    statusLabel->setText(tr("Sending request to LLM..."));
-    
-    emit requestSent(prompt);
-    
-    // Send request to LLM service
-    llmService->requestSuggestions(currentFile, selectionStart, selectionEnd, selectedCode, prompt);
-    
-    LOG_INFO("LLM request sent: " + prompt.toStdString());
+    sendRequestToLLM();
 }
 
 void LLMAssistantDialog::onCancelRequest() {
-    if (!isProcessing) return;
-    
-    isProcessing = false;
-    progressBar->setVisible(false);
-    statusLabel->setText(tr("Request cancelled"));
-    
-    requestButton->setEnabled(true);
-    cancelButton->setEnabled(false);
-}
-
-void LLMAssistantDialog::onModificationSelected(int index) {
-    if (index < 0 || index >= modifications.size()) {
-        acceptButton->setEnabled(false);
-        rejectButton->setEnabled(false);
-        return;
-    }
-    
-    const CodeModification& mod = modifications[index];
-    showModificationPreview(mod);
-    
-    confidenceLabel->setText(QString("%1%").arg(static_cast<int>(mod.confidence * 100)));
-    explanationLabel->setText(mod.explanation);
-    
-    acceptButton->setEnabled(true);
-    rejectButton->setEnabled(true);
-    acceptAllButton->setEnabled(!modifications.isEmpty());
-    rejectAllButton->setEnabled(!modifications.isEmpty());
-    applyButton->setEnabled(true);
-}
-
-void LLMAssistantDialog::onAcceptModification() {
-    int index = suggestionsList->currentRow();
-    if (index < 0 || index >= modifications.size()) return;
-    
-    modifications[index].accepted = true;
-    updateModificationStatus(index, true);
-}
-
-void LLMAssistantDialog::onRejectModification() {
-    int index = suggestionsList->currentRow();
-    if (index < 0 || index >= modifications.size()) return;
-    
-    modifications[index].accepted = false;
-    updateModificationStatus(index, false);
-}
-
-void LLMAssistantDialog::onAcceptAll() {
-    for (int i = 0; i < modifications.size(); i++) {
-        modifications[i].accepted = true;
-        updateModificationStatus(i, true);
-    }
-}
-
-void LLMAssistantDialog::onRejectAll() {
-    for (int i = 0; i < modifications.size(); i++) {
-        modifications[i].accepted = false;
-        updateModificationStatus(i, false);
+    if (llmService && isProcessing) {
+        // Отмена запроса к LLM
+        timeoutTimer->stop();
+        isProcessing = false;
+        statusLabel->setText("Запрос отменён");
+        progressBar->setVisible(false);
+        updateButtonStates();
     }
 }
 
 void LLMAssistantDialog::onApplySelected() {
-    QVector<int> acceptedIds;
-    for (int i = 0; i < modifications.size(); i++) {
-        if (modifications[i].accepted) {
-            acceptedIds.append(modifications[i].id);
-        }
-    }
+    QVector<CodeModification> accepted = getAcceptedModifications();
     
-    if (acceptedIds.isEmpty()) {
-        QMessageBox::information(this, tr("Info"), tr("No modifications selected"));
+    if (accepted.isEmpty()) {
+        QMessageBox::information(this, "Info", "No modifications selected");
         return;
     }
     
-    emit modificationsApplied(acceptedIds);
-    accept();
+    QMessageBox::StandardButton reply = QMessageBox::question(
+        this, "Apply Modifications",
+        QString("Apply %1 selected modification(s)?").arg(accepted.size()),
+        QMessageBox::Yes | QMessageBox::No);
+    
+    if (reply == QMessageBox::Yes) {
+        applyModifications(accepted);
+        accept();
+    }
 }
 
-void LLMAssistantDialog::onPromptChanged() {
-    // Enable/disable request button based on prompt content
-    requestButton->setEnabled(!promptEdit->toPlainText().isEmpty());
+void LLMAssistantDialog::onApplyAll() {
+    if (modifications.isEmpty()) {
+        QMessageBox::information(this, "Info", "No modifications available");
+        return;
+    }
+    
+    QMessageBox::StandardButton reply = QMessageBox::question(
+        this, "Apply All",
+        QString("Apply all %1 modification(s)?").arg(modifications.size()),
+        QMessageBox::Yes | QMessageBox::No);
+    
+    if (reply == QMessageBox::Yes) {
+        applyModifications(modifications);
+        accept();
+    }
+}
+
+void LLMAssistantDialog::onRejectAll() {
+    for (CodeModification& mod : modifications) {
+        mod.accepted = false;
+    }
+    displayModifications();
+    updateStatistics();
+}
+
+void LLMAssistantDialog::onAcceptAll() {
+    for (CodeModification& mod : modifications) {
+        if (!mod.applied) {
+            mod.accepted = true;
+        }
+    }
+    displayModifications();
+    updateStatistics();
+}
+
+void LLMAssistantDialog::onSelectAll() {
+    for (CodeModification& mod : modifications) {
+        if (!mod.applied) {
+            mod.accepted = true;
+        }
+    }
+    displayModifications();
+    updateStatistics();
+}
+
+void LLMAssistantDialog::onDeselectAll() {
+    for (CodeModification& mod : modifications) {
+        mod.accepted = false;
+    }
+    displayModifications();
+    updateStatistics();
+}
+
+void LLMAssistantDialog::onInvertSelection() {
+    for (CodeModification& mod : modifications) {
+        if (!mod.applied) {
+            mod.accepted = !mod.accepted;
+        }
+    }
+    displayModifications();
+    updateStatistics();
+}
+
+void LLMAssistantDialog::onViewAllOriginal() {
+    mainTabWidget->setCurrentWidget(previewTab);
+    // Показать оригинальный код для всех
+}
+
+void LLMAssistantDialog::onViewAllSuggested() {
+    mainTabWidget->setCurrentWidget(previewTab);
+    // Показать предлагаемый код для всех
+}
+
+void LLMAssistantDialog::onViewAllDiff() {
+    mainTabWidget->setCurrentWidget(previewTab);
+    // Показать различия для всех
+}
+
+void LLMAssistantDialog::onExportSuggestions() {
+    QString path = QFileDialog::getSaveFileName(
+        this, "Export Suggestions", "", 
+        "HTML Files (*.html);;JSON Files (*.json);;All Files (*)");
+    
+    if (path.isEmpty()) return;
+    
+    if (path.endsWith(".html", Qt::CaseInsensitive)) {
+        exportToHtml(path);
+    } else if (path.endsWith(".json", Qt::CaseInsensitive)) {
+        exportToJson(path);
+    }
+}
+
+void LLMAssistantDialog::onImportSuggestions() {
+    QString path = QFileDialog::getOpenFileName(
+        this, "Import Suggestions", "", 
+        "JSON Files (*.json);;All Files (*)");
+    
+    if (path.isEmpty()) return;
+    
+    // Загрузка и парсинг JSON
+    // TODO: Implement import
+}
+
+void LLMAssistantDialog::onClearSuggestions() {
+    modifications.clear();
+    displayModifications();
+    updateStatistics();
+}
+
+void LLMAssistantDialog::onFilterChanged(const QString& text) {
+    displayModifications();
+}
+
+void LLMAssistantDialog::onCategoryFilterChanged(const QString& category) {
+    if (category == "all") {
+        categoryFilter.clear();
+    } else {
+        categoryFilter = QStringList() << category;
+    }
+    displayModifications();
+}
+
+void LLMAssistantDialog::onConfidenceFilterChanged(double value) {
+    minConfidence = value;
+    displayModifications();
+}
+
+void LLMAssistantDialog::onModificationAccepted(int blockId, bool accepted) {
+    for (CodeModification& mod : modifications) {
+        if (mod.blockId == blockId) {
+            mod.accepted = accepted;
+            break;
+        }
+    }
+    updateStatistics();
+}
+
+void LLMAssistantDialog::onViewOriginal(int blockId) {
+    for (const CodeModification& mod : modifications) {
+        if (mod.blockId == blockId) {
+            originalPreview->setPlainText(formatCodeForDisplay(mod.originalCode));
+            mainTabWidget->setCurrentWidget(previewTab);
+            break;
+        }
+    }
+}
+
+void LLMAssistantDialog::onViewSuggested(int blockId) {
+    for (const CodeModification& mod : modifications) {
+        if (mod.blockId == blockId) {
+            suggestedPreview->setPlainText(formatCodeForDisplay(mod.suggestedCode));
+            mainTabWidget->setCurrentWidget(previewTab);
+            break;
+        }
+    }
+}
+
+void LLMAssistantDialog::onShowDiff(int blockId) {
+    for (const CodeModification& mod : modifications) {
+        if (mod.blockId == blockId) {
+            QString diff = generateDiff(mod.originalCode, mod.suggestedCode);
+            diffPreview->setPlainText(diff);
+            mainTabWidget->setCurrentWidget(previewTab);
+            break;
+        }
+    }
 }
 
 void LLMAssistantDialog::onLLMResponse(const QVector<CodeSuggestion>& suggestions) {
     isProcessing = false;
+    timeoutTimer->stop();
     progressBar->setVisible(false);
     
-    // Convert suggestions to modifications
+    parseLLMResponse(suggestions);
+    displayModifications();
+    updateStatistics();
+    
+    statusLabel->setText(QString("Получено %1 предложений").arg(modifications.size()));
+    updateButtonStates();
+    
+    mainTabWidget->setCurrentWidget(suggestionsTab);
+}
+
+void LLMAssistantDialog::onLLMError(const QString& error) {
+    isProcessing = false;
+    timeoutTimer->stop();
+    progressBar->setVisible(false);
+    
+    statusLabel->setText("Ошибка: " + error);
+    updateButtonStates();
+    
+    QMessageBox::critical(this, "LLM Error", error);
+}
+
+void LLMAssistantDialog::onLLMProcessingStarted() {
+    isProcessing = true;
+    progressBar->setVisible(true);
+    statusLabel->setText("Запрос к LLM...");
+    updateButtonStates();
+    
+    timeoutTimer->start(timeout);
+}
+
+void LLMAssistantDialog::onLLMProcessingFinished() {
+    isProcessing = false;
+    progressBar->setVisible(false);
+    updateButtonStates();
+}
+
+// ============================================================================
+// Приватные слоты
+// ============================================================================
+
+void LLMAssistantDialog::onTimeout() {
+    isProcessing = false;
+    progressBar->setVisible(false);
+    statusLabel->setText("Таймаут запроса");
+    updateButtonStates();
+    
+    QMessageBox::warning(this, "Timeout", "Request timed out. Please try again.");
+}
+
+void LLMAssistantDialog::updateProgressBar() {
+    // Обновление прогресс бара
+}
+
+void LLMAssistantDialog::updateStatistics() {
+    acceptedCount = 0;
+    appliedCount = 0;
+    double totalConfidence = 0.0;
+    categoryStats.clear();
+    
+    for (const CodeModification& mod : modifications) {
+        if (mod.accepted) acceptedCount++;
+        if (mod.applied) appliedCount++;
+        totalConfidence += mod.confidence;
+        categoryStats[mod.category]++;
+    }
+    
+    averageConfidence = modifications.isEmpty() ? 0.0 : 
+                       totalConfidence / modifications.size();
+    
+    statisticsLabel->setText(
+        QString("Всего: %1 | Принято: %2 | Применено: %3 | Средняя уверенность: %4%")
+        .arg(modifications.size())
+        .arg(acceptedCount)
+        .arg(appliedCount)
+        .arg(static_cast<int>(averageConfidence * 100))
+    );
+}
+
+void LLMAssistantDialog::updateButtonStates() {
+    bool hasModifications = !modifications.isEmpty();
+    bool hasAccepted = getAcceptedCount() > 0;
+    
+    applySelectedButton->setEnabled(hasAccepted);
+    applyAllButton->setEnabled(hasModifications);
+    acceptAllButton->setEnabled(hasModifications && !isProcessing);
+    rejectAllButton->setEnabled(hasModifications && !isProcessing);
+    selectAllButton->setEnabled(hasModifications && !isProcessing);
+    deselectAllButton->setEnabled(hasModifications && !isProcessing);
+    invertSelectionButton->setEnabled(hasModifications && !isProcessing);
+    exportButton->setEnabled(hasModifications);
+    
+    requestButton->setEnabled(!isProcessing);
+    cancelButton->setEnabled(isProcessing);
+}
+
+void LLMAssistantDialog::onTabChanged(int index) {
+    // Обработка переключения табов
+}
+
+// ============================================================================
+// Приватные методы
+// ============================================================================
+
+void LLMAssistantDialog::sendRequestToLLM() {
+    if (!llmService) return;
+    
+    QString prompt = promptEdit->toPlainText();
+    if (prompt.isEmpty()) {
+        QMessageBox::warning(this, "Warning", "Please enter a prompt");
+        return;
+    }
+    
+    // Отправка запроса к LLM
+    llmService->suggestModifications(
+        filePath,
+        selectionStart,
+        selectionEnd,
+        selectedCode,
+        prompt
+    );
+}
+
+void LLMAssistantDialog::parseLLMResponse(const QVector<CodeSuggestion>& suggestions) {
     modifications.clear();
-    for (int i = 0; i < suggestions.size(); i++) {
-        const CodeSuggestion& sugg = suggestions[i];
+    
+    for (const CodeSuggestion& sugg : suggestions) {
+        if (sugg.confidence < minConfidence) {
+            continue;  // Фильтрация по уверенности
+        }
+        
+        if (!categoryFilter.isEmpty() && !categoryFilter.contains(sugg.explanation)) {
+            continue;  // Фильтрация по категории
+        }
+        
         CodeModification mod;
-        mod.id = sugg.blockId;
+        mod.blockId = sugg.blockId;
         mod.startLine = sugg.startLine;
         mod.endLine = sugg.endLine;
         mod.originalCode = sugg.originalCode;
@@ -368,125 +1124,190 @@ void LLMAssistantDialog::onLLMResponse(const QVector<CodeSuggestion>& suggestion
         mod.explanation = sugg.explanation;
         mod.confidence = sugg.confidence;
         mod.accepted = false;
+        mod.applied = false;
+        mod.category = "other";  // В полной реализации - определение категории
+        mod.timestamp = QDateTime::currentDateTime();
+        
         modifications.append(mod);
     }
     
-    populateSuggestions();
-    
-    statusLabel->setText(tr("Received %1 suggestions").arg(modifications.size()));
-    
-    requestButton->setEnabled(true);
-    cancelButton->setEnabled(false);
-    
-    if (!modifications.isEmpty()) {
-        acceptAllButton->setEnabled(true);
-        rejectAllButton->setEnabled(true);
+    currentBlockId = modifications.isEmpty() ? 0 : modifications.last().blockId + 1;
+}
+
+void LLMAssistantDialog::displayModifications() {
+    // Очистка контейнера
+    QLayoutItem* child;
+    while ((child = modificationsLayout->takeAt(0)) != nullptr) {
+        child->widget()->deleteLater();
+        delete child;
     }
     
-    LOG_INFO("Received " + std::to_string(modifications.size()) + " LLM suggestions");
-}
-
-void LLMAssistantDialog::onLLMError(const QString& error) {
-    isProcessing = false;
-    progressBar->setVisible(false);
-    statusLabel->setText(tr("Error: ") + error);
-    
-    requestButton->setEnabled(true);
-    cancelButton->setEnabled(false);
-    
-    QMessageBox::critical(this, tr("LLM Error"), error);
-    
-    LOG_ERROR("LLM error: " + error.toStdString());
-}
-
-void LLMAssistantDialog::onProcessingStarted() {
-    isProcessing = true;
-    progressBar->setVisible(true);
-    statusLabel->setText(tr("Processing..."));
-}
-
-void LLMAssistantDialog::onProcessingFinished() {
-    isProcessing = false;
-    progressBar->setVisible(false);
-}
-
-void LLMAssistantDialog::populateSuggestions() {
-    suggestionsList->clear();
-    
-    for (int i = 0; i < modifications.size(); i++) {
-        const CodeModification& mod = modifications[i];
+    // Фильтрация и отображение
+    for (const CodeModification& mod : modifications) {
+        // Применение фильтров
+        if (!filterEdit->text().isEmpty()) {
+            if (!mod.explanation.contains(filterEdit->text(), Qt::CaseInsensitive) &&
+                !mod.originalCode.contains(filterEdit->text(), Qt::CaseInsensitive) &&
+                !mod.suggestedCode.contains(filterEdit->text(), Qt::CaseInsensitive)) {
+                continue;
+            }
+        }
         
-        QListWidgetItem* item = new QListWidgetItem();
+        if (!categoryFilter.isEmpty() && !categoryFilter.contains(mod.category)) {
+            continue;
+        }
         
-        QString text = QString("Modification %1 (Lines %2-%3)")
-            .arg(i + 1)
-            .arg(mod.startLine)
-            .arg(mod.endLine);
+        // Создание виджета
+        ModificationItemWidget* widget = new ModificationItemWidget(mod, this);
+        connect(widget, &ModificationItemWidget::acceptanceChanged,
+                this, &LLMAssistantDialog::onModificationAccepted);
+        connect(widget, &ModificationItemWidget::viewOriginalRequested,
+                this, &LLMAssistantDialog::onViewOriginal);
+        connect(widget, &ModificationItemWidget::viewSuggestedRequested,
+                this, &LLMAssistantDialog::onViewSuggested);
+        connect(widget, &ModificationItemWidget::showDiffRequested,
+                this, &LLMAssistantDialog::onShowDiff);
         
-        item->setText(text);
-        
-        // Add confidence indicator
-        QString confidence = QString("%1%").arg(static_cast<int>(mod.confidence * 100));
-        item->setData(Qt::UserRole, confidence);
-        
-        suggestionsList->addItem(item);
-    }
-    
-    if (suggestionsList->count() > 0) {
-        suggestionsList->setCurrentRow(0);
+        modificationsLayout->insertWidget(modificationsLayout->count() - 1, widget);
     }
 }
 
-void LLMAssistantDialog::showModificationPreview(const CodeModification& mod) {
-    originalPreview->setPlainText(mod.originalCode);
-    suggestedPreview->setPlainText(mod.suggestedCode);
-}
-
-void LLMAssistantDialog::updateModificationStatus(int index, bool accepted) {
-    if (index < 0 || index >= suggestionsList->count()) return;
+void LLMAssistantDialog::applyModifications(const QVector<CodeModification>& mods) {
+    // В полной реализации - применение изменений к коду
+    // Через сигнал в редактор кода
     
-    QListWidgetItem* item = suggestionsList->item(index);
-    if (item) {
-        QString text = item->text();
-        if (accepted) {
-            item->setText(text + " ✓");
-            item->setForeground(Qt::darkGreen);
-        } else {
-            item->setText(text.replace(" ✓", ""));
-            item->setForeground(Qt::black);
+    for (CodeModification& mod : modifications) {
+        for (const CodeModification& accepted : mods) {
+            if (mod.blockId == accepted.blockId) {
+                mod.applied = true;
+                appliedCount++;
+                break;
+            }
         }
     }
+    
+    displayModifications();
+    updateStatistics();
+    
+    emit accepted(QDialog::Accepted);
 }
 
-QString LLMAssistantDialog::buildPrompt() const {
-    QString prompt = promptEdit->toPlainText();
-    
-    if (prompt.isEmpty()) {
-        return "";
-    }
-    
-    // Add context if requested
-    if (includeContextCheck->isChecked()) {
-        prompt += "\n\nContext: This code is from file " + currentFile;
-        prompt += ", lines " + QString::number(selectionStart) + "-" + QString::number(selectionEnd);
-    }
-    
-    // Add template-specific instructions
-    QString templateType = promptTemplateCombo->currentData().toString();
-    if (templateType == "optimize") {
-        prompt += "\n\nFocus on performance optimization. Consider using vectorization, parallel processing, or algorithmic improvements.";
-    } else if (templateType == "fix_bugs") {
-        prompt += "\n\nFocus on identifying and fixing potential bugs, edge cases, and error handling.";
-    } else if (templateType == "add_comments") {
-        prompt += "\n\nAdd clear, concise comments explaining the purpose and logic of the code.";
-    } else if (templateType == "refactor") {
-        prompt += "\n\nImprove code structure, readability, and maintainability while preserving functionality.";
-    } else if (templateType == "add_tests") {
-        prompt += "\n\nGenerate comprehensive test cases covering normal operation, edge cases, and error conditions.";
-    }
-    
-    return prompt;
+void LLMAssistantDialog::highlightAcceptedItems() {
+    // Подсветка принятых элементов
 }
+
+void LLMAssistantDialog::updateModificationStatistics() {
+    updateStatistics();
+}
+
+QString LLMAssistantDialog::generateDiff(const QString& original, const QString& suggested) {
+    // В полной реализации - использование QDiff или аналогичной библиотеки
+    // Для примера - простая реализация
+    
+    QString diff;
+    QStringList originalLines = original.split("\n");
+    QStringList suggestedLines = suggested.split("\n");
+    
+    int maxLines = qMax(originalLines.size(), suggestedLines.size());
+    
+    for (int i = 0; i < maxLines; i++) {
+        QString origLine = i < originalLines.size() ? originalLines[i] : "";
+        QString suggLine = i < suggestedLines.size() ? suggestedLines[i] : "";
+        
+        if (origLine == suggLine) {
+            diff += "  " + origLine + "\n";
+        } else {
+            if (!origLine.isEmpty()) {
+                diff += "- " + origLine + "\n";
+            }
+            if (!suggLine.isEmpty()) {
+                diff += "+ " + suggLine + "\n";
+            }
+        }
+    }
+    
+    return diff;
+}
+
+QString LLMAssistantDialog::formatCodeForDisplay(const QString& code) {
+    return code;
+}
+
+QColor LLMAssistantDialog::getConfidenceColor(double confidence) const {
+    if (confidence >= 0.8) return QColor(106, 153, 85);    // Зелёный
+    if (confidence >= 0.6) return QColor(206, 167, 0);     // Жёлтый
+    if (confidence >= 0.4) return QColor(244, 71, 71);     // Оранжевый
+    return QColor(200, 50, 50);                             // Красный
+}
+
+QString LLMAssistantDialog::getConfidenceTooltip(double confidence) const {
+    if (confidence >= 0.8) return "Высокая уверенность";
+    if (confidence >= 0.6) return "Средняя уверенность";
+    if (confidence >= 0.4) return "Низкая уверенность";
+    return "Очень низкая уверенность";
+}
+
+void LLMAssistantDialog::showModificationDetails(int blockId) {
+    // Показать детали модификации
+}
+
+void LLMAssistantDialog::exportToHtml(const QString& path) {
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) return;
+    
+    QTextStream out(&file);
+    out << "<!DOCTYPE html>\n<html>\n<head>\n";
+    out << "<meta charset=\"UTF-8\">\n";
+    out << "<title>LLM Suggestions</title>\n";
+    out << "<style>\n";
+    out << "body { font-family: Consolas, monospace; background: #1e1e1e; color: #d4d4d4; }\n";
+    out << ".accepted { background: #1a3a1a; }\n";
+    out << ".rejected { background: #3a1a1a; }\n";
+    out << "pre { background: #2d2d2d; padding: 10px; }\n";
+    out << "</style>\n";
+    out << "</head>\n<body>\n";
+    
+    for (const CodeModification& mod : modifications) {
+        out << "<div class=\"" << (mod.accepted ? "accepted" : "rejected") << "\">\n";
+        out << "<h3>Block " << mod.blockId << " (Lines " << mod.startLine << "-" << mod.endLine << ")</h3>\n";
+        out << "<p>Confidence: " << static_cast<int>(mod.confidence * 100) << "%</p>\n";
+        out << "<p>Explanation: " << mod.explanation.toHtmlEscaped() << "</p>\n";
+        out << "<h4>Original:</h4>\n<pre>" << mod.originalCode.toHtmlEscaped() << "</pre>\n";
+        out << "<h4>Suggested:</h4>\n<pre>" << mod.suggestedCode.toHtmlEscaped() << "</pre>\n";
+        out << "</div>\n";
+    }
+    
+    out << "</body>\n</html>\n";
+    file.close();
+}
+
+void LLMAssistantDialog::exportToJson(const QString& path) {
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) return;
+    
+    QJsonArray array;
+    for (const CodeModification& mod : modifications) {
+        QJsonObject obj;
+        obj["blockId"] = mod.blockId;
+        obj["startLine"] = mod.startLine;
+        obj["endLine"] = mod.endLine;
+        obj["originalCode"] = mod.originalCode;
+        obj["suggestedCode"] = mod.suggestedCode;
+        obj["explanation"] = mod.explanation;
+        obj["confidence"] = mod.confidence;
+        obj["accepted"] = mod.accepted;
+        obj["applied"] = mod.applied;
+        obj["category"] = mod.category;
+        array.append(obj);
+    }
+    
+    file.write(QJsonDocument(array).toJson());
+    file.close();
+}
+
+// ============================================================================
+// Геттеры
+// ============================================================================
 
 QVector<CodeModification> LLMAssistantDialog::getAcceptedModifications() const {
     QVector<CodeModification> accepted;
@@ -496,6 +1317,46 @@ QVector<CodeModification> LLMAssistantDialog::getAcceptedModifications() const {
         }
     }
     return accepted;
+}
+
+QVector<CodeModification> LLMAssistantDialog::getAppliedModifications() const {
+    QVector<CodeModification> applied;
+    for (const CodeModification& mod : modifications) {
+        if (mod.applied) {
+            applied.append(mod);
+        }
+    }
+    return applied;
+}
+
+int LLMAssistantDialog::getAcceptedCount() const {
+    int count = 0;
+    for (const CodeModification& mod : modifications) {
+        if (mod.accepted) count++;
+    }
+    return count;
+}
+
+int LLMAssistantDialog::getAppliedCount() const {
+    int count = 0;
+    for (const CodeModification& mod : modifications) {
+        if (mod.applied) count++;
+    }
+    return count;
+}
+
+double LLMAssistantDialog::getAverageConfidence() const {
+    if (modifications.isEmpty()) return 0.0;
+    
+    double total = 0.0;
+    for (const CodeModification& mod : modifications) {
+        total += mod.confidence;
+    }
+    return total / modifications.size();
+}
+
+QMap<QString, int> LLMAssistantDialog::getCategoryStatistics() const {
+    return categoryStats;
 }
 
 } // namespace proxima

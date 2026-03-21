@@ -6,6 +6,8 @@
 #include <QDateTime>
 #include <QMessageBox>
 
+#include "editor/SyntaxHighlighter.h"
+
 namespace proxima {
 
 LineNumberArea::LineNumberArea(CodeEditor *editor)
@@ -54,8 +56,15 @@ void CodeEditor::setupEditor() {
     // Enable line wrapping option
     // setLineWrapMode(LineWrapMode::NoWrap);
 
-    // Create syntax highlighter
-    highlighter = new SyntaxHighlighter(document());
+    // Создание подсветки синтаксиса
+    syntaxHighlighter = new SyntaxHighlighter(document());
+    syntaxHighlighter->setFilePath(filePath);
+
+    // Подключение к изменениям режима отображения
+    connect(this, &CodeEditor::displayModeChanged, syntaxHighlighter,
+            [this](DisplayMode mode) {
+        syntaxHighlighter->setDisplayMode(mode);
+    });
 
     // Set line number area color
     setStyleSheet("QPlainTextEdit { background-color: #1e1e1e; color: #d4d4d4; }");
@@ -97,8 +106,10 @@ bool CodeEditor::loadFile(const QString& path) {
     modified = false;
     clearBreakpoints();
 
-    // Update highlighter with file path for context
-    highlighter->setFilePath(path);
+    // Обновление пути для подсветки
+    if (syntaxHighlighter) {
+        syntaxHighlighter->setFilePath(path);
+    }
 
     // Load fold state after loading file
     CodeFoldingManager::getInstance().loadFoldState(path);
@@ -305,9 +316,12 @@ void CodeEditor::clearBreakpoints() {
 
 void CodeEditor::setDisplayMode(DisplayMode mode) {
     displayMode = mode;
-    highlighter->setDisplayMode(mode);
-    highlighter->rehighlight();
-    viewport()->update();
+    emit displayModeChanged(mode);
+
+    if (syntaxHighlighter) {
+        syntaxHighlighter->setDisplayMode(mode);
+    }
+    //viewport()->update();
 }
 
 void CodeEditor::applyTypeHighlighting(const QMap<int, QString>& lineTypes) {
