@@ -55,7 +55,7 @@ Optional:
 
 ```bash
 # Clone repository
-git clone https://github.com/proxima-lang/proxima.git
+git clone hhttps://github.com/snowfire-gtc/Proxima-Centauri.git
 cd proxima
 
 # Build and install
@@ -65,11 +65,11 @@ cd proxima
 
 ``` bash
 # Run compiler tests
-cd proxima-compiler/build
+cd proxima/build
 ctest
 
 # Run IDE tests
-cd centauri-ide/build
+cd centauri/build
 ctest
 
 # Run integration tests
