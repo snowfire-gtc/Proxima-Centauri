@@ -55,7 +55,7 @@ Optional:
 
 ```bash
 # Clone repository
-git clone hhttps://github.com/snowfire-gtc/Proxima-Centauri.git
+git clone https://github.com/snowfire-gtc/Proxima-Centauri.git
 cd proxima
 
 # Build and install
