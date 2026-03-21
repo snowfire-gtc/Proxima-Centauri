@@ -69,6 +69,17 @@ void CodeEditor::setupEditor() {
             this, &CodeEditor::onFoldStateChanged);
     connect(&CodeFoldingManager::getInstance(), &CodeFoldingManager::visibilityChanged,
             this, &CodeEditor::onVisibilityChanged);
+
+    // Connect to snippet manager
+    SnippetManager::getInstance().setDocument(document());
+
+    // Connect snippet signals
+    connect(&SnippetManager::getInstance(), &SnippetManager::sessionStarted,
+            this, &CodeEditor::onSnippetSessionStarted);
+    connect(&SnippetManager::getInstance(), &SnippetManager::sessionEnded,
+            this, &CodeEditor::onSnippetSessionEnded);
+    connect(&SnippetManager::getInstance(), &SnippetManager::placeholderNavigated,
+            this, &CodeEditor::onPlaceholderNavigated);
 }
 
 bool CodeEditor::loadFile(const QString& path) {
@@ -159,8 +170,112 @@ void CodeEditor::formatCode() {
     highlighter->rehighlight();
 }
 
-void CodeEditor::insertSnippet(const QString& snippet) {
-    textCursor().insertText(snippet);
+bool CodeEditor::checkAndInsertSnippet() {
+    QTextCursor cursor = textCursor();
+    QTextBlock block = cursor.block();
+    QString blockText = block.text();
+
+    // Get word before cursor
+    int cursorPosInBlock = cursor.position() - block.position();
+    int wordStart = cursorPosInBlock;
+
+    while (wordStart > 0 &&
+           (blockText[wordStart - 1].isLetterOrNumber() ||
+            blockText[wordStart - 1] == '.' ||
+            blockText[wordStart - 1] == '_')) {
+        wordStart--;
+    }
+
+    QString trigger = blockText.mid(wordStart, cursorPosInBlock - wordStart);
+
+    if (trigger.isEmpty()) {
+        return false;
+    }
+
+    // Check if trigger matches a snippet
+    SnippetDefinition snippet = SnippetManager::getInstance().getSnippet(trigger);
+
+    if (snippet.trigger.isEmpty()) {
+        return false;
+    }
+
+    // Insert snippet
+    cursor.setPosition(block.position() + wordStart);
+    cursor.setPosition(block.position() + cursorPosInBlock, QTextCursor::KeepAnchor);
+    cursor.removeSelectedText();
+
+    int insertPosition = cursor.position();
+
+    SnippetManager::getInstance().startSnippetSession(
+        document(),
+        snippet.content,
+        insertPosition
+    );
+
+    LOG_INFO("Inserted snippet: " + snippet.trigger.toStdString());
+    return true;
+}
+
+void CodeEditor::insertSnippet(const QString& snippetName) {
+    SnippetDefinition snippet = SnippetManager::getInstance().getSnippet(snippetName);
+
+    if (snippet.trigger.isEmpty()) {
+        LOG_WARNING("Snippet not found: " + snippetName.toStdString());
+        return;
+    }
+
+    QTextCursor cursor = textCursor();
+    int insertPosition = cursor.position();
+
+    SnippetManager::getInstance().startSnippetSession(
+        document(),
+        snippet.content,
+        insertPosition
+    );
+}
+
+void CodeEditor::onSnippetSessionStarted(const SnippetSession& session) {
+    // Update UI to show snippet mode
+    statusBar->setMessage(QString("Snippet mode: %1 placeholders").arg(session.placeholders.size()));
+
+    // Show placeholder info
+    if (!session.placeholders.isEmpty()) {
+        QString info = QString("Placeholder %1/%2")
+            .arg(session.currentPlaceholderIndex + 1)
+            .arg(session.placeholders.size());
+
+        QToolTip::showText(QCursor::pos(), info, this);
+    }
+}
+
+void CodeEditor::onSnippetSessionEnded() {
+    // Clear snippet mode UI
+    statusBar->clearMessage();
+    QToolTip::hideText();
+}
+
+void CodeEditor::onPlaceholderNavigated(int currentIndex, int total) {
+    // Update UI with current placeholder info
+    QString info = QString("Placeholder %1/%2")
+        .arg(currentIndex + 1)
+        .arg(total);
+
+    statusBar->setMessage(info);
+
+    // Show tooltip with placeholder info
+    if (currentIndex >= 0 && currentIndex < SnippetManager::getInstance().getCurrentSession().placeholders.size()) {
+        const SnippetPlaceholder& placeholder =
+            SnippetManager::getInstance().getCurrentSession().placeholders[currentIndex];
+
+        QString tooltip = QString("Placeholder #%1\nDefault: %2")
+            .arg(placeholder.id)
+            .arg(placeholder.defaultText);
+
+        QRect rect = SnippetManager::getInstance().getPlaceholderRect(currentIndex);
+        if (rect.isValid()) {
+            QToolTip::showText(mapToGlobal(rect.center()), tooltip, this);
+        }
+    }
 }
 
 void CodeEditor::toggleBreakpoint(int line) {
@@ -287,6 +402,36 @@ void CodeEditor::keyPressEvent(QKeyEvent *event) {
         // Toggle breakpoint
         toggleBreakpoint(getCurrentLine());
         return;
+    }
+
+    // Snippet navigation
+    if (SnippetManager::getInstance().isSessionActive()) {
+        if (event->key() == Qt::Key_Tab) {
+            if (event->modifiers() & Qt::ShiftModifier) {
+                // Shift+Tab - previous placeholder
+                SnippetManager::getInstance().previousPlaceholder();
+            } else {
+                // Tab - next placeholder
+                SnippetManager::getInstance().nextPlaceholder();
+            }
+            event->accept();
+            return;
+        }
+
+        if (event->key() == Qt::Key_Escape) {
+            // Escape - end snippet session
+            SnippetManager::getInstance().endSnippetSession();
+            event->accept();
+            return;
+        }
+    }
+
+   // Check for snippet trigger on Enter/Space
+    if (event->key() == Qt::Key_Tab || event->key() == Qt::Key_Space) {
+        if (checkAndInsertSnippet()) {
+            event->accept();
+            return;
+        }
     }
 
     if (event->key() == Qt::Key_Tab) {
@@ -689,9 +834,12 @@ void CodeEditor::applyCompletion(const CompletionItem& item) {
     cursor.setPosition(cursor.position() + context.currentWord.length(), QTextCursor::KeepAnchor);
 
     if (item.type == "snippet") {
-        // Вставка сниппета с поддержкой placeholder'ов
-        cursor.insertText(item.detail);
-        // TODO: Реализовать навигацию по placeholder'ам
+        // Insert snippet with placeholder navigation
+        SnippetManager::getInstance().startSnippetSession(
+            editor->document(),
+            item.detail,  // Snippet content with placeholders
+            editor->textCursor().position()
+        );
     } else {
         // Вставка метода/свойства
         QString text = item.text;
