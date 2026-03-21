@@ -1,0 +1,105 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-compiler:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        compiler: [gcc, clang]
+        exclude:
+          - os: windows-latest
+            compiler: gcc
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y llvm-14-dev qt5-default
+    
+    - name: Configure
+      run: |
+        cd proxima-compiler
+        mkdir build && cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+    
+    - name: Build
+      run: |
+        cd proxima-compiler/build
+        make -j$(nproc)
+    
+    - name: Test
+      run: |
+        cd proxima-compiler/build
+        ctest --output-on-failure
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: proxima-compiler-${{ matrix.os }}
+        path: proxima-compiler/build/proxima
+
+  build-ide:
+    runs-on: ${{ matrix.os }}
+    needs: build-compiler
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y qt5-default
+    
+    - name: Configure
+      run: |
+        cd centauri-ide
+        mkdir build && cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release
+    
+    - name: Build
+      run: |
+        cd centauri-ide/build
+        make -j$(nproc)
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: centauri-ide-${{ matrix.os }}
+        path: centauri-ide/build/centauri
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build-compiler, build-ide]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Download artifacts
+      uses: actions/download-artifact@v3
+    
+    - name: Create release package
+      run: |
+        mkdir release
+        cp -r proxima-compiler-*/* release/
+        cp -r centauri-ide-*/* release/
+        tar -czf proxima-centauri-${{ github.ref_name }}.tar.gz release/
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: proxima-centauri-*.tar.gz
+        draft: false
+        prerelease: false
