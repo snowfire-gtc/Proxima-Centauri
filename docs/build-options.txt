@@ -1,0 +1,5 @@
+./build.sh --debug          # Debug build
+./build.sh --with-cuda      # Enable CUDA support
+./build.sh --with-curl      # Enable LLM integration
+./build.sh --with-ide       # Build Centauri IDE
+./build.sh --clean          # Clean build

@@ -1,0 +1,1 @@
+proxima run hello.prx

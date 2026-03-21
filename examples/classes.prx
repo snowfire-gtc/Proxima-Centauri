@@ -1,0 +1,63 @@
+// Пример ООП
+namespace("examples");
+
+template<T>
+class Shape
+public:
+    constructor()
+        .name = "Unnamed Shape";
+        .position = point2<T>(0, 0);
+    end
+    
+    get_name(): string
+        return .name;
+    end
+    
+    set_name(new_name: string)
+        .name = new_name;
+    end
+    
+protected:
+    name: string;
+    position: point2<T>;
+end
+
+template<T>
+class Circle: public Shape<T>
+public:
+    constructor()
+        .name = "Circle";
+        .radius = 1;
+    end
+    
+    get_radius(): T
+        return .radius;
+    end
+    
+    set_radius(r: T)
+        .radius = r;
+    end
+    
+    get_area(): T
+        return pi * .radius * .radius;
+    end
+    
+protected:
+    radius: T;
+end
+
+main(): int32
+    // Создание объектов
+    circle: Circle<double> = Circle<double>();
+    circle.set_name("My Circle");
+    circle.set_radius(5.0);
+    
+    // Использование
+    print("Shape: %s\n", circle.get_name());
+    print("Radius: %.2f\n", circle.get_radius());
+    print("Area: %.2f\n", circle.get_area());
+    
+    return 0;
+end
+
+end

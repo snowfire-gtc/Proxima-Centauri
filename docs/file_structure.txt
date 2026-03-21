@@ -1,0 +1,24 @@
+proxima/
+├── proxima-compiler/    # Compiler implementation
+│   ├── src/
+│   ├── tests/
+│   ├── examples/
+│   └── build.sh
+├── centauri-ide/        # IDE implementation
+│   ├── src/
+│   ├── resources/
+│   └── build-ide.sh
+├── docs/                # Documentation
+├── examples/            # Example projects
+└── README.md
+
+
+
+proxima/
+├── src/           # Compiler source code
+├── ide/           # Centauri IDE source code
+├── tests/         # Unit and integration tests
+├── examples/      # Example programs
+├── docs/          # Documentation
+├── rules/         # Build configuration examples
+└── build.sh       # Build script
