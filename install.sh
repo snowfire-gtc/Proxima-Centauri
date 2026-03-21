@@ -59,21 +59,22 @@ elif [ -d "/usr/lib/llvm-15" ]; then
     print_success "LLVM 15 found"
 elif [ -d "/usr/lib/llvm-16" ]; then
     print_success "LLVM 16 found"
+elif [ -d "/usr/lib/llvm-17" ]; then
+    print_success "LLVM 17 found"
+elif [ -d "/usr/lib/llvm-18" ]; then
+    print_success "LLVM 18 found"
 else
     print_warning "LLVM not found in standard locations"
     echo "Please install LLVM 14+ or set LLVM_DIR environment variable"
 fi
 
 # Check Qt
-if [ -d "/opt/Qt5.15.2" ]; then
-    print_success "Qt 5.15.2 found"
-    export QT_PATH="/opt/Qt5.15.2"
-elif [ -d "/opt/Qt6" ]; then
-    print_success "Qt 6 found"
-    export QT_PATH="/opt/Qt6"
+if [ dpkg -s qt6-base-dev >/dev/null 2>&1; ]; then
+    print_success "Qt6 found"
+    export QT_PATH="/usr/lib/x86_64-linux-gnu/qt6"
 else
-    print_warning "Qt not found in /opt"
-    echo "Please install Qt 5.15.2+ or set QT_PATH environment variable"
+    print_warning "Qt not found"
+    echo "Please install qt6-base-dev and qt6-5compat-dev or set QT_PATH environment variable"
 fi
 
 # Build compiler
@@ -153,7 +154,7 @@ if [ "$(uname)" = "Linux" ] && [ "$1" = "install" ]; then
 Name=Centauri IDE
 Comment=IDE for Proxima Programming Language
 Exec=$PREFIX/bin/centauri
-Icon=$PREFIX/share/centauri/icons/centauri.png
+Icon=$PREFIX/share/icons/hicolor/256x256/apps/logo.png
 Terminal=false
 Type=Application
 Categories=Development;IDE;

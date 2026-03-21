@@ -50,7 +50,7 @@ clean_build() {
 build_compiler() {
     print_info "Building Proxima Compiler..."
     
-    cd proxima-compiler
+    cd proxima
     
     if [ -d "build" ]; then
         rm -rf build
@@ -70,14 +70,14 @@ build_compiler() {
     
     cd ../..
     
-    print_success "Compiler built"
+    print_success "Proxima built"
 }
 
 # Build IDE
 build_ide() {
     print_info "Building Centauri IDE..."
     
-    cd centauri-ide
+    cd centauri
     
     if [ -d "build" ]; then
         rm -rf build
@@ -97,7 +97,7 @@ build_ide() {
     
     cd ../..
     
-    print_success "IDE built"
+    print_success "Centaury built"
 }
 
 # Create package structure
@@ -123,10 +123,10 @@ create_package() {
     cp -r docs/* $BUILD_DIR/share/proxima/docs/ 2>/dev/null || true
     
     # Copy resources
-    cp -r centauri-ide/resources/* $BUILD_DIR/share/centauri/resources/ 2>/dev/null || true
+    cp -r centauri/resources/* $BUILD_DIR/share/centauri/resources/ 2>/dev/null || true
     
     # Copy icons
-    cp centauri-ide/resources/icons/centauri.png $BUILD_DIR/share/icons/hicolor/256x256/apps/ 2>/dev/null || true
+    cp centauri/assets/logo.png $BUILD_DIR/share/icons/hicolor/256x256/apps/ 2>/dev/null || true
     
     # Create desktop file
     cat > $BUILD_DIR/share/applications/centauri.desktop << EOF
@@ -284,7 +284,7 @@ Version: $VERSION
 Section: devel
 Priority: optional
 Architecture: amd64
-Maintainer: Proxima Development Team <dev@proxima-lang.org>
+Maintainer: Serey Antonov & Proxima Development Team <dev@prxlang.ru>
 Description: Proxima Programming Language and Centauri IDE
  A MATLAB-compatible programming language with full OOP support,
  GPU acceleration, and modern IDE integration.
@@ -393,9 +393,9 @@ See \`share/proxima/examples/\` for example projects.
 
 ## Support
 
-- Website: https://proxima-lang.org
-- Email: dev@proxima-lang.org
-- Issues: https://github.com/proxima-lang/proxima/issues
+- Website: https://prxlang.ru
+- Email: dev@prxlang.ru
+- Issues: https://github.com/snowfire-gtc/Proxima-Centauri/issues
 
 ## Changelog
 
