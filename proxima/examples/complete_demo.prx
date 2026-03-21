@@ -17,7 +17,7 @@ interface class gem
     name: string;
     params: collection;
     time_last_call: time;
-    
+
     init() : [];
     reset() : [];
     update(time_current: time) : [time_next_call: time, is_alive: bool];
@@ -40,31 +40,31 @@ public:
         .params = collection();
         .params["input_size"] = input_size;
         .params["is_parallel"] = is_parallel;
-        .time_last_call = time_now();
-        
-        print("DataProcessor created: size=%d, parallel=%s\n", 
+        .time_last_call = time.now();
+
+        print("DataProcessor created: size=%d, parallel=%s\n",
               input_size, is_parallel ? "true" : "false");
     end
-    
+
     destructor()
         print("DataProcessor destroyed: %s\n", .name);
     end
-    
+
     init() : []
         .data = zeros(.input_size);
         .result = zeros(.input_size);
         print("DataProcessor initialized\n");
     end
-    
+
     reset() : []
         .data = zeros(.input_size);
         .result = zeros(.input_size);
         print("DataProcessor reset\n");
     end
-    
+
     update(time_current: time) : [time_next_call: time, is_alive: bool]
         .time_last_call = time_current;
-        
+
         // Process data
         if .is_parallel
             parallel(threads=8, array=&.result) for i in 1:.input_size
@@ -75,17 +75,17 @@ public:
                 .result[i] = .data[i] * 2.0;
             end
         end
-        
+
         return time_current + time(1000), true;
     end
-    
+
     show() : []
         print("DataProcessor: %s\n", .name);
         print("Input size: %d\n", .input_size);
         print("Parallel: %s\n", .is_parallel ? "true" : "false");
         print("Last call: %s\n", .time_last_call.formatted());
     end
-    
+
     get_metrics() : [metrics: collection]
         metrics = collection();
         metrics["name"] = .name;
@@ -94,29 +94,29 @@ public:
         metrics["last_call"] = .time_last_call.formatted();
         return metrics;
     end
-    
+
     get_name() : string
         return .name;
     end
-    
+
     set_data(new_data: vector<T>) : void
         if size(new_data, 1) != .input_size
             error("Data size mismatch");
         end
         .data = new_data;
     end
-    
+
     get_result() : vector<T>
         return .result;
     end
-    
+
     process_gpu() : auto*
         // GPU обработка
         config: parallel = parallel(grid=32, block=256);
         gpu_result: auto* = parallel(config) T* gpu_process(.data);
         return gpu_result;
     end
-    
+
 protected:
     input_size: int32;
     is_parallel: bool;
@@ -139,25 +139,25 @@ suite processor_tests
         proc: DataProcessor<double> = DataProcessor<double>(100, false);
         assert(proc.get_name() == "DataProcessor", "Name mismatch");
     end
-    
+
     test test_parallel() : void
         proc: DataProcessor<double> = DataProcessor<double>(1000, true);
         proc.init();
-        
+
         data: vector<double> = rand(1000);
         proc.set_data(data);
-        
-        result = proc.update(time_now());
+
+        result = proc.update(time.now());
         assert(result.is_alive == true, "Processor should be alive");
     end
-    
+
     test test_gpu() : void
         proc: DataProcessor<double> = DataProcessor<double>(10000, true);
         proc.init();
-        
+
         data: vector<double> = rand(10000);
         proc.set_data(data);
-        
+
         gpu_ptr = proc.process_gpu();
         assert(gpu_ptr != null, "GPU pointer should not be null");
     end
@@ -172,18 +172,18 @@ main() : int32
     print("Proxima Language Demo\n");
     print("Version: 1.0.0\n");
     print("========================================\n\n");
-    
+
     // 1. Скалярные типы
     print("1. Scalar Types\n");
     print("----------------------------------------\n");
-    
+
     a: int32 = 100;
     b: double = 3.14159;
     c: single = 2.718;
     d: bool = true;
     e: char = 'A';
     f: string = "Hello, Proxima!";
-    
+
     print("int32: %d\n", a);
     print("double: %.6f\n", b);
     print("single: %.6f\n", c);
@@ -191,121 +191,121 @@ main() : int32
     print("char: %c\n", e);
     print("string: %s\n", f);
     print("\n");
-    
+
     // 2. Вектора и матрицы
     print("2. Vectors and Matrices\n");
     print("----------------------------------------\n");
-    
+
     v: vector<double> = 1:10;
     print("Vector 1:10: ");
     print(v);
     print("\n");
-    
+
     m: matrix<double> = [1, 2, 3,, 4, 5, 6,, 7, 8, 9];
     print("Matrix 3x3:\n");
     print(m);
     print("\n");
-    
+
     // Матричные операции
     I: matrix33 = eye(3);
     A: matrix33 = m;
     C: matrix33 = A * I;
-    
+
     print("A * I = A: %s\n", (A == C) ? "true" : "false");
     print("\n");
-    
+
     // 3. Коллекции
     print("3. Collections\n");
     print("----------------------------------------\n");
-    
+
     people: collection = [
         "Smith", "25", "Paris",,
         "Bob", "38", "Moscow",,
         "Alice", "30", "London"
     ];
     people.header = ["Name", "Age", "City"];
-    
+
     print("{:>10} {:>5} {:<15}\n", "Name", "Age", "City");
     for row in people
         print("{:>10} {:>5} {:<15}\n", row.Name, row.Age, row.City);
     end
     print("\n");
-    
+
     // 4. Время
     print("4. Time\n");
     print("----------------------------------------\n");
-    
-    t1: time = time_now();
+
+    t1: time = time.now();
     print("Current time: %s\n", t1.formatted());
-    
+
     t2: time = time("18:00:00.345 13.09.2024");
     print("Formatted time: %s\n", t2.formatted());
-    
+
     delta: int64 = t2 - t1;
     print("Time delta: %d ms\n", delta);
     print("\n");
-    
+
     // 5. Классы и ООП
     print("5. Classes and OOP\n");
     print("----------------------------------------\n");
-    
+
     proc: DataProcessor<double> = DataProcessor<double>(100, true);
     proc.show();
-    
+
     data: vector<double> = rand(100);
     proc.set_data(data);
-    
-    result = proc.update(time_now());
-    print("Next call: %s, Alive: %s\n", 
-          result.time_next_call.formatted(), 
+
+    result = proc.update(time.now());
+    print("Next call: %s, Alive: %s\n",
+          result.time_next_call.formatted(),
           result.is_alive ? "true" : "false");
-    
+
     metrics = proc.get_metrics();
     print("Metrics:\n");
     print(metrics);
     print("\n");
-    
+
     // 6. Параллельные вычисления
     print("6. Parallel Computing\n");
     print("----------------------------------------\n");
-    
+
     N: int32 = 1000000;
     A: vector<double> = zeros(N);
     B: vector<double> = zeros(N);
     C: vector<double> = zeros(N);
-    
+
     // Инициализация
     for i in 1:N
         A[i] = i * 1.0;
         B[i] = i * 2.0;
     end
-    
+
     // Параллельное вычисление
     parallel(threads=8, array=&C) for i in 1:N
         C[i] = A[i] + B[i];
     end
-    
+
     print("Parallel sum of first 10 elements:\n");
     for i in 1:10
         print("C[%d] = %.2f\n", i, C[i]);
     end
     print("\n");
-    
+
     // 7. Анонимные функции
     print("7. Anonymous Functions\n");
     print("----------------------------------------\n");
-    
+
     add = (x, y) : auto {x + y};
     result = add(10, 20);
     print("Anonymous function add(10, 20) = %d\n", result);
     print("\n");
-    
+
     // 8. Условные операторы
     print("8. Conditional Statements\n");
     print("----------------------------------------\n");
-    
+
     x: int32 = 50;
-    
+
     if x > 100
         print("x > 100\n");
     elseif x > 50
@@ -313,22 +313,22 @@ main() : int32
     else
         print("x <= 50\n");
     end
-    
+
     // Тернарный оператор
     y: string = (x > 50) ? "greater" : "not greater";
     print("Ternary result: %s\n", y);
     print("\n");
-    
+
     // 9. Циклы
     print("9. Loops\n");
     print("----------------------------------------\n");
-    
+
     print("For loop: ");
     for i in 1:5
         print("%d ", i);
     end
     print("\n");
-    
+
     print("While loop: ");
     i: int32 = 1;
     while i <= 5
@@ -336,42 +336,42 @@ main() : int32
         i = i + 1;
     end
     print("\n\n");
-    
+
     // 10. Исключения и отладка
     print("10. Debug Functions\n");
     print("----------------------------------------\n");
-    
+
     dbgprint("Debug message", level=3);
     dbgcontext();
-    
+
     print("\n");
-    
+
     // 11. Встроенные константы
     print("11. Built-in Constants\n");
     print("----------------------------------------\n");
-    
+
     print("pi = %.10f\n", pi);
     print("pi2 = %.10f\n", pi2);
     print("exp = %.10f\n", exp);
     print("nan = %f\n", nan);
     print("inf = %f\n", inf);
     print("\n");
-    
+
     // 12. RTTI
     print("12. Runtime Type Information\n");
     print("----------------------------------------\n");
-    
+
     type_info: rtti = rtti(proc);
     print("Object name: %s\n", type_info.name);
     print("Object fields:\n");
     print(type_info.fields);
     print("\n");
-    
+
     // Завершение
     print("========================================\n");
     print("Demo completed successfully!\n");
     print("========================================\n");
-    
+
     return 0;
 end
 

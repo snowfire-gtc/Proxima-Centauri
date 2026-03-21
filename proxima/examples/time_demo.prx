@@ -1,0 +1,99 @@
+// Демонстрация работы с временем (обновлённый API)
+// Файл: examples/time_demo.prx
+
+namespace("examples");
+
+main(): int32
+    print("========================================\n");
+    print("Time API Demo (Updated)\n");
+    print("========================================\n\n");
+    
+    // 1. Получение текущего времени через статический метод
+    print("1. Current Time\n");
+    print("----------------------------------------\n");
+    
+    t: time = time.now();  // Новый способ
+    print("Current: %s\n", t.formatted());
+    print("Timestamp: %d ms\n", t.getTimestamp());
+    print("\n");
+    
+    // 2. Форматирование
+    print("2. Formatting\n");
+    print("----------------------------------------\n");
+    
+    print("Default: %s\n", t.formatted());
+    print("Custom:  %s\n", t.formatted("%Y-%m-%d %H:%M:%S"));
+    print("Time:    %s\n", t.formatted("%H:%M:%S.%u"));
+    print("Date:    %s\n", t.formatted("%d.%m.%Y"));
+    print("\n");
+    
+    // 3. Компоненты времени
+    print("3. Time Components\n");
+    print("----------------------------------------\n");
+    
+    print("Year:   %d\n", t.getYear());
+    print("Month:  %d\n", t.getMonth());
+    print("Day:    %d\n", t.getDay());
+    print("Hour:   %d\n", t.getHour());
+    print("Minute: %d\n", t.getMinute());
+    print("Second: %d\n", t.getSecond());
+    print("\n");
+    
+    // 4. Арифметика времени
+    print("4. Time Arithmetic\n");
+    print("----------------------------------------\n");
+    
+    t2: time = t.add(3600000);  // +1 час
+    print("Original: %s\n", t.formatted());
+    print("+1 hour:  %s\n", t2.formatted());
+    
+    delta: int64 = t2.difference(t);
+    print("Delta:    %d ms (%.2f hours)\n", delta, delta / 3600000.0);
+    print("\n");
+    
+    // 5. Создание времени
+    print("5. Creating Time\n");
+    print("----------------------------------------\n");
+    
+    t3: time = time.fromLocalTime(18, 30, 0, 13, 9, 2024);
+    print("From components: %s\n", t3.formatted());
+    
+    t4: time = time.fromUnixTimestamp(1234567890);
+    print("From timestamp:  %s\n", t4.formatted());
+    print("\n");
+    
+    // 6. Проверки
+    print("6. Time Checks\n");
+    print("----------------------------------------\n");
+    
+    print("Is valid:  %s\n", t.isValid() ? "true" : "false");
+    print("Is today:  %s\n", t.isToday() ? "true" : "false");
+    print("Is past:   %s\n", t.isPast() ? "true" : "false");
+    print("Is future: %s\n", t.isFuture() ? "true" : "false");
+    print("\n");
+    
+    // 7. Задержка выполнения
+    print("7. Sleep Demo\n");
+    print("----------------------------------------\n");
+    
+    print("Sleeping for 1 second...\n");
+    time.sleep(1000);
+    print("Done!\n\n");
+    
+    // 8. Временные зоны
+    print("8. Timezones\n");
+    print("----------------------------------------\n");
+    
+    print("Local:   %s\n", t.formatted());
+    print("UTC:     %s\n", t.toUTC().formatted());
+    print("Timezone: %s\n", t.getTimezone());
+    print("\n");
+    
+    print("========================================\n");
+    print("Demo completed!\n");
+    print("========================================\n");
+    
+    return 0;
+end
+
+end  // namespace

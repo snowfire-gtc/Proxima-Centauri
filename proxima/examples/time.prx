@@ -1,0 +1,16 @@
+// Получение текущего времени
+t: time = time.now();
+print("Current: %s\n", t.formatted());
+
+// Задержка выполнения
+time.sleep(1000);  // 1 секунда
+
+// Создание времени из timestamp
+t2: time = time.fromUnixTimestamp(1234567890);
+
+// Создание времени из компонентов
+t3: time = time.fromLocalTime(18, 30, 0, 13, 9, 2024);
+
+// Арифметика времени
+t4: time = t.add(3600000);  // +1 час
+delta: int64 = t4.difference(t);  // разница в мс

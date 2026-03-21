@@ -282,10 +282,119 @@ void SemanticAnalyzer::analyzeBlock(BlockNodePtr block) {
     symbolTable.popScope();
 }
 
+// Добавлена поддержка вызова статических методов класса
 void SemanticAnalyzer::analyzeExpression(ExpressionNodePtr expr) {
     if (!expr) return;
     
     switch (expr->nodeType) {
+    	case NodeType::CALL_EXPR: {
+            auto call = std::static_pointer_cast<CallNode>(expr);
+            analyzeExpression(call->callee);
+            
+            // Проверяем, является ли вызов статическим методом класса
+            if (call->callee->nodeType == NodeType::MEMBER_ACCESS) {
+                auto memberAccess = std::static_pointer_cast<MemberAccessNode>(call->callee);
+                
+                if (memberAccess->object->nodeType == NodeType::TYPE_REF) {
+                    // Это вызов статического метода класса: ClassName.method()
+                    auto typeRef = std::static_pointer_cast<TypeRefNode>(memberAccess->object);
+                    std::string className = typeRef->typeName;
+                    std::string methodName = memberAccess->memberName;
+                    
+                    // Проверяем существование класса
+                    if (!typeChecker.typeExists(className)) {
+                        addError("Unknown class: '" + className + "'", call->token);
+                        break;
+                    }
+                    
+                    // Проверяем существование статического метода
+                    auto staticMethods = stdlib::StdLibRegistry::getInstance()
+                        .getStaticMethods(className);
+                    
+                    if (std::find(staticMethods.begin(), staticMethods.end(), 
+                                 methodName) == staticMethods.end()) {
+                        addWarning("Static method '" + methodName + "' not found in class '" + 
+                                  className + "'", call->token);
+                        
+                        // Предоставляем подсказку
+                        std::string hint = "Available static methods: ";
+                        for (size_t i = 0; i < staticMethods.size() && i < 5; i++) {
+                            if (i > 0) hint += ", ";
+                            hint += staticMethods[i];
+                        }
+                        if (staticMethods.size() > 5) {
+                            hint += ", ...";
+                        }
+                        addWarning(hint, call->token);
+                    }
+                    
+                    // Проверяем аргументы
+                    std::vector<ExpressionNodePtr> args;
+                    for (const auto& arg : call->arguments) {
+                        analyzeExpression(arg);
+                        args.push_back(arg);
+                    }
+                    
+                    checkFunctionCall(className + "::" + methodName, args, call->token);
+                    break;
+                }
+            }
+            
+            // Обычный вызов функции
+            std::vector<ExpressionNodePtr> args;
+            for (const auto& arg : call->arguments) {
+                analyzeExpression(arg);
+                args.push_back(arg);
+            }
+            
+            if (call->callee->nodeType == NodeType::IDENTIFIER) {
+                auto ident = std::static_pointer_cast<IdentifierNode>(call->callee);
+                checkFunctionCall(ident->name, args, call->token);
+            }
+            break;
+        }
+        
+        case NodeType::MEMBER_ACCESS: {
+            auto memberAccess = std::static_pointer_cast<MemberAccessNode>(expr);
+            analyzeExpression(memberAccess->object);
+            
+            // Проверяем тип объекта
+            std::string objectType = typeChecker.inferType(memberAccess->object);
+            
+            if (typeChecker.typeExists(objectType)) {
+                // Проверяем существование поля/метода
+                auto instanceMethods = stdlib::StdLibRegistry::getInstance()
+                    .getInstanceMethods(objectType);
+                auto properties = stdlib::StdLibRegistry::getInstance()
+                    .getProperties(objectType);
+                
+                bool found = std::find(instanceMethods.begin(), instanceMethods.end(),
+                              memberAccess->memberName) != instanceMethods.end() ||
+                            std::find(properties.begin(), properties.end(),
+                              memberAccess->memberName) != properties.end();
+                
+                if (!found) {
+                    addWarning("Member '" + memberAccess->memberName + "' not found in type '" + 
+                              objectType + "'", memberAccess->token);
+                    
+                    // Предоставляем подсказку с доступными методами
+                    std::string hint = "Available members: ";
+                    size_t count = 0;
+                    for (const auto& method : instanceMethods) {
+                        if (count > 0) hint += ", ";
+                        hint += method;
+                        count++;
+                        if (count >= 10) {
+                            hint += ", ...";
+                            break;
+                        }
+                    }
+                    addWarning(hint, memberAccess->token);
+                }
+            }
+            break;
+        }
+        
         case NodeType::BINARY_OP: {
             auto binop = std::static_pointer_cast<BinaryOpNode>(expr);
             analyzeExpression(binop->left);

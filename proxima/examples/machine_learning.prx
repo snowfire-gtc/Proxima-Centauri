@@ -21,95 +21,95 @@ public:
         .params = collection();
         .params["layers"] = layers;
         .params["learning_rate"] = learning_rate;
-        .time_last_call = time_now();
-        
+        .time_last_call = time.now();
+
         // Инициализация весов
         init_weights();
     end
-    
+
     init() : []
         print("NeuralNetwork initialized\n");
     end
-    
+
     reset() : []
         init_weights();
         print("NeuralNetwork reset\n");
     end
-    
+
     forward(input: vector<T>) : vector<T>
         .activations[1] = input;
-        
+
         for l in 2:size(.layers)
             .z[l] = .weights[l-1] * .activations[l-1] + .biases[l-1];
             .activations[l] = sigmoid(.z[l]);
         end
-        
+
         return .activations[size(.layers)];
     end
-    
+
     backward(target: vector<T>) : void
         m: int32 = size(target, 1);
         L: int32 = size(.layers);
-        
+
         // Выходной слой
         .delta[L] = .activations[L] - target;
-        
+
         // Скрытые слои
         for l in (L-1):-1:2
             .delta[l] = (.weights[l]' * .delta[l+1]) .* sigmoid_gradient(.z[l]);
         end
-        
+
         // Обновление весов
         for l in 1:(L-1)
             .weights[l] = .weights[l] - .learning_rate * (.delta[l+1] * .activations[l]') / m;
             .biases[l] = .biases[l] - .learning_rate * sum(.delta[l+1], 2) / m;
         end
     end
-    
+
     train(X: matrix<T>, y: matrix<T>, epochs: int32) : collection
         metrics = collection();
         m: int32 = size(X, 2);
-        
+
         print("Training started: %d samples, %d epochs\n", m, epochs);
-        
+
         for epoch in 1:epochs
             cost: T = 0;
-            
+
             for i in 1:m
                 // Forward pass
                 output = forward(X[:, i]);
-                
+
                 // Compute cost
                 cost = cost + sum((output - y[:, i]) .^ 2);
-                
+
                 // Backward pass
                 backward(y[:, i]);
             end
-            
+
             cost = cost / (2 * m);
-            
+
             if epoch % 100 == 0
                 print("Epoch %d: Cost = %.6f\n", epoch, cost);
             end
-            
+
             metrics[epoch, "cost"] = cost;
         end
-        
-        .time_last_call = time_now();
+
+        .time_last_call = time.now();
         return metrics;
     end
-    
+
     predict(X: matrix<T>) : matrix<T>
         m: int32 = size(X, 2);
         predictions: matrix<T> = zeros(size(.layers, L), m);
-        
+
         for i in 1:m
             predictions[:, i] = forward(X[:, i]);
         end
-        
+
         return predictions;
     end
-    
+
     show() : []
         print("NeuralNetwork: %s\n", .name);
         print("Layers: ");
@@ -117,7 +117,7 @@ public:
         print("\nLearning rate: %.6f\n", .learning_rate);
         print("Last update: %s\n", .time_last_call.formatted());
     end
-    
+
     get_metrics() : [metrics: collection]
         metrics = collection();
         metrics["name"] = .name;
@@ -126,11 +126,11 @@ public:
         metrics["last_update"] = .time_last_call.formatted();
         return metrics;
     end
-    
+
     get_name() : string
         return .name;
     end
-    
+
 protected:
     layers: vector<int32>;
     learning_rate: T;
@@ -139,12 +139,12 @@ protected:
     activations: vector<vector<T>>;
     z: vector<vector<T>>;
     delta: vector<vector<T>>;
-    
+
     init_weights() : void
         L: int32 = size(.layers);
         .weights = vector<matrix<T>>(L-1);
         .biases = vector<vector<T>>(L-1);
-        
+
         for l in 1:(L-1)
             // Инициализация Xavier
             epsilon: T = sqrt(6 / (.layers[l] + .layers[l+1]));
@@ -152,11 +152,11 @@ protected:
             .biases[l] = zeros(.layers[l+1], 1);
         end
     end
-    
+
     sigmoid(x: vector<T>) : vector<T>
         return 1 / (1 + exp(-x));
     end
-    
+
     sigmoid_gradient(x: vector<T>) : vector<T>
         s = sigmoid(x);
         return s .* (1 - s);
@@ -169,17 +169,17 @@ end
 
 function load_mnist_dataset(path: string) : [X: matrix<double>, y: matrix<double>]
     print("Loading MNIST dataset from: %s\n", path);
-    
+
     // Загрузка изображений
     X = collection.read(path + "/images.csv");
     X = X[:, 2:end]; // Пропустить первый столбец (labels)
-    
+
     // Нормализация
     X = X / 255.0;
-    
+
     // Загрузка меток
     y = collection.read(path + "/labels.csv");
-    
+
     print("Dataset loaded: %d samples\n", size(X, 1));
 end
 
@@ -191,76 +191,76 @@ main() : int32
     print("========================================\n");
     print("Machine Learning Demo - Neural Network\n");
     print("========================================\n\n");
-    
+
     // Параметры сети
     input_size: int32 = 784;      // 28x28 изображения
     hidden_size: int32 = 128;
     output_size: int32 = 10;      // 10 классов
-    
+
     layers: vector<int32> = [input_size, hidden_size, output_size];
     learning_rate: double = 0.01;
     epochs: int32 = 1000;
-    
+
     // Создание сети
     nn: NeuralNetwork<double> = NeuralNetwork<double>(layers, learning_rate);
     nn.show();
-    
+
     // Загрузка данных (заглушка для примера)
     print("Generating synthetic data...\n");
     X: matrix<double> = rand(784, 1000);
     y: matrix<double> = zeros(10, 1000);
-    
+
     // One-hot encoding меток
     for i in 1:1000
         label: int32 = i % 10;
         y[label+1, i] = 1;
     end
-    
+
     print("Data generated: %d samples\n", size(X, 2));
     print("\n");
-    
+
     // Обучение
     print("Training neural network...\n");
     print("----------------------------------------\n");
-    
+
     metrics = nn.train(X, y, epochs);
-    
+
     print("\n");
-    
+
     // Тестирование
     print("Testing neural network...\n");
     print("----------------------------------------\n");
-    
+
     predictions = nn.predict(X);
-    
+
     // Вычисление точности
     correct: int32 = 0;
     for i in 1:size(X, 2)
         pred_label: int32 = argmax(predictions[:, i]);
         true_label: int32 = argmax(y[:, i]);
-        
+
         if pred_label == true_label
             correct = correct + 1;
         end
     end
-    
+
     accuracy: double = correct / size(X, 2) * 100;
     print("Accuracy: %.2f%% (%d/%d)\n", accuracy, correct, size(X, 2));
     print("\n");
-    
+
     // Сохранение модели
     print("Saving model...\n");
     model_state = nn.store();
     model_state.write("model_state.csv");
-    
+
     // Визуализация
     print("Visualization:\n");
     nn.get_metrics();
-    
+
     print("\n========================================\n");
     print("Demo completed successfully!\n");
     print("========================================\n");
-    
+
     return 0;
 end
 

@@ -7,6 +7,7 @@
 #include <QVector>
 #include "SyntaxHighlighter.h"
 #include "core/Module.h"
+#include "CodeFoldingManager.h"
 
 namespace proxima {
 
