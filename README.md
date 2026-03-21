@@ -60,3 +60,18 @@ cd proxima
 
 # Build and install
 ./install.sh install
+
+### Testing
+
+``` bash
+# Run compiler tests
+cd proxima-compiler/build
+ctest
+
+# Run IDE tests
+cd centauri-ide/build
+ctest
+
+# Run integration tests
+./run-tests.sh
+```
