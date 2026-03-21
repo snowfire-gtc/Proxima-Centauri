@@ -12,7 +12,7 @@ Proxima is a MATLAB-compatible programming language with full OOP support, GPU a
 ## 🚀 Features
 
 ### Language (Proxima)
-- ✅ MATLAB-compatible syntax with `end` blocks
+- ✅ MATLAB-compatible syntax
 - ✅ Full OOP with classes, interfaces, inheritance
 - ✅ Optional typing with automatic inference
 - ✅ GPU acceleration (CUDA)
