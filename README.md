@@ -2,8 +2,8 @@
 
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Version](https://img.shields.io/badge/Version-1.0.0-green.svg)](https://github.com/proxima-lang/proxima/releases)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/proxima-lang/proxima/build.yml)](https://github.com/proxima-lang/proxima/actions)
-[![Issues](https://img.shields.io/github/issues/proxima-lang/proxima)](https://github.com/proxima-lang/proxima/issues)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/Proxima-Centauri/main.yml)](https://github.com/snowfire-gtc/Proxima-Centauri/actions)
+[![Issues](https://img.shields.io/github/issues/Proxima-Centauri)](https://github.com/snowfire-gtc/Proxima-Centauri/issues)
 
 **Complete development environment for scientific computing and data analysis**
 
