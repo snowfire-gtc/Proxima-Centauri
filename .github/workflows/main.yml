@@ -23,22 +23,22 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y llvm-14-dev qt5-default
+        sudo apt-get install -y llvm qt6-base-dev qt6-5compat-dev
     
     - name: Configure
       run: |
-        cd proxima-compiler
+        cd src
         mkdir build && cd build
         cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
     
     - name: Build
       run: |
-        cd proxima-compiler/build
+        cd src/build
         make -j$(nproc)
     
     - name: Test
       run: |
-        cd proxima-compiler/build
+        cd src/build
         ctest --output-on-failure
     
     - name: Upload artifacts
@@ -60,7 +60,7 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y qt5-default
+        sudo apt-get install -y qt6-base-dev
     
     - name: Configure
       run: |
