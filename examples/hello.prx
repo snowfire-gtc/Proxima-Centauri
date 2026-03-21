@@ -1,0 +1,4 @@
+main(): int32
+    print("Hello, Proxima!\n");
+    return 0;
+end

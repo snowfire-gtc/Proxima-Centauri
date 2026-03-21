@@ -1,0 +1,52 @@
+interface class gem
+    // Стандартный интерфейс GEM
+end
+
+class Calculator: public gem
+public:
+    constructor()
+        .name = "Calculator";
+        .params = collection();
+    end
+    
+    multiply(a: matrix<double>, b: matrix<double>): matrix<double>
+        if a.cols != b.rows
+            error("Matrix dimension mismatch");
+        end
+        
+        result: matrix<double> = zeros(a.rows, b.cols);
+        
+        // Параллельное вычисление
+        parallel(threads=8) for i in 1:a.rows
+            for j in 1:b.cols
+                sum: double = 0;
+                for k in 1:a.cols
+                    sum = sum + a[i, k] * b[k, j];
+                end
+                result[i, j] = sum;
+            end
+        end
+        
+        return result;
+    end
+    
+    update(time_current: time): [time_next_call: time, is_alive: bool]
+        return time_current + time(1000), true;
+    end
+    
+    show(): void
+        print("Calculator: %s\n", .name);
+        print("Parameters: %d\n", .params.count());
+    end
+    
+    get_metrics(): [metrics: collection]
+        metrics = collection();
+        metrics["operations"] = .operation_count;
+        metrics["last_calc"] = .time_last_call;
+        return metrics;
+    end
+    
+protected:
+    operation_count: int64 = 0;
+    time_last_call: time;
+end

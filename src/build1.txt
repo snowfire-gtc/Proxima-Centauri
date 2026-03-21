@@ -1,0 +1,17 @@
+# Создание директории сборки
+mkdir build && cd build
+
+# Конфигурация CMake
+cmake .. -DCMAKE_BUILD_TYPE=Release
+
+# Сборка
+make -j$(nproc)
+
+# Установка (опционально)
+sudo make install
+
+# Компиляция примера
+./proxima build ../examples/hello.prx -o hello.bc
+
+# Запуск (через runtime)
+./proxima run ../examples/hello.prx

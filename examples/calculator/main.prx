@@ -1,0 +1,20 @@
+include("calculator");
+include("utils/helpers");
+
+namespace("math.app");
+
+main(): void
+    calc: Calculator = Calculator();
+    
+    a: matrix<double> = rand(100, 100);
+    b: matrix<double> = rand(100, 100);
+    
+    result: matrix<double> = calc.multiply(a, b);
+    
+    print("Result matrix: %dx%d\n", result.rows, result.cols);
+    print("Sum: %.4f\n", sum(result));
+    
+    calc.show();
+end
+
+end  // namespace

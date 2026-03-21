@@ -1,0 +1,92 @@
+centauri-ide/
+├── CMakeLists.txt
+├── README.md
+├── LICENSE (GPLv3)
+├── src/
+│   ├── main.cpp
+│   ├── app/
+│   │   ├── Application.h
+│   │   ├── Application.cpp
+│   │   ├── MainWindow.h
+│   │   ├── MainWindow.cpp
+│   │   └── Settings.h
+│   ├── ui/
+│   │   ├── editor/
+│   │   │   ├── CodeEditor.h
+│   │   │   ├── CodeEditor.cpp
+│   │   │   ├── SyntaxHighlighter.h
+│   │   │   ├── SyntaxHighlighter.cpp
+│   │   │   ├── EditorToolbar.h
+│   │   │   ├── EditorToolbar.cpp
+│   │   │   ├── StatusBar.h
+│   │   │   └── StatusBar.cpp
+│   │   ├── console/
+│   │   │   ├── ConsoleWidget.h
+│   │   │   ├── ConsoleWidget.cpp
+│   │   │   ├── ConsoleTab.h
+│   │   │   └── ConsoleTab.cpp
+│   │   ├── project/
+│   │   │   ├── ProjectTree.h
+│   │   │   ├── ProjectTree.cpp
+│   │   │   ├── FileExplorer.h
+│   │   │   └── FileExplorer.cpp
+│   │   ├── debugger/
+│   │   │   ├── BreakpointManager.h
+│   │   │   ├── BreakpointManager.cpp
+│   │   │   ├── VariableInspector.h
+│   │   │   ├── VariableInspector.cpp
+│   │   │   └── visualizers/
+│   │   │       ├── VectorPlot.h
+│   │   │       ├── VectorPlot.cpp
+│   │   │       ├── MatrixView.h
+│   │   │       ├── MatrixView.cpp
+│   │   │       ├── Layer3DView.h
+│   │   │       ├── Layer3DView.cpp
+│   │   │       ├── CollectionTable.h
+│   │   │       └── CollectionTable.cpp
+│   │   └── menu/
+│   │       ├── MainMenu.h
+│   │       ├── MainMenu.cpp
+│   │       ├── FileMenu.h
+│   │       ├── ProjectMenu.h
+│   │       ├── RunMenu.h
+│   │       ├── GenerateMenu.h
+│   │       ├── SettingsMenu.h
+│   │       ├── InfoMenu.h
+│   │       └── HelpMenu.h
+│   ├── core/
+│   │   ├── Project.h
+│   │   ├── Project.cpp
+│   │   ├── Module.h
+│   │   ├── Module.cpp
+│   │   ├── AutoSaveManager.h
+│   │   ├── AutoSaveManager.cpp
+│   │   ├── CompilerConnector.h
+│   │   ├── CompilerConnector.cpp
+│   │   └── Protocol.h
+│   ├── services/
+│   │   ├── git/
+│   │   │   ├── GitService.h
+│   │   │   ├── GitService.cpp
+│   │   │   └── Repository.h
+│   │   ├── llm/
+│   │   │   ├── LLMService.h
+│   │   │   ├── LLMService.cpp
+│   │   │   └── CodeAssistant.h
+│   │   └── collaboration/
+│   │       ├── CollaborationService.h
+│   │       ├── CollaborationService.cpp
+│   │       ├── SyncClient.h
+│   │       └── UserManager.h
+│   └── utils/
+│       ├── Logger.h
+│       ├── Config.h
+│       └── Helpers.h
+├── resources/
+│   ├── icons/
+│   ├── themes/
+│   └── translations/
+└── rules/
+    ├── build.rules
+    ├── design.rules
+    └── ui.rules

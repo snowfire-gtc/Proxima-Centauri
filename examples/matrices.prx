@@ -1,0 +1,35 @@
+// Пример работы с матрицами
+namespace("examples");
+
+main(): int32
+    // Создание матриц
+    A: matrix<double> = [1, 2, 3,, 4, 5, 6,, 7, 8, 9];
+    B: matrix<double> = eye(3);
+    
+    // Матричные операции
+    C: matrix<double> = A * B;
+    D: matrix<double> = A .+ B;  // Поэлементное сложение
+    
+    // Вывод
+    print("Matrix A:\n");
+    print(A);
+    
+    print("Matrix C (A * I):\n");
+    print(C);
+    
+    // Вектора
+    v: vector<double> = 1:10;
+    print("Vector v: ");
+    print(v);
+    print("\n");
+    
+    // Транспонирование
+    vt: vector<double> = v';
+    print("Vector v transposed: ");
+    print(vt);
+    print("\n");
+    
+    return 0;
+end
+
+end

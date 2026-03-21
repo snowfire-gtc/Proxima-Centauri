@@ -1,0 +1,58 @@
+proxima-compiler/
+├── CMakeLists.txt
+├── README.md
+├── LICENSE (GPLv3)
+├── src/
+│   ├── main.cpp
+│   ├── compiler/
+│   │   ├── Compiler.h
+│   │   ├── Compiler.cpp
+│   │   ├── Config.h
+│   │   └── Config.cpp
+│   ├── lexer/
+│   │   ├── Lexer.h
+│   │   ├── Lexer.cpp
+│   │   ├── Token.h
+│   │   └── Token.cpp
+│   ├── parser/
+│   │   ├── Parser.h
+│   │   ├── Parser.cpp
+│   │   ├── AST.h
+│   │   └── AST.cpp
+│   ├── semantic/
+│   │   ├── SemanticAnalyzer.h
+│   │   ├── SemanticAnalyzer.cpp
+│   │   ├── TypeChecker.h
+│   │   ├── TypeChecker.cpp
+│   │   └── SymbolTable.h
+│   ├── codegen/
+│   │   ├── LLVMCodeGen.h
+│   │   ├── LLVMCodeGen.cpp
+│   │   ├── Optimizer.h
+│   │   └── Optimizer.cpp
+│   ├── runtime/
+│   │   ├── Runtime.h
+│   │   ├── Runtime.cpp
+│   │   ├── Debugger.h
+│   │   ├── Debugger.cpp
+│   │   └── GarbageCollector.h
+│   ├── stdlib/
+│   │   ├── IO.h
+│   │   ├── IO.cpp
+│   │   ├── Math.h
+│   │   ├── Math.cpp
+│   │   ├── Collection.h
+│   │   └── Collection.cpp
+│   └── utils/
+│       ├── Logger.h
+│       ├── Logger.cpp
+│       ├── Protocol.h
+│       └── Protocol.cpp
+├── include/
+│   └── proxima/
+│       └── api.h
+├── tests/
+│   ├── unit/
+│   └── integration/
+└── examples/
+    └── hello.prx

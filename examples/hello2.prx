@@ -1,0 +1,10 @@
+// Простая программа Hello World
+namespace("examples");
+
+main(): int32
+    print("Hello, Proxima!\n");
+    print("Version: 1.0.0\n");
+    return 0;
+end
+
+end

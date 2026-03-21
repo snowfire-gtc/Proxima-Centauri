@@ -1,0 +1,51 @@
+// Пример программы на языке Proxima
+// Файл: examples/hello.prx
+
+namespace("examples");
+
+// Функция приветствия
+greet(name: string): void
+    print("Hello, %s!\n", name);
+end
+
+// Главная функция
+main(): int32
+    // Переменные с автоматическим выводом типа
+    message = "Welcome to Proxima!";
+    version: string = "1.0.0";
+    
+    // Вывод в консоль
+    print("%s\n", message);
+    print("Version: %s\n", version);
+    
+    // Вызов функции
+    greet("Developer");
+    
+    // Математические операции
+    a: double = 10.5;
+    b: double = 3.2;
+    sum: double = a + b;
+    product: double = a * b;
+    
+    print("Sum: %.2f\n", sum);
+    print("Product: %.2f\n", product);
+    
+    // Массивы
+    numbers: vector<int32> = [1, 2, 3, 4, 5];
+    print("Numbers: ");
+    for n in numbers
+        print("%d ", n);
+    end
+    print("\n");
+    
+    // Условные операторы
+    if sum > 10
+        print("Sum is greater than 10\n");
+    else
+        print("Sum is 10 or less\n");
+    end
+    
+    return 0;
+end
+
+end  // namespace
