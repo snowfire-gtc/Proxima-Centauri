@@ -8,6 +8,7 @@
 #include <memory>
 #include <mutex>
 #include <condition_variable>
+#include <functional>
 
 namespace proxima {
 
@@ -15,6 +16,19 @@ enum class BreakpointType {
     UNCONDITIONAL,
     CONDITIONAL,
     TEMPORARY
+};
+
+enum class DebugState {
+    RUNNING,
+    PAUSED,
+    STOPPED,
+    STEPPING
+};
+
+enum class StepMode {
+    Over,
+    Into,
+    Out
 };
 
 struct Breakpoint {
@@ -26,6 +40,7 @@ struct Breakpoint {
     int hitCount;
     int maxHits;
     bool enabled;
+    std::string lastHitTime;
     
     Breakpoint() : id(0), line(0), type(BreakpointType::UNCONDITIONAL),
                    hitCount(0), maxHits(1), enabled(true) {}
@@ -37,13 +52,6 @@ struct StackFrame {
     int line;
     std::unordered_map<std::string, std::string> variables;
     std::vector<std::string> parameters;
-};
-
-enum class DebugState {
-    RUNNING,
-    PAUSED,
-    STOPPED,
-    STEPPING
 };
 
 class Debugger {
@@ -59,7 +67,9 @@ public:
     void removeBreakpoint(int id);
     void enableBreakpoint(int id, bool enable);
     void clearBreakpoints();
+    void clearFileBreakpoints(const std::string& filename);
     std::vector<Breakpoint> getBreakpoints() const;
+    bool hasBreakpoint(const std::string& filename, int line) const;
     
     // Execution control
     void start();
@@ -97,16 +107,45 @@ public:
     void onStop(StopCallback callback);
     
     // Configuration
-    void setVerboseLevel(int level) { verboseLevel = level; }
+    void setVerboseLevel(int level);
     int getVerboseLevel() const { return verboseLevel; }
-    void setMaxMemory(size_t limit) { maxMemory = limit; }
+    void setMaxMemory(size_t limit);
     size_t getMaxMemory() const { return maxMemory; }
     
     // IDE communication
     std::string serializeState() const;
     void deserializeState(const std::string& data);
     
+    // Runtime integration
+    void notifyFunctionEntry(const std::string& function, 
+                            const std::string& filename, 
+                            int line);
+    void notifyFunctionExit(const std::string& function);
+    void notifyLineExecution(const std::string& filename, int line);
+    void notifyVariableChange(const std::string& name, const std::string& value);
+    
+    // Memory tracking
+    void recordMemoryAllocation(size_t size);
+    void recordMemoryDeallocation(size_t size);
+    size_t getCurrentMemoryUsage() const;
+    
+    // Persistence
+    void saveBreakpoints(const std::string& filename);
+    void loadBreakpoints(const std::string& filename);
+    
 private:
+    bool shouldBreak();
+    bool evaluateCondition(const std::string& condition);
+    void updateCallStack();
+    void pushStackFrame(const std::string& function, const std::string& filename, int line);
+    void popStackFrame();
+    void setCurrentLocation(const std::string& filename, int line);
+    void addVariable(const std::string& name, const std::string& value);
+    void removeVariable(const std::string& name);
+    void clearVariables();
+    std::string getCurrentTimestamp() const;
+    void log(int level, const std::string& message);
+    
     DebugState state;
     std::string currentFile;
     int currentLine;
@@ -122,14 +161,13 @@ private:
     std::condition_variable pauseCondition;
     bool pauseRequested;
     
+    StepMode stepMode;
+    int targetDepth;
+    int nextBreakpointId;
+    
     BreakpointCallback onBreakpointCallback;
     PauseCallback onPauseCallback;
     StopCallback onStopCallback;
-    
-    bool shouldBreak();
-    bool evaluateCondition(const std::string& condition);
-    void updateCallStack();
-    void log(int level, const std::string& message);
 };
 
 } // namespace proxima

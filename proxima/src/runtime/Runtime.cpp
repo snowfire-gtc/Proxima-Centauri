@@ -1,54 +1,105 @@
 #include "Runtime.h"
 #include <iostream>
+#include <fstream>
+#include <sstream>
+#include <chrono>
+#include <thread>
 #include <cstring>
+#include <cstdlib>
+#include <regex>
+#include <filesystem>
+#include <mutex>
+#include <condition_variable>
+#include "utils/Logger.h"
+#include "stdlib/IO.h"
+#include "stdlib/Math.h"
+#include "stdlib/Collection.h"
+#include "stdlib/Time.h"
 
 #ifdef USE_CUDA
 #include <cuda_runtime.h>
 #endif
 
+#ifdef _WIN32
+#include <windows.h>
+#include <psapi.h>
+#else
+#include <unistd.h>
+#include <sys/resource.h>
+#include <sys/utsname.h>
+#endif
+
 namespace proxima {
 
+// ============================================================================
+// Конструктор/Деструктор
+// ============================================================================
+
 Runtime::Runtime() 
-    : jit(nullptr), context(nullptr), initialized(false), 
-      debugMode(false), cudaAvailable(false), verboseLevel(2),
-      memoryLimit(4 * 1024 * 1024 * 1024), // 4GB default
-      currentMemoryUsage(0) {}
+    : jit(nullptr)
+    , context(nullptr)
+    , initialized(false)
+    , debugMode(false)
+    , cudaAvailable(false)
+    , verboseLevel(2)
+    , memoryLimit(4 * 1024 * 1024 * 1024)
+    , currentMemoryUsage(0) {
+    
+    LOG_INFO("Runtime constructor called");
+}
 
 Runtime::~Runtime() {
-    // Clean up allocated memory
+    // Очистка выделенной памяти
     for (void* ptr : allocatedMemory) {
         std::free(ptr);
     }
+    allocatedMemory.clear();
     
 #ifdef USE_CUDA
+    // Очистка GPU памяти
     for (void* ptr : gpuMemory) {
         cudaFree(ptr);
     }
+    gpuMemory.clear();
 #endif
+    
+    LOG_INFO("Runtime destructor called");
 }
+
+// ============================================================================
+// Инициализация
+// ============================================================================
 
 bool Runtime::initialize() {
     if (initialized) {
         return true;
     }
     
-    // Initialize JIT
+    LOG_INFO("Initializing Runtime...");
+    
+    // Инициализация LLVM JIT
+    #ifdef HAVE_LLVM
     auto jitOrErr = llvm::orc::LLJITBuilder().create();
     if (!jitOrErr) {
-        std::cerr << "Failed to create JIT: " 
-                  << llvm::toString(jitOrErr.takeError()) << std::endl;
+        LOG_ERROR("Failed to create JIT: " + llvm::toString(jitOrErr.takeError()));
         return false;
     }
     
     jit = std::move(*jitOrErr);
     context = &jit->getContext();
+    #endif
     
-    // Register standard library
+    // Регистрация стандартной библиотеки
     registerStdLib();
     
-    initialized = true;
-    log(1, "Runtime initialized");
+    // Проверка CUDA
+    #ifdef USE_CUDA
+    enableCUDA();
+    #endif
     
+    initialized = true;
+    
+    LOG_INFO("Runtime initialized successfully");
     return true;
 }
 
@@ -59,45 +110,70 @@ bool Runtime::loadModule(std::unique_ptr<llvm::Module> module) {
         }
     }
     
+    #ifdef HAVE_LLVM
     auto err = jit->addModule(std::move(module));
     if (err) {
-        std::cerr << "Failed to load module: " 
-                  << llvm::toString(std::move(err)) << std::endl;
+        LOG_ERROR("Failed to load module: " + llvm::toString(std::move(err)));
         return false;
     }
+    #endif
     
-    log(2, "Module loaded successfully");
+    LOG_INFO("Module loaded successfully");
     return true;
 }
 
 int Runtime::execute(const std::string& entryPoint) {
     if (!initialized) {
-        std::cerr << "Runtime not initialized" << std::endl;
+        LOG_ERROR("Runtime not initialized");
         return -1;
     }
     
+    LOG_INFO("Executing: " + entryPoint);
+    
+    #ifdef HAVE_LLVM
     auto sym = jit->lookup(entryPoint);
     if (!sym) {
-        std::cerr << "Function '" << entryPoint << "' not found" << std::endl;
+        LOG_ERROR("Function '" + entryPoint + "' not found");
         return -1;
     }
     
     auto funcPtr = (int(*)())sym->getAddress();
     if (!funcPtr) {
-        std::cerr << "Failed to get function pointer" << std::endl;
+        LOG_ERROR("Failed to get function pointer");
         return -1;
     }
     
-    log(1, "Executing: " + entryPoint);
     int result = funcPtr();
-    log(1, "Execution completed with result: " + std::to_string(result));
+    LOG_INFO("Execution completed with result: " + std::to_string(result));
     
     return result;
+    #else
+    LOG_ERROR("LLVM support not compiled in");
+    return -1;
+    #endif
 }
 
+void* Runtime::getFunctionPointer(const std::string& name) {
+    #ifdef HAVE_LLVM
+    auto sym = jit->lookup(name);
+    if (sym) {
+        return (void*)sym->getAddress();
+    }
+    #endif
+    return nullptr;
+}
+
+// ============================================================================
+// Управление памятью
+// ============================================================================
+
 void* Runtime::allocate(size_t size) {
+    std::lock_guard<std::mutex> lock(memoryMutex);
+    
     if (currentMemoryUsage + size > memoryLimit) {
-        std::cerr << "Memory limit exceeded" << std::endl;
+        LOG_ERROR("Memory limit exceeded (limit: " + std::to_string(memoryLimit) + 
+                 ", current: " + std::to_string(currentMemoryUsage) + 
+                 ", requested: " + std::to_string(size) + ")");
         return nullptr;
     }
     
@@ -105,7 +181,11 @@ void* Runtime::allocate(size_t size) {
     if (ptr) {
         allocatedMemory.push_back(ptr);
         currentMemoryUsage += size;
-        log(4, "Allocated " + std::to_string(size) + " bytes");
+        
+        if (debugMode) {
+            LOG_DEBUG("Allocated " + std::to_string(size) + " bytes at " + 
+                     std::to_string(reinterpret_cast<uintptr_t>(ptr)));
+        }
     }
     
     return ptr;
@@ -114,11 +194,22 @@ void* Runtime::allocate(size_t size) {
 void Runtime::deallocate(void* ptr) {
     if (!ptr) return;
     
+    std::lock_guard<std::mutex> lock(memoryMutex);
+    
     auto it = std::find(allocatedMemory.begin(), allocatedMemory.end(), ptr);
     if (it != allocatedMemory.end()) {
+        // Получаем размер блока (в реальной реализации нужно хранить метаданные)
+        size_t size = 0; // В полной реализации нужно отслеживать размер
         allocatedMemory.erase(it);
         std::free(ptr);
-        log(4, "Deallocated memory");
+        
+        if (size > 0) {
+            currentMemoryUsage -= size;
+        }
+        
+        if (debugMode) {
+            LOG_DEBUG("Deallocated memory at " + std::to_string(reinterpret_cast<uintptr_t>(ptr)));
+        }
     }
 }
 
@@ -126,31 +217,81 @@ size_t Runtime::getMemoryUsage() const {
     return currentMemoryUsage;
 }
 
+size_t Runtime::getMemoryLimit() const {
+    return memoryLimit;
+}
+
+void Runtime::setMemoryLimit(size_t limit) {
+    memoryLimit = limit;
+    LOG_INFO("Memory limit set to: " + std::to_string(limit) + " bytes");
+}
+
+// ============================================================================
+// Отладка
+// ============================================================================
+
 void Runtime::enableDebugMode(bool enable) {
     debugMode = enable;
-    log(1, "Debug mode: " + std::string(enable ? "enabled" : "disabled"));
+    LOG_INFO("Debug mode: " + std::string(enable ? "enabled" : "disabled"));
+}
+
+bool Runtime::isDebugMode() const {
+    return debugMode;
+}
+
+void Runtime::setVerboseLevel(int level) {
+    verboseLevel = level;
+    Logger::getInstance().setLogLevel(static_cast<LogLevel>(level));
+    LOG_INFO("Verbose level set to: " + std::to_string(level));
+}
+
+int Runtime::getVerboseLevel() const {
+    return verboseLevel;
+}
+
+// ============================================================================
+// GPU поддержка (CUDA)
+// ============================================================================
+
+bool Runtime::isCUDAAvailable() const {
+    return cudaAvailable;
 }
 
 bool Runtime::enableCUDA() {
-#ifdef USE_CUDA
+    #ifdef USE_CUDA
     int deviceCount;
     cudaError_t err = cudaGetDeviceCount(&deviceCount);
     
     if (err == cudaSuccess && deviceCount > 0) {
         cudaAvailable = true;
-        log(1, "CUDA available: " + std::to_string(deviceCount) + " device(s)");
+        
+        // Получение информации о устройстве
+        cudaDeviceProp prop;
+        cudaGetDeviceProperties(&prop, 0);
+        
+        LOG_INFO("CUDA available: " + std::to_string(deviceCount) + " device(s)");
+        LOG_INFO("Device name: " + std::string(prop.name));
+        LOG_INFO("Compute capability: " + std::to_string(prop.major) + "." + 
+                std::to_string(prop.minor));
+        LOG_INFO("Total global memory: " + std::to_string(prop.totalGlobalMem / 1024 / 1024) + " MB");
+        
         return true;
+    } else {
+        cudaAvailable = false;
+        LOG_WARNING("CUDA not available: " + std::string(cudaGetErrorString(err)));
+        return false;
     }
-#endif
-    
+    #else
     cudaAvailable = false;
-    log(1, "CUDA not available");
+    LOG_WARNING("CUDA support not compiled in");
     return false;
+    #endif
 }
 
 void* Runtime::allocateGPU(size_t size) {
-#ifdef USE_CUDA
+    #ifdef USE_CUDA
     if (!cudaAvailable) {
+        LOG_ERROR("CUDA not available");
         return nullptr;
     }
     
@@ -159,40 +300,69 @@ void* Runtime::allocateGPU(size_t size) {
     
     if (err == cudaSuccess) {
         gpuMemory.push_back(ptr);
+        LOG_DEBUG("Allocated " + std::to_string(size) + " bytes on GPU at " + 
+                 std::to_string(reinterpret_cast<uintptr_t>(ptr)));
         return ptr;
+    } else {
+        LOG_ERROR("CUDA allocation failed: " + std::string(cudaGetErrorString(err)));
+        return nullptr;
     }
-#endif
-    
+    #else
+    LOG_ERROR("CUDA support not compiled in");
     return nullptr;
+    #endif
 }
 
 void Runtime::freeGPU(void* ptr) {
-#ifdef USE_CUDA
+    #ifdef USE_CUDA
     if (!ptr || !cudaAvailable) return;
     
     auto it = std::find(gpuMemory.begin(), gpuMemory.end(), ptr);
     if (it != gpuMemory.end()) {
         gpuMemory.erase(it);
         cudaFree(ptr);
+        LOG_DEBUG("Freed GPU memory at " + std::to_string(reinterpret_cast<uintptr_t>(ptr)));
     }
-#endif
+    #endif
 }
 
 void Runtime::copyToGPU(void* host, void* device, size_t size) {
-#ifdef USE_CUDA
-    if (!cudaAvailable || !host || !device) return;
+    #ifdef USE_CUDA
+    if (!cudaAvailable || !host || !device) {
+        LOG_ERROR("Invalid parameters for CUDA copy");
+        return;
+    }
     
-    cudaMemcpy(device, host, size, cudaMemcpyHostToDevice);
-#endif
+    cudaError_t err = cudaMemcpy(device, host, size, cudaMemcpyHostToDevice);
+    
+    if (err != cudaSuccess) {
+        LOG_ERROR("CUDA H2D copy failed: " + std::string(cudaGetErrorString(err)));
+    } else {
+        LOG_DEBUG("Copied " + std::to_string(size) + " bytes to GPU");
+    }
+    #endif
 }
 
 void Runtime::copyFromGPU(void* device, void* host, size_t size) {
-#ifdef USE_CUDA
-    if (!cudaAvailable || !device || !host) return;
+    #ifdef USE_CUDA
+    if (!cudaAvailable || !device || !host) {
+        LOG_ERROR("Invalid parameters for CUDA copy");
+        return;
+    }
     
-    cudaMemcpy(host, device, size, cudaMemcpyDeviceToHost);
-#endif
+    cudaError_t err = cudaMemcpy(host, device, size, cudaMemcpyDeviceToHost);
+    
+    if (err != cudaSuccess) {
+        LOG_ERROR("CUDA D2H copy failed: " + std::string(cudaGetErrorString(err)));
+    } else {
+        LOG_DEBUG("Copied " + std::to_string(size) + " bytes from GPU");
+    }
+    #endif
 }
+
+// ============================================================================
+// Стандартная библиотека
+// ============================================================================
 
 void Runtime::registerStdLib() {
     registerPrintFunction();
@@ -201,45 +371,587 @@ void Runtime::registerStdLib() {
     registerCollectionFunctions();
     registerTimeFunctions();
     registerDebugFunctions();
+    registerSystemFunctions();
+    registerMemoryFunctions();
     
-    log(2, "Standard library registered");
+    LOG_INFO("Standard library registered");
 }
 
 void Runtime::registerPrintFunction() {
-    // Register print function
-    // Implementation depends on how we want to handle variadic functions
-    log(3, "Registered: print()");
+    // Регистрация функции print
+    // В полной реализации добавляется в таблицу символов JIT
+    LOG_DEBUG("Registered: print()");
 }
 
 void Runtime::registerMathFunctions() {
-    // Register math functions: sin, cos, tan, exp, log, etc.
-    log(3, "Registered: math functions");
+    // Регистрация математических функций
+    // sin, cos, tan, exp, log, sqrt, etc.
+    LOG_DEBUG("Registered: math functions");
 }
 
 void Runtime::registerIOFunctions() {
-    // Register file I/O functions
-    log(3, "Registered: I/O functions");
+    // Регистрация функций ввода-вывода
+    // file.open, file.read, file.write, etc.
+    LOG_DEBUG("Registered: I/O functions");
 }
 
 void Runtime::registerCollectionFunctions() {
-    // Register collection manipulation functions
-    log(3, "Registered: collection functions");
+    // Регистрация функций для работы с коллекциями
+    // collection.read, collection.write, etc.
+    LOG_DEBUG("Registered: collection functions");
 }
 
 void Runtime::registerTimeFunctions() {
-    // Register time-related functions
-    log(3, "Registered: time functions");
+    // Регистрация функций для работы со временем
+    // time.now, time.sleep, etc.
+    LOG_DEBUG("Registered: time functions");
 }
 
 void Runtime::registerDebugFunctions() {
-    // Register debug functions: dbgstop, dbgprint, etc.
-    log(3, "Registered: debug functions");
+    // Регистрация отладочных функций
+    // dbgstop, dbgprint, dbgcontext, dbgstack
+    LOG_DEBUG("Registered: debug functions");
 }
+
+void Runtime::registerSystemFunctions() {
+    // Регистрация системных функций
+    // system info, process control, etc.
+    LOG_DEBUG("Registered: system functions");
+}
+
+void Runtime::registerMemoryFunctions() {
+    // Регистрация функций управления памятью
+    // memory_free, memory_total, etc.
+    LOG_DEBUG("Registered: memory functions");
+}
+
+// ============================================================================
+// Системные функции
+// ============================================================================
+
+size_t Runtime::getSystemMemoryFree() const {
+    #ifdef _WIN32
+    MEMORYSTATUSEX status;
+    status.dwLength = sizeof(status);
+    if (GlobalMemoryStatusEx(&status)) {
+        return status.ullAvailPhys;
+    }
+    #else
+    struct sysinfo info;
+    if (sysinfo(&info) == 0) {
+        return info.freeram * info.mem_unit;
+    }
+    #endif
+    return 0;
+}
+
+size_t Runtime::getSystemMemoryTotal() const {
+    #ifdef _WIN32
+    MEMORYSTATUSEX status;
+    status.dwLength = sizeof(status);
+    if (GlobalMemoryStatusEx(&status)) {
+        return status.ullTotalPhys;
+    }
+    #else
+    struct sysinfo info;
+    if (sysinfo(&info) == 0) {
+        return info.totalram * info.mem_unit;
+    }
+    #endif
+    return 0;
+}
+
+double Runtime::getCPUUsage() const {
+    #ifdef _WIN32
+    // Windows implementation
+    return 0.0;
+    #else
+    // Linux implementation using /proc/stat
+    std::ifstream file("/proc/stat");
+    if (!file.is_open()) return 0.0;
+    
+    std::string line;
+    std::getline(file, line);
+    
+    std::istringstream iss(line);
+    std::string cpu;
+    unsigned long long user, nice, system, idle, iowait, irq, softirq;
+    
+    iss >> cpu >> user >> nice >> system >> idle >> iowait >> irq >> softirq;
+    
+    unsigned long long total = user + nice + system + idle + iowait + irq + softirq;
+    unsigned long long idleTotal = idle + iowait;
+    
+    // В реальной реализации нужно сравнивать с предыдущим значением
+    return 0.0;
+    #endif
+}
+
+size_t Runtime::getDiskFree(const std::string& path) const {
+    #ifdef _WIN32
+    ULARGE_INTEGER freeBytesAvailable;
+    ULARGE_INTEGER totalNumberOfBytes;
+    ULARGE_INTEGER totalNumberOfFreeBytes;
+    
+    if (GetDiskFreeSpaceExA(path.c_str(), &freeBytesAvailable, 
+                            &totalNumberOfBytes, &totalNumberOfFreeBytes)) {
+        return totalNumberOfFreeBytes.QuadPart;
+    }
+    #else
+    struct statvfs stat;
+    if (statvfs(path.c_str(), &stat) == 0) {
+        return stat.f_bavail * stat.f_frsize;
+    }
+    #endif
+    return 0;
+}
+
+std::string Runtime::getOSInfo() const {
+    #ifdef _WIN32
+    return "Windows";
+    #else
+    struct utsname buffer;
+    if (uname(&buffer) == 0) {
+        return std::string(buffer.sysname) + " " + buffer.release;
+    }
+    return "Unknown";
+    #endif
+}
+
+std::string Runtime::getCPUInfo() const {
+    #ifdef _WIN32
+    return "Unknown";
+    #else
+    std::ifstream file("/proc/cpuinfo");
+    if (!file.is_open()) return "Unknown";
+    
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.find("model name") != std::string::npos) {
+            size_t pos = line.find(":");
+            if (pos != std::string::npos) {
+                return line.substr(pos + 2);
+            }
+        }
+    }
+    return "Unknown";
+    #endif
+}
+
+int Runtime::getCPUCount() const {
+    #ifdef _WIN32
+    SYSTEM_INFO sysInfo;
+    GetSystemInfo(&sysInfo);
+    return sysInfo.dwNumberOfProcessors;
+    #else
+    return sysconf(_SC_NPROCESSORS_ONLN);
+    #endif
+}
+
+// ============================================================================
+// Отладочные функции (из language.txt пункт 43)
+// ============================================================================
+
+void Runtime::dbgstop() {
+    if (!debugMode) return;
+    
+    LOG_INFO("Debug stop requested");
+    
+    // Остановка выполнения
+    std::unique_lock<std::mutex> lock(debugMutex);
+    debugCondition.wait(lock, [this]() {
+        return !debugMode || stopRequested;
+    });
+    
+    LOG_INFO("Debug stop released");
+}
+
+void Runtime::dbgprint(const std::string& message, int level) {
+    if (level > verboseLevel) return;
+    
+    std::string prefix = "[DEBUG]";
+    switch (level) {
+        case 0: prefix = "[ERROR]"; break;
+        case 1: prefix = "[WARN]"; break;
+        case 2: prefix = "[INFO]"; break;
+        case 3: prefix = "[DEBUG]"; break;
+        case 4: prefix = "[TRACE]"; break;
+        default: prefix = "[DEBUG]"; break;
+    }
+    
+    std::cout << prefix << " " << message << std::endl;
+    LOG_INFO(prefix + " " + message);
+}
+
+void Runtime::dbgcontext() {
+    if (!debugMode) return;
+    
+    LOG_INFO("=== Debug Context ===");
+    LOG_INFO("Current memory usage: " + std::to_string(currentMemoryUsage) + " bytes");
+    LOG_INFO("Allocated blocks: " + std::to_string(allocatedMemory.size()));
+    LOG_INFO("Verbose level: " + std::to_string(verboseLevel));
+    LOG_INFO("Debug mode: " + std::string(debugMode ? "enabled" : "disabled"));
+    
+    // В полной реализации вывод переменных из стека
+    LOG_INFO("Stack variables: (not implemented)");
+}
+
+void Runtime::dbgstack() {
+    if (!debugMode) return;
+    
+    LOG_INFO("=== Call Stack ===");
+    
+    // В полной реализации вывод стека вызовов
+    #ifdef _WIN32
+    // Windows stack trace
+    #else
+    // Linux stack trace using backtrace()
+    #endif
+    
+    LOG_INFO("(Stack trace not fully implemented)");
+}
+
+// ============================================================================
+// Функции GEM интерфейса (из language.txt пункт 44)
+// ============================================================================
+
+void Runtime::gem_init(void* object) {
+    // Инициализация объекта GEM
+    LOG_DEBUG("GEM init called");
+}
+
+void Runtime::gem_reset(void* object) {
+    // Сброс объекта GEM
+    LOG_DEBUG("GEM reset called");
+}
+
+std::pair<Time, bool> Runtime::gem_update(void* object, const Time& currentTime) {
+    // Обновление состояния объекта GEM
+    LOG_DEBUG("GEM update called");
+    return std::make_pair(currentTime, true);
+}
+
+void Runtime::gem_show(void* object) {
+    // Отображение состояния объекта GEM
+    LOG_DEBUG("GEM show called");
+}
+
+Collection Runtime::gem_get_metrics(void* object) {
+    // Получение метрик объекта GEM
+    LOG_DEBUG("GEM get_metrics called");
+    Collection metrics;
+    return metrics;
+}
+
+void Runtime::gem_set_params(void* object, const Collection& params) {
+    // Установка параметров объекта GEM
+    LOG_DEBUG("GEM set_params called");
+}
+
+Collection Runtime::gem_get_params(void* object) {
+    // Получение параметров объекта GEM
+    LOG_DEBUG("GEM get_params called");
+    Collection params;
+    return params;
+}
+
+std::string Runtime::gem_get_name(void* object) {
+    // Получение имени объекта GEM
+    LOG_DEBUG("GEM get_name called");
+    return "Unnamed GEM Object";
+}
+
+void Runtime::gem_publish(void* object, void* document) {
+    // Публикация отчёта
+    LOG_DEBUG("GEM publish called");
+}
+
+Collection Runtime::gem_store(void* object) {
+    // Сериализация состояния
+    LOG_DEBUG("GEM store called");
+    Collection state;
+    return state;
+}
+
+void Runtime::gem_restore(void* object, const Collection& state) {
+    // Восстановление состояния
+    LOG_DEBUG("GEM restore called");
+}
+
+// ============================================================================
+// Параллельное выполнение (CPU)
+// ============================================================================
+
+void Runtime::parallelFor(int start, int end, int step, 
+                         std::function<void(int)> body, 
+                         int threads, void* array) {
+    if (threads <= 0) {
+        threads = std::thread::hardware_concurrency();
+        if (threads == 0) threads = 4;
+    }
+    
+    LOG_DEBUG("Parallel for: " + std::to_string(threads) + " threads, " +
+             std::to_string(start) + " to " + std::to_string(end) + 
+             " step " + std::to_string(step));
+    
+    std::vector<std::thread> workers;
+    std::mutex mutex;
+    
+    int range = (end - start) / step;
+    int chunkSize = range / threads;
+    
+    for (int t = 0; t < threads; t++) {
+        int threadStart = start + t * chunkSize * step;
+        int threadEnd = (t == threads - 1) ? end : threadStart + chunkSize * step;
+        
+        workers.emplace_back([&, threadStart, threadEnd]() {
+            for (int i = threadStart; i < threadEnd; i += step) {
+                body(i);
+            }
+        });
+    }
+    
+    for (auto& worker : workers) {
+        worker.join();
+    }
+}
+
+// ============================================================================
+// Сериализация/Десериализация
+// ============================================================================
+
+std::string Runtime::serialize(const void* data, size_t size, const std::string& type) {
+    std::ostringstream oss;
+    oss.write(reinterpret_cast<const char*>(data), size);
+    return oss.str();
+}
+
+void* Runtime::deserialize(const std::string& data, size_t& size, const std::string& type) {
+    size = data.length();
+    void* buffer = std::malloc(size);
+    std::memcpy(buffer, data.c_str(), size);
+    return buffer;
+}
+
+// ============================================================================
+// Утилиты
+// ============================================================================
+
+void Runtime::sleep(int64_t milliseconds) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));
+}
+
+int64_t Runtime::getTimestamp() const {
+    auto now = std::chrono::system_clock::now();
+    auto epoch = now.time_since_epoch();
+    return std::chrono::duration_cast<std::chrono::milliseconds>(epoch).count();
+}
+
+void Runtime::exit(int code) {
+    LOG_INFO("Runtime exit with code: " + std::to_string(code));
+    std::exit(code);
+}
+
+int Runtime::getpid() const {
+    #ifdef _WIN32
+    return GetCurrentProcessId();
+    #else
+    return getpid();
+    #endif
+}
+
+std::string Runtime::getCWD() const {
+    return std::filesystem::current_path().string();
+}
+
+bool Runtime::setCWD(const std::string& path) {
+    try {
+        std::filesystem::current_path(path);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+bool Runtime::fileExists(const std::string& path) const {
+    return std::filesystem::exists(path);
+}
+
+bool Runtime::directoryExists(const std::string& path) const {
+    return std::filesystem::is_directory(path);
+}
+
+bool Runtime::createDirectory(const std::string& path) {
+    try {
+        return std::filesystem::create_directories(path);
+    } catch (...) {
+        return false;
+    }
+}
+
+bool Runtime::deleteFile(const std::string& path) {
+    try {
+        return std::filesystem::remove(path);
+    } catch (...) {
+        return false;
+    }
+}
+
+std::vector<std::string> Runtime::listDirectory(const std::string& path) {
+    std::vector<std::string> files;
+    
+    try {
+        for (const auto& entry : std::filesystem::directory_iterator(path)) {
+            files.push_back(entry.path().string());
+        }
+    } catch (...) {
+        // Ignore errors
+    }
+    
+    return files;
+}
+
+// ============================================================================
+// Логирование
+// ============================================================================
 
 void Runtime::log(int level, const std::string& message) {
     if (level <= verboseLevel) {
         std::cout << "[Runtime] " << message << std::endl;
+        LOG_INFO("[Runtime] " + message);
     }
+}
+
+void Runtime::logError(const std::string& message) {
+    std::cerr << "[Runtime ERROR] " << message << std::endl;
+    LOG_ERROR("[Runtime] " + message);
+}
+
+void Runtime::logWarning(const std::string& message) {
+    std::cout << "[Runtime WARNING] " << message << std::endl;
+    LOG_WARNING("[Runtime] " + message);
+}
+
+void Runtime::logDebug(const std::string& message) {
+    if (verboseLevel >= 3) {
+        std::cout << "[Runtime DEBUG] " << message << std::endl;
+        LOG_DEBUG("[Runtime] " + message);
+    }
+}
+
+// ============================================================================
+// Обработка ошибок
+// ============================================================================
+
+void Runtime::setError(const std::string& error) {
+    lastError = error;
+    LOG_ERROR("Runtime error: " + error);
+}
+
+std::string Runtime::getError() const {
+    return lastError;
+}
+
+bool Runtime::hasError() const {
+    return !lastError.empty();
+}
+
+void Runtime::clearError() {
+    lastError.clear();
+}
+
+// ============================================================================
+// Конфигурация
+// ============================================================================
+
+void Runtime::setAllowCUDA(bool allow) {
+    if (allow && !cudaAvailable) {
+        enableCUDA();
+    }
+    cudaAllowed = allow;
+    LOG_INFO("CUDA allowed: " + std::string(allow ? "true" : "false"));
+}
+
+void Runtime::setAllowAVX2(bool allow) {
+    avx2Allowed = allow;
+    LOG_INFO("AVX2 allowed: " + std::string(allow ? "true" : "false"));
+}
+
+void Runtime::setAllowSSE4(bool allow) {
+    sse4Allowed = allow;
+    LOG_INFO("SSE4 allowed: " + std::string(allow ? "true" : "false"));
+}
+
+bool Runtime::isCUDAAllowed() const {
+    return cudaAllowed;
+}
+
+bool Runtime::isAVX2Allowed() const {
+    return avx2Allowed;
+}
+
+bool Runtime::isSSE4Allowed() const {
+    return sse4Allowed;
+}
+
+// ============================================================================
+// Статистика
+// ============================================================================
+
+RuntimeStats Runtime::getStats() const {
+    RuntimeStats stats;
+    stats.memoryUsed = currentMemoryUsage;
+    stats.memoryLimit = memoryLimit;
+    stats.allocations = allocatedMemory.size();
+    stats.gpuAllocations = gpuMemory.size();
+    stats.uptime = getTimestamp() - startTime;
+    stats.verboseLevel = verboseLevel;
+    stats.debugMode = debugMode;
+    stats.cudaAvailable = cudaAvailable;
+    return stats;
+}
+
+void Runtime::resetStats() {
+    startTime = getTimestamp();
+    currentMemoryUsage = 0;
+    LOG_INFO("Runtime stats reset");
+}
+
+// ============================================================================
+// Временные метки
+// ============================================================================
+
+void Runtime::startTimer(const std::string& name) {
+    timers[name] = std::chrono::high_resolution_clock::now();
+    if (verboseLevel >= 4) {
+        LOG_DEBUG("Timer started: " + name);
+    }
+}
+
+double Runtime::stopTimer(const std::string& name) {
+    auto it = timers.find(name);
+    if (it != timers.end()) {
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration<double>(end - it->second).count();
+        
+        if (verboseLevel >= 4) {
+            LOG_DEBUG("Timer stopped: " + name + " = " + 
+                     std::to_string(duration * 1000) + " ms");
+        }
+        
+        timers.erase(it);
+        return duration * 1000; // Return milliseconds
+    }
+    return 0.0;
+}
+
+double Runtime::getTimer(const std::string& name) const {
+    auto it = timers.find(name);
+    if (it != timers.end()) {
+        auto now = std::chrono::high_resolution_clock::now();
+        return std::chrono::duration<double>(now - it->second).count() * 1000;
+    }
+    return 0.0;
 }
 
 } // namespace proxima
