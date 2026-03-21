@@ -1,0 +1,114 @@
+// Пример файла сборки Proxima
+// Файл: rules/build.rules.example
+// Лицензия: GPLv3
+
+[
+    "compiler_version", "1.0.0",,
+    "optimization_level", "O2",,
+    "target_arch", "x86_64",,
+    "target_os", "linux",,
+    
+    // Аппаратное ускорение
+    "enable_cuda", false,,
+    "enable_avx2", true,,
+    "enable_sse4", true,,
+    "enable_openmp", true,,
+    
+    // Память
+    "max_memory", "4GB",,
+    "stack_size", "8MB",,
+    
+    // Отладка
+    "debug_symbols", true,,
+    "verbose_level", "2",,
+    
+    // Вывод
+    "output_format", "executable",,
+    "output_path", "build/output",,
+    
+    // Модули
+    "modules", [
+        "src/main.prx",,
+        "src/utils/helpers.prx",,
+        "src/math/matrix.prx",,
+        "src/io/file.prx"
+    ],,
+    
+    // Директивы компиляции
+    "defines", [
+        "DEBUG",,
+        "ENABLE_LOGGING",,
+        "MAX_THREADS=8"
+    ],,
+    
+    // Пути поиска
+    "include_paths", [
+        "src",,
+        "libs",,
+        "/usr/local/include/proxima"
+    ],,
+    
+    // Библиотеки
+    "libraries", [
+        "proxima_stdlib",,
+        "proxima_math",,
+        "cuda",,
+        "pthread"
+    ],,
+    
+    // Оптимизации
+    "optimizations", [
+        "inline_functions",,
+        "loop_unrolling",,
+        "vectorization",,
+        "dead_code_elimination"
+    ],,
+    
+    // GPU настройки
+    "cuda_config", [
+        "grid_size", 32,,
+        "block_size", 256,,
+        "shared_memory", "48KB",,
+        "registers_per_thread", 64
+    ],,
+    
+    // Документация
+    "generate_docs", true,,
+    "doc_format", "html",,
+    "doc_output", "docs",,
+    
+    // Тесты
+    "run_tests", true,,
+    "test_suites", [
+        "matrix_tests",,
+        "io_tests",,
+        "utils_tests"
+    ],,
+    
+    // Сборка
+    "parallel_build", true,,
+    "build_threads", 4,,
+    "cache_enabled", true,,
+    "cache_dir", "build/cache"
+]
+
+/*
+    Дополнительные комментарии
+    --------------------------
+    
+    Этот файл задаёт параметры сборки проекта Proxima.
+    
+    Основные разделы:
+    1. Компилятор - версия и базовые настройки
+    2. Аппаратное ускорение - CUDA, AVX, SSE
+    3. Память - ограничения на использование
+    4. Отладка - уровень детализации
+    5. Модули - список исходных файлов
+    6. Оптимизации - применяемые преобразования
+    7. GPU - настройки для CUDA
+    8. Документация - генерация docs
+    9. Тесты - автоматическое тестирование
+    
+    Для изменения настроек отредактируйте соответствующие
+    значения и запустите сборку заново.
+*/

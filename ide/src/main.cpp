@@ -3,10 +3,12 @@
 #include <QFontDatabase>
 #include <QDir>
 #include <QStandardPaths>
+#include <QCommandLineParser>
+#include <QCommandLineOption>
+#include "app/Application.h"
 #include "app/MainWindow.h"
 #include "app/Settings.h"
 #include "utils/Logger.h"
-#include "utils/Config.h"
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -17,147 +19,121 @@ void setupHighDPI() {
     QApplication::setHighDpiScaleFactorRoundingPolicy(
         Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 #endif
+    QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+    QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 }
 
-void setupApplicationStyle() {
-    QApplication::setStyle(QStyleFactory::create("Fusion"));
-}
-
-void setupDarkTheme() {
-    QPalette darkPalette;
-    darkPalette.setColor(QPalette::Window, QColor(53, 53, 53));
-    darkPalette.setColor(QPalette::WindowText, Qt::white);
-    darkPalette.setColor(QPalette::Base, QColor(25, 25, 25));
-    darkPalette.setColor(QPalette::AlternateBase, QColor(53, 53, 53));
-    darkPalette.setColor(QPalette::ToolTipBase, Qt::white);
-    darkPalette.setColor(QPalette::ToolTipText, Qt::white);
-    darkPalette.setColor(QPalette::Text, Qt::white);
-    darkPalette.setColor(QPalette::Button, QColor(53, 53, 53));
-    darkPalette.setColor(QPalette::ButtonText, Qt::white);
-    darkPalette.setColor(QPalette::BrightText, Qt::red);
-    darkPalette.setColor(QPalette::Link, QColor(42, 130, 218));
-    darkPalette.setColor(QPalette::Highlight, QColor(42, 130, 218));
-    darkPalette.setColor(QPalette::HighlightedText, Qt::black);
-    QApplication::setPalette(darkPalette);
-}
-
-void setupLightTheme() {
-    QApplication::setPalette(QApplication::style()->standardPalette());
-}
-
-void setupFonts() {
-    // Load custom fonts
-    QString fontsDir = QCoreApplication::applicationDirPath() + "/fonts";
-    if (QDir(fontsDir).exists()) {
-        QStringList fontFiles = QDir(fontsDir).entryList(QStringList() << "*.ttf" << "*.otf",
-                                                         QDir::Files);
-        for (const QString& fontFile : fontFiles) {
-            QFontDatabase::addApplicationFont(fontsDir + "/" + fontFile);
-        }
-    }
-}
-
-void setupPaths() {
-    // Set organization and application name
-    QApplication::setOrganizationName("Proxima Development Team");
-    QApplication::setApplicationName("Centauri IDE");
-    QApplication::setApplicationVersion("1.0.0");
-
-    // Ensure config directory exists
-    QString configDir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
-    QDir().mkpath(configDir);
-
-    // Ensure data directory exists
-    QString dataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    QDir().mkpath(dataDir);
+void printVersion() {
+    printf("Centauri IDE Version 1.0.0\n");
+    printf("Proxima Programming Language Development Environment\n");
+    printf("License: GPLv3\n");
+    printf("Qt Version: %s\n", QT_VERSION_STR);
+    printf("Build Date: " __DATE__ " " __TIME__ "\n");
 }
 
 int main(int argc, char *argv[]) {
-    // Initialize logger early
-    QString logPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+    // Create application
+    proxima::Application app(argc, argv);
+    
+    // Setup high DPI
+    setupHighDPI();
+    
+    // Command line parser
+    QCommandLineParser parser;
+    parser.setApplicationDescription("Centauri IDE - Proxima Programming Language");
+    parser.addHelpOption();
+    parser.addVersionOption();
+    
+    // Options
+    QCommandLineOption projectOption(QStringList() << "p" << "project",
+                                    "Open project at <path>", "path");
+    parser.addOption(projectOption);
+    
+    QCommandLineOption fileOption(QStringList() << "f" << "file",
+                                 "Open file at <path>", "path");
+    parser.addOption(fileOption);
+    
+    QCommandLineOption themeOption(QStringList() << "t" << "theme",
+                                  "Set theme (dark, light, system)", "theme");
+    parser.addOption(themeOption);
+    
+    QCommandLineOption verboseOption(QStringList() << "v" << "verbose",
+                                    "Enable verbose logging");
+    parser.addOption(verboseOption);
+    
+    QCommandLineOption safeModeOption(QStringList() << "safe-mode",
+                                     "Start in safe mode (no plugins)");
+    parser.addOption(safeModeOption);
+    
+    // Process arguments
+    parser.process(app);
+    
+    // Initialize logger
+    QString logPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + 
                      "/centauri.log";
     proxima::Logger::getInstance().setLogFile(logPath.toStdString());
-    proxima::Logger::getInstance().setLogLevel(proxima::LogLevel::INFO);
-
+    
+    if (parser.isSet(verboseOption)) {
+        proxima::Logger::getInstance().setLogLevel(proxima::LogLevel::DEBUG);
+    } else {
+        proxima::Logger::getInstance().setLogLevel(proxima::LogLevel::INFO);
+    }
+    
     LOG_INFO("========================================");
     LOG_INFO("Centauri IDE Starting");
     LOG_INFO("========================================");
     LOG_INFO("Version: 1.0.0");
     LOG_INFO("License: GPLv3");
     LOG_INFO("Qt Version: " + std::string(QT_VERSION_STR));
-
-    // Create application
-    QApplication app(argc, argv);
-
-    // Setup
-    setupHighDPI();
-    setupApplicationStyle();
-    setupFonts();
-    setupPaths();
-
-    // Load settings
-    proxima::Settings& settings = proxima::Settings::getInstance();
-    settings.load();
-
-    // Apply theme
-    switch (settings.getTheme()) {
-        case proxima::Theme::Dark:
-            setupDarkTheme();
-            LOG_INFO("Theme: Dark");
-            break;
-        case proxima::Theme::Light:
-            setupLightTheme();
-            LOG_INFO("Theme: Light");
-            break;
-        case proxima::Theme::System:
-            // Use system theme
-            LOG_INFO("Theme: System");
-            break;
-    }
-
-    // Set application metadata
-    app.setWindowIcon(QIcon(":/icons/centauri.ico"));
-    app.setApplicationDisplayName("Centauri IDE");
-
-    // Check for command line arguments
-    QStringList args = app.arguments();
-    QString projectToOpen;
-
-    for (int i = 1; i < args.size(); i++) {
-        QString arg = args[i];
-        if (!arg.startsWith("-") && QFileInfo(arg).exists()) {
-            projectToOpen = arg;
-            break;
+    LOG_INFO("Arguments: " + app.arguments().join(" ").toStdString());
+    
+    // Apply theme from command line
+    if (parser.isSet(themeOption)) {
+        QString theme = parser.value(themeOption);
+        if (theme == "dark") {
+            proxima::Settings::getInstance().setTheme(proxima::Theme::Dark);
+        } else if (theme == "light") {
+            proxima::Settings::getInstance().setTheme(proxima::Theme::Light);
+        } else if (theme == "system") {
+            proxima::Settings::getInstance().setTheme(proxima::Theme::System);
         }
     }
-
+    
     // Create main window
-    proxima::MainWindow mainWindow;
-
+    proxima::MainWindow* mainWindow = new proxima::MainWindow();
+    
     // Open project if specified
-    if (!projectToOpen.isEmpty()) {
-        LOG_INFO("Opening project: " + projectToOpen.toStdString());
-        mainWindow.openProject(projectToOpen);
+    if (parser.isSet(projectOption)) {
+        QString projectPath = parser.value(projectOption);
+        if (QFileInfo(projectPath).exists()) {
+            LOG_INFO("Opening project: " + projectPath.toStdString());
+            mainWindow->openProject(projectPath);
+        }
     }
-
+    
+    // Open file if specified
+    if (parser.isSet(fileOption)) {
+        QString filePath = parser.value(fileOption);
+        if (QFileInfo(filePath).exists()) {
+            LOG_INFO("Opening file: " + filePath.toStdString());
+            mainWindow->openFile(filePath);
+        }
+    }
+    
     // Show main window
-    mainWindow.show();
-
+    mainWindow->show();
+    
     LOG_INFO("Centauri IDE Started Successfully");
     LOG_INFO("========================================");
-
+    
     // Execute application
-    int result = app.exec();
-
+    int result = app.run();
+    
     LOG_INFO("========================================");
     LOG_INFO("Centauri IDE Shutting Down");
     LOG_INFO("========================================");
-
-    // Save settings
-    settings.save();
-
-    LOG_INFO("Settings saved");
-    LOG_INFO("Exit code: " + std::to_string(result));
-
+    
+    delete mainWindow;
+    
     return result;
 }

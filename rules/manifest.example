@@ -1,0 +1,118 @@
+// Манифест приложения Proxima
+// Файл: manifest.example
+// Лицензия: GPLv3
+
+[
+    "name", "ProximaDemo",,
+    "version", "1.0.0",,
+    "entry_point", "src/main.prx",,
+    "required_ide_version", "Centauri >= 0.9.0",,
+    
+    // Возможности
+    "capabilities", [
+        "cuda",,
+        "avx2",,
+        "sse4",,
+        "gui",,
+        "parallel",,
+        "gpu_memory_transfer"
+    ],,
+    
+    // Лицензия
+    "license", "GPLv3",,
+    "license_url", "https://www.gnu.org/licenses/gpl-3.0.html",,
+    
+    // Авторы
+    "authors", [
+        "Sergey Antonov",,
+        "John Smith",,
+        "Jane Doe"
+    ],,
+    
+    // Контакты
+    "email", "dev@proxima-lang.org",,
+    "website", "https://proxima-lang.org",,
+    "repository", "https://github.com/proxima-lang/proxima",,
+    
+    // Зависимости
+    "dependencies", [
+        "Proxima >= 1.0.0",,
+        "LLVM >= 14.0",,
+        "Qt >= 5.15.2",,
+        "CUDA >= 11.0"
+    ],,
+    
+    // Сборка
+    "build_hash", "auto",,
+    "build_timestamp", "auto",,
+    "build_machine", "auto",,
+    "build_user", "auto",,
+    
+    // Ресурсы
+    "assets", [
+        "assets/config/",
+        "assets/data/",
+        "assets/models/"
+    ],,
+    
+    // Локализация
+    "languages", [
+        "en",,
+        "ru",,
+        "zh",,
+        "es"
+    ],,
+    "default_language", "en",,
+    
+    // Платформы
+    "platforms", [
+        "linux-x86_64",,
+        "windows-x86_64",,
+        "macos-x86_64",,
+        "macos-arm64"
+    ],,
+    
+    // Минимальные требования
+    "min_memory", "2GB",,
+    "min_disk", "500MB",,
+    "min_cpu_cores", 2,,
+    
+    // Рекомендованные требования
+    "recommended_memory", "8GB",,
+    "recommended_disk", "2GB",,
+    "recommended_cpu_cores", 4,,
+    
+    // Категории
+    "categories", [
+        "Development",,
+        "Scientific Computing",,
+        "Data Analysis",,
+        "Machine Learning"
+    ],,
+    
+    // Ключевые слова
+    "keywords", [
+        "programming",,
+        "matlab",,
+        "scientific",,
+        "matrix",,
+        "gpu",,
+        "cuda"
+    ]
+]
+
+/*
+    Манифест приложения
+    -------------------
+    
+    Этот файл содержит метаданные проекта Proxima.
+    
+    Автоматически заполняемые поля:
+    - build_hash: MD5 хеш сборки
+    - build_timestamp: дата и время сборки
+    - build_machine: имя машины сборки
+    - build_user: пользователь сборки
+    
+    Для изменения настроек отредактируйте соответствующие
+    значения перед сборкой.
+*/
