@@ -47,15 +47,18 @@ set(COMPILER_SOURCES
     src/codegen/Optimizer.cpp
     src/runtime/Runtime.cpp
     src/runtime/Debugger.cpp
+    src/runtime/StoryManager.cpp
     src/stdlib/IO.cpp
     src/stdlib/Math.cpp
     src/stdlib/Collection.cpp
     src/utils/Logger.cpp
     src/utils/Protocol.cpp
     src/utils/DocGenerator.cpp
+    src/utils/CollectionParser.cpp
     src/services/llm/LLMClient.cpp
     src/services/git/GitIntegration.cpp
     src/core/AutoSave.cpp
+    src/gem/gem.cpp
 )
 
 set(COMPILER_HEADERS
@@ -73,15 +76,18 @@ set(COMPILER_HEADERS
     src/codegen/Optimizer.h
     src/runtime/Runtime.h
     src/runtime/Debugger.h
+    src/runtime/StoryManager.h
     src/stdlib/IO.h
     src/stdlib/Math.h
     src/stdlib/Collection.h
     src/utils/Logger.h
     src/utils/Protocol.h
     src/utils/DocGenerator.h
+    src/utils/CollectionParser.h
     src/services/llm/LLMClient.h
     src/services/git/GitIntegration.h
     src/core/AutoSave.h
+    src/gem/gem.h
 )
 
 # Создать исполняемый файл компилятора
@@ -101,15 +107,15 @@ target_include_directories(proxima PRIVATE ${CMAKE_SOURCE_DIR}/src)
 # Тесты
 if(BUILD_TESTS)
     enable_testing()
-    
+
     add_executable(lexer_test tests/unit/lexer_test.cpp)
     target_link_libraries(lexer_test proxima)
     add_test(NAME LexerTest COMMAND lexer_test)
-    
+
     add_executable(parser_test tests/unit/parser_test.cpp)
     target_link_libraries(parser_test proxima)
     add_test(NAME ParserTest COMMAND parser_test)
-    
+
     add_executable(typechecker_test tests/unit/typechecker_test.cpp)
     target_link_libraries(typechecker_test proxima)
     add_test(NAME TypeCheckerTest COMMAND typechecker_test)

@@ -1,11 +1,20 @@
 #include "Parser.h"
-#include <stdexcept>
-#include <iostream>
+#include "utils/Logger.h"
+#include <memory>
 
 namespace proxima {
 
+// ============================================================================
+// Конструктор
+// ============================================================================
+
 Parser::Parser(const std::vector<Token>& tokens, const std::string& filename)
-    : tokens(tokens), pos(0), filename(filename) {}
+    : tokens(tokens), pos(0), filename(filename) {
+}
+
+// ============================================================================
+// Вспомогательные методы
+// ============================================================================
 
 Token Parser::currentToken() const {
     if (pos >= tokens.size()) return Token(TokenType::EOF_TOKEN);
@@ -42,16 +51,20 @@ Token Parser::expect(TokenType type, const std::string& message) {
     return tok;
 }
 
+// ============================================================================
+// Парсинг программы
+// ============================================================================
+
 ProgramNodePtr Parser::parseProgram() {
     auto program = std::make_shared<ProgramNode>(filename);
     
     while (!check(TokenType::EOF_TOKEN)) {
-        if (check(TokenType::KEYWORD_CLASS) || 
+        if (check(TokenType::KEYWORD_CLASS) ||
             check(TokenType::KEYWORD_INTERFACE) ||
             check(TokenType::KEYWORD_TEMPLATE) ||
             check(TokenType::KEYWORD_NAMESPACE)) {
             program->declarations.push_back(parseDeclaration());
-        } else if (check(TokenType::KEYWORD_FUNCTION) || 
+        } else if (check(TokenType::KEYWORD_FUNCTION) ||
                    check(TokenType::IDENTIFIER)) {
             auto decl = parseDeclaration();
             if (decl) program->declarations.push_back(decl);
@@ -64,17 +77,21 @@ ProgramNodePtr Parser::parseProgram() {
     return program;
 }
 
+// ============================================================================
+// Парсинг деклараций
+// ============================================================================
+
 DeclarationNodePtr Parser::parseDeclaration() {
     Token tok = currentToken();
     
+    // Парсинг класса
     if (match(TokenType::KEYWORD_CLASS)) {
-        // Parse class declaration
-        return nullptr; // TODO: Implement
+        return parseClass();
     }
     
+    // Парсинг интерфейса
     if (match(TokenType::KEYWORD_INTERFACE)) {
-        // Parse interface declaration
-        return nullptr; // TODO: Implement
+        return parseInterface();
     }
     
     // Variable or function declaration
@@ -90,18 +107,8 @@ DeclarationNodePtr Parser::parseDeclaration() {
         
         if (match(TokenType::DELIM_LPAREN)) {
             // Function declaration
-            std::vector<std::pair<std::string, std::string>> params;
-            while (!check(TokenType::DELIM_RPAREN) && !check(TokenType::EOF_TOKEN)) {
-                std::string paramName = currentToken().value;
-                advance();
-                std::string paramType = "auto";
-                if (match(TokenType::OP_COLON)) {
-                    paramType = currentToken().value;
-                    advance();
-                }
-                params.push_back({paramName, paramType});
-                if (!match(TokenType::OP_COMMA)) break;
-            }
+            std::vector<std::pair<std::string, std::string>> params = parseParameters();
+            
             expect(TokenType::DELIM_RPAREN, "Expected ')'");
             
             std::string returnType = "void";
@@ -111,19 +118,221 @@ DeclarationNodePtr Parser::parseDeclaration() {
             }
             
             auto body = parseBlock();
+            
             return std::make_shared<FunctionDeclNode>(tok, name, returnType, params, body, filename);
         } else {
             // Variable declaration
             ExpressionNodePtr initializer = nullptr;
+            
             if (match(TokenType::OP_ASSIGN)) {
                 initializer = parseExpression();
             }
-            return std::make_shared<VariableDeclNode>(tok, name, typeName, initializer, filename);
+            
+            if (match(TokenType::OP_SEMICOLON) || match(TokenType::NEWLINE)) {
+                return std::make_shared<VariableDeclNode>(tok, name, typeName, initializer, filename);
+            }
         }
     }
     
     return nullptr;
 }
+
+// ============================================================================
+// Парсинг классов
+// ============================================================================
+
+DeclarationNodePtr Parser::parseClass() {
+    Token classToken = currentToken();
+    
+    // Ожидание имени класса
+    std::string className = expect(TokenType::IDENTIFIER, "Expected class name").value;
+    
+    // Парсинг списка наследования
+    std::vector<std::string> parents;
+    if (match(TokenType::OP_COLON)) {
+        parents = parseInheritanceList();
+    }
+    
+    expect(TokenType::DELIM_LBRACE, "Expected '{' after class declaration");
+    
+    // Парсинг членов класса
+    std::vector<std::pair<std::string, std::string>> members = parseClassMembers();
+    
+    expect(TokenType::DELIM_RBRACE, "Expected '}' after class body");
+    
+    // Создание узла класса
+    auto classDecl = std::make_shared<ClassDeclNode>(classToken, className, parents, members, filename);
+    
+    LOG_DEBUG("Parsed class: " + className + " with " + 
+              std::to_string(members.size()) + " members");
+    
+    return classDecl;
+}
+
+// ============================================================================
+// Парсинг интерфейсов
+// ============================================================================
+
+DeclarationNodePtr Parser::parseInterface() {
+    Token interfaceToken = currentToken();
+    
+    // Ожидание имени интерфейса
+    std::string interfaceName = expect(TokenType::IDENTIFIER, "Expected interface name").value;
+    
+    // Парсинг списка наследования интерфейсов
+    std::vector<std::string> parents;
+    if (match(TokenType::OP_COLON)) {
+        parents = parseInheritanceList();
+    }
+    
+    expect(TokenType::DELIM_LBRACE, "Expected '{' after interface declaration");
+    
+    // Парсинг методов интерфейса (только объявления)
+    std::vector<std::pair<std::string, std::string>> methods = parseClassMembers();
+    
+    expect(TokenType::DELIM_RBRACE, "Expected '}' after interface body");
+    
+    // Создание узла интерфейса
+    auto interfaceDecl = std::make_shared<InterfaceDeclNode>(interfaceToken, interfaceName, parents, methods, filename);
+    
+    LOG_DEBUG("Parsed interface: " + interfaceName + " with " + 
+              std::to_string(methods.size()) + " methods");
+    
+    return interfaceDecl;
+}
+
+// ============================================================================
+// Парсинг списка наследования
+// ============================================================================
+
+std::vector<std::string> Parser::parseInheritanceList() {
+    std::vector<std::string> parents;
+    
+    do {
+        if (check(TokenType::IDENTIFIER)) {
+            parents.push_back(currentToken().value);
+            advance();
+        } else {
+            break;
+        }
+    } while (match(TokenType::OP_COMMA));
+    
+    return parents;
+}
+
+// ============================================================================
+// Парсинг членов класса
+// ============================================================================
+
+std::vector<std::pair<std::string, std::string>> Parser::parseClassMembers() {
+    std::vector<std::pair<std::string, std::string>> members;
+    
+    while (!check(TokenType::DELIM_RBRACE) && !check(TokenType::EOF_TOKEN)) {
+        // Пропуск модификаторов доступа
+        if (match(TokenType::KEYWORD_PUBLIC) || 
+            match(TokenType::KEYWORD_PROTECTED) || 
+            match(TokenType::KEYWORD_PRIVATE)) {
+            expect(TokenType::OP_COLON, "Expected ':' after access modifier");
+            continue;
+        }
+        
+        // Пропуск конструктора/деструктора
+        if (match(TokenType::KEYWORD_CONSTRUCTOR) || match(TokenType::KEYWORD_DESTRUCTOR)) {
+            if (match(TokenType::DELIM_LPAREN)) {
+                parseParameters();
+                expect(TokenType::DELIM_RPAREN, "Expected ')'");
+            }
+            auto body = parseBlock();
+            continue;
+        }
+        
+        // Парсинг поля или метода
+        if (check(TokenType::IDENTIFIER)) {
+            std::string name = currentToken().value;
+            advance();
+            
+            std::string typeName = "auto";
+            
+            // Проверка на метод (есть скобки)
+            if (match(TokenType::DELIM_LPAREN)) {
+                // Это метод
+                auto params = parseParameters();
+                expect(TokenType::DELIM_RPAREN, "Expected ')'");
+                
+                std::string returnType = "void";
+                if (match(TokenType::OP_COLON)) {
+                    returnType = currentToken().value;
+                    advance();
+                }
+                
+                // Для интерфейсов тело не ожидается
+                if (!check(TokenType::DELIM_LBRACE)) {
+                    expect(TokenType::OP_SEMICOLON, "Expected ';' or method body");
+                    members.push_back({name, returnType});
+                    continue;
+                }
+                
+                // Для классов ожидается тело
+                auto body = parseBlock();
+                members.push_back({name, returnType});
+            } else if (match(TokenType::OP_COLON)) {
+                // Это поле с типом
+                typeName = currentToken().value;
+                advance();
+                
+                ExpressionNodePtr initializer = nullptr;
+                if (match(TokenType::OP_ASSIGN)) {
+                    initializer = parseExpression();
+                }
+                
+                expect(TokenType::OP_SEMICOLON, "Expected ';' after field declaration");
+                members.push_back({name, typeName});
+            } else if (match(TokenType::OP_SEMICOLON)) {
+                // Поле без типа (auto)
+                members.push_back({name, "auto"});
+            }
+        } else {
+            advance();
+        }
+    }
+    
+    return members;
+}
+
+// ============================================================================
+// Парсинг параметров
+// ============================================================================
+
+std::vector<std::pair<std::string, std::string>> Parser::parseParameters() {
+    std::vector<std::pair<std::string, std::string>> params;
+    
+    if (check(TokenType::DELIM_RPAREN)) {
+        return params;
+    }
+    
+    do {
+        if (check(TokenType::IDENTIFIER)) {
+            std::string paramName = currentToken().value;
+            advance();
+            
+            std::string paramType = "auto";
+            if (match(TokenType::OP_COLON)) {
+                paramType = currentToken().value;
+                advance();
+            }
+            
+            params.push_back({paramName, paramType});
+        } else {
+            break;
+        }
+    } while (match(TokenType::OP_COMMA));
+    
+    return params;
+}
+
+// ============================================================================
+// Парсинг statement'ов
+// ============================================================================
 
 StatementNodePtr Parser::parseStatement() {
     Token tok = currentToken();
@@ -150,6 +359,7 @@ StatementNodePtr Parser::parseStatement() {
     
     // Expression statement or assignment
     auto expr = parseExpression();
+    
     if (match(TokenType::OP_SEMICOLON) || match(TokenType::NEWLINE)) {
         return std::make_shared<ExpressionStatementNode>(tok, expr, filename);
     }
@@ -184,12 +394,21 @@ StatementNodePtr Parser::parseFor() {
     return std::make_shared<ForNode>(tok, varName, iterable, body, filename);
 }
 
+StatementNodePtr Parser::parseWhile() {
+    Token tok = currentToken();
+    auto condition = parseExpression();
+    auto body = parseBlock();
+    expect(TokenType::KEYWORD_END, "Expected 'end' for while loop");
+    
+    return std::make_shared<WhileNode>(tok, condition, body, filename);
+}
+
 StatementNodePtr Parser::parseReturn() {
     Token tok = currentToken();
     ExpressionNodePtr value = nullptr;
     
-    if (!check(TokenType::KEYWORD_END) && 
-        !check(TokenType::OP_SEMICOLON) && 
+    if (!check(TokenType::KEYWORD_END) &&
+        !check(TokenType::OP_SEMICOLON) &&
         !check(TokenType::NEWLINE)) {
         value = parseExpression();
     }
@@ -197,6 +416,7 @@ StatementNodePtr Parser::parseReturn() {
     if (match(TokenType::OP_SEMICOLON) || match(TokenType::NEWLINE)) {
         // consume
     }
+    
     expect(TokenType::KEYWORD_END, "Expected 'end' for return statement");
     
     return std::make_shared<ReturnNode>(tok, value, filename);
@@ -206,19 +426,36 @@ StatementNodePtr Parser::parseBlock() {
     Token tok = currentToken();
     auto block = std::make_shared<BlockNode>(tok, filename);
     
-    while (!check(TokenType::KEYWORD_END) && 
-           !check(TokenType::KEYWORD_ELSE) &&
-           !check(TokenType::EOF_TOKEN)) {
-        auto stmt = parseStatement();
-        if (stmt) {
-            block->statements.push_back(stmt);
-        } else {
-            advance();
+    if (match(TokenType::DELIM_LBRACE)) {
+        while (!check(TokenType::DELIM_RBRACE) && !check(TokenType::EOF_TOKEN)) {
+            auto stmt = parseStatement();
+            if (stmt) {
+                block->statements.push_back(stmt);
+            } else {
+                advance();
+            }
+        }
+        expect(TokenType::DELIM_RBRACE, "Expected '}'");
+    } else {
+        // Блок без скобок (до end)
+        while (!check(TokenType::KEYWORD_END) &&
+               !check(TokenType::KEYWORD_ELSE) &&
+               !check(TokenType::EOF_TOKEN)) {
+            auto stmt = parseStatement();
+            if (stmt) {
+                block->statements.push_back(stmt);
+            } else {
+                advance();
+            }
         }
     }
     
     return block;
 }
+
+// ============================================================================
+// Парсинг выражений
+// ============================================================================
 
 ExpressionNodePtr Parser::parseExpression() {
     return parseAssignment();
@@ -276,10 +513,19 @@ ExpressionNodePtr Parser::parseAnd() {
 ExpressionNodePtr Parser::parseEquality() {
     auto left = parseComparison();
     
-    while (match(TokenType::OP_EQ) || match(TokenType::OP_NEQ)) {
+    while (match(TokenType::OP_EQ) || match(TokenType::OP_NEQ) ||
+           match(TokenType::OP_TYPE_EQ) || match(TokenType::OP_TYPE_NEQ)) {
         Token opToken = currentToken();
         auto right = parseComparison();
-        left = std::make_shared<BinaryOpNode>(opToken, left, right, filename);
+        auto binop = std::make_shared<BinaryOpNode>(opToken, left, right, filename);
+        
+        // Флаг для операторов проверки типов
+        if (opToken.type == TokenType::OP_TYPE_EQ || 
+            opToken.type == TokenType::OP_TYPE_NEQ) {
+            binop->isTypeCheck = true;
+        }
+        
+        left = binop;
     }
     
     return left;
@@ -411,6 +657,10 @@ std::vector<ExpressionNodePtr> Parser::parseArguments() {
     
     return args;
 }
+
+// ============================================================================
+// Основной метод парсинга
+// ============================================================================
 
 ProgramNodePtr Parser::parse() {
     return parseProgram();

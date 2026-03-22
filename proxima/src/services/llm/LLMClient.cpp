@@ -34,12 +34,12 @@ LLMClient::LLMClient(QObject *parent)
     , connected(false)
     , processing(false)
     , pendingRequests(0) {
-    
+
     networkManager = new QNetworkAccessManager(this);
-    
+
     // Проверка соединения при создании
     checkConnection();
-    
+
     LOG_INFO("LLMClient initialized");
 }
 
@@ -52,7 +52,7 @@ LLMClient::~LLMClient() {
         }
     }
     pendingReplies.clear();
-    
+
     LOG_INFO("LLMClient destroyed");
 }
 
@@ -99,29 +99,29 @@ bool LLMClient::checkConnection() {
     QUrl url(serverURL + "/v1/models");
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    
+
     if (!apiKey.isEmpty()) {
         request.setRawHeader("Authorization", "Bearer " + apiKey.toUtf8());
     }
-    
+
     QNetworkReply* reply = networkManager->get(request);
-    
+
     // Ждём ответа
     QEventLoop loop;
     QTimer timeoutTimer;
     connect(&timeoutTimer, &QTimer::timeout, &loop, &QEventLoop::quit);
     timeoutTimer.start(5000);
-    
+
     connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
-    
+
     loop.exec();
-    
+
     if (timeoutTimer.isActive()) {
         timeoutTimer.stop();
     }
-    
+
     bool success = false;
-    
+
     if (reply->error() == QNetworkReply::NoError) {
         connected = true;
         success = true;
@@ -131,10 +131,10 @@ bool LLMClient::checkConnection() {
         lastError = reply->errorString();
         LOG_WARNING("LLM server connection failed: " + lastError.toStdString());
     }
-    
+
     reply->deleteLater();
     emit connectionStatusChanged(connected);
-    
+
     return success;
 }
 
@@ -153,53 +153,53 @@ LLMResponse LLMClient::sendRequest(const LLMRequest& request) {
         response.errorMessage = "Not connected to LLM server";
         return response;
     }
-    
+
     processing = true;
     pendingRequests++;
     emit processingStarted();
-    
+
     auto startTime = std::chrono::high_resolution_clock::now();
-    
+
     // Build request body using collection format (not JSON)
     QString requestBody = buildRequestBody(request);
-    
+
     QUrl url(serverURL + "/v1/chat/completions");
     QNetworkRequest networkRequest(url);
     networkRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/x-proxima-collection");
     networkRequest.setRawHeader("Accept", "application/x-proxima-collection");
-    
+
     if (!apiKey.isEmpty()) {
         networkRequest.setRawHeader("Authorization", "Bearer " + apiKey.toUtf8());
     }
-    
+
     QNetworkReply* reply = networkManager->post(networkRequest, requestBody.toUtf8());
     pendingReplies.push_back(reply);
-    
+
     // Setup timeout
     QTimer* timeoutTimer = new QTimer(this);
     timeoutTimer->setSingleShot(true);
     timeoutTimer->start(timeout);
-    
+
     // Wait for response
     QEventLoop loop;
     connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
     connect(timeoutTimer, &QTimer::timeout, &loop, &QEventLoop::quit);
-    
+
     loop.exec();
-    
+
     auto endTime = std::chrono::high_resolution_clock::now();
-    
+
     LLMResponse response;
     response.processingTime = std::chrono::duration<double>(endTime - startTime).count();
-    
+
     if (timeoutTimer->isActive()) {
         timeoutTimer->stop();
-        
+
         if (reply->error() == QNetworkReply::NoError) {
             QByteArray responseData = reply->readAll();
             response = parseResponse(QString::fromUtf8(responseData));
             response.success = true;
-            
+
             LOG_INFO("LLM request completed in " + std::to_string(response.processingTime) + "s");
         } else {
             response.success = false;
@@ -214,19 +214,19 @@ LLMResponse LLMClient::sendRequest(const LLMRequest& request) {
         reply->abort();
         LOG_ERROR("LLM request timeout");
     }
-    
+
     timeoutTimer->deleteLater();
     reply->deleteLater();
     pendingReplies.removeOne(reply);
     pendingRequests--;
     processing = false;
-    
+
     emit processingFinished();
-    
+
     if (responseCallback) {
         responseCallback(response);
     }
-    
+
     return response;
 }
 
@@ -235,81 +235,28 @@ LLMResponse LLMClient::sendRequest(const LLMRequest& request) {
 // ============================================================================
 
 QString LLMClient::buildRequestBody(const LLMRequest& request) {
-    // Используем формат collection вместо JSON (согласно language.txt пункт 53-54)
-    QString collection;
-    collection += "[\n";
-    
-    // Тип запроса
-    collection += "    \"type\", \"" + request.type + "\",,\n";
-    
-    // Модель
-    collection += "    \"model\", \"" + model + "\",,\n";
-    
-    // Параметры
-    collection += "    \"max_tokens\", " + QString::number(maxTokens) + ",,\n";
-    collection += "    \"temperature\", " + QString::number(temperature) + ",,\n";
-    
-    // Файл и позиция
-    collection += "    \"file\", \"" + request.file + "\",,\n";
-    collection += "    \"start_line\", " + QString::number(request.startLine) + ",,\n";
-    collection += "    \"end_line\", " + QString::number(request.endLine) + ",,\n";
-    
-    // Prompt
-    QString escapedPrompt = request.prompt;
-    escapedPrompt.replace("\\", "\\\\");
-    escapedPrompt.replace("\"", "\\\"");
-    escapedPrompt.replace("\n", "\\n");
-    collection += "    \"prompt\", \"" + escapedPrompt + "\",,\n";
-    
-    // Контекст кода
-    if (!request.codeContext.isEmpty()) {
-        QString escapedCode = request.codeContext;
-        escapedCode.replace("\\", "\\\\");
-        escapedCode.replace("\"", "\\\"");
-        escapedCode.replace("\n", "\\n");
-        collection += "    \"code_context\", \"" + escapedCode + "\",,\n";
+    CollectionParser parser;
+
+    QVector<QPair<QString, CollectionParser::Value>> pairs;
+    pairs.append(qMakePair("type", CollectionParser::Value::fromString(request.type)));
+    pairs.append(qMakePair("model", CollectionParser::Value::fromString(model)));
+    pairs.append(qMakePair("max_tokens", CollectionParser::Value::fromNumber(maxTokens)));
+    pairs.append(qMakePair("temperature", CollectionParser::Value::fromNumber(temperature)));
+    pairs.append(qMakePair("file", CollectionParser::Value::fromString(request.file)));
+    pairs.append(qMakePair("start_line", CollectionParser::Value::fromNumber(request.startLine)));
+    pairs.append(qMakePair("end_line", CollectionParser::Value::fromNumber(request.endLine)));
+    pairs.append(qMakePair("prompt", CollectionParser::Value::fromString(request.prompt)));
+    pairs.append(qMakePair("code_context", CollectionParser::Value::fromString(request.codeContext)));
+
+    // Options как вложенная collection
+    QVector<QPair<QString, CollectionParser::Value>> optionPairs;
+    for (auto it = request.options.begin(); it != request.options.end(); ++it) {
+        optionPairs.append(qMakePair(it.key(), CollectionParser::Value::fromString(it.value())));
     }
-    
-    // Опции
-    if (!request.options.isEmpty()) {
-        collection += "    \"options\", [\n";
-        int count = 0;
-        for (auto it = request.options.begin(); it != request.options.end(); ++it) {
-            collection += "        \"" + it.key() + "\", \"" + it.value() + "\"";
-            if (count < request.options.size() - 1) {
-                collection += ",,";
-            }
-            collection += "\n";
-            count++;
-        }
-        collection += "    ],,\n";
-    }
-    
-    // История диалога (для контекста)
-    if (!conversationHistory.isEmpty()) {
-        collection += "    \"conversation_history\", [\n";
-        for (int i = 0; i < conversationHistory.size(); i++) {
-            const auto& msg = conversationHistory[i];
-            collection += "        [\n";
-            collection += "            \"role\", \"" + msg.role + "\",,\n";
-            QString escapedContent = msg.content;
-            escapedContent.replace("\\", "\\\\");
-            escapedContent.replace("\"", "\\\"");
-            escapedContent.replace("\n", "\\n");
-            collection += "            \"content\", \"" + escapedContent + "\"\n";
-            collection += "        ]";
-            if (i < conversationHistory.size() - 1) {
-                collection += ",,";
-            }
-            collection += "\n";
-        }
-        collection += "    ],,\n";
-    }
-    
-    collection += "    \"timestamp\", " + QString::number(QDateTime::currentMSecsSinceEpoch()) + "\n";
-    collection += "]";
-    
-    return collection;
+    pairs.append(qMakePair("options", CollectionParser::createCollection(optionPairs)));
+
+    CollectionParser::Value collection = CollectionParser::createCollection(pairs);
+    return parser.serialize(collection);
 }
 
 // ============================================================================
@@ -317,98 +264,34 @@ QString LLMClient::buildRequestBody(const LLMRequest& request) {
 // ============================================================================
 
 LLMResponse LLMClient::parseResponse(const QString& responseData) {
+    CollectionParser parser;
+    CollectionParser::ParseResult result = parser.parse(responseData);
+
     LLMResponse response;
-    response.success = false;
-    
-    // Парсинг формата collection (не JSON!)
-    // Пример ответа:
-    // [
-    //     "status", "ok",,
-    //     "suggestions", [
-    //         [
-    //             "block_id", 1,,
-    //             "start_line", 42,,
-    //             "end_line", 50,,
-    //             "original_code", "...",,
-    //             "suggested_code", "...",,
-    //             "explanation", "...",,
-    //             "confidence", 0.95
-    //         ],,
-    //         ...
-    //     ],,
-    //     "explanation", "...",,
-    //     "processing_time", 1.23
-    // ]
-    
-    // Упрощённый парсер collection
-    QStringList lines = responseData.split("\n");
-    QString currentKey;
-    QString currentValue;
-    bool inSuggestions = false;
-    bool inSuggestion = false;
-    
-    CodeSuggestion currentSuggestion;
-    
-    for (const QString& line : lines) {
-        QString trimmed = line.trimmed();
-        
-        if (trimmed.startsWith("]")) {
-            if (inSuggestion) {
-                if (currentSuggestion.blockId > 0) {
-                    response.suggestions.append(currentSuggestion);
-                }
-                currentSuggestion = CodeSuggestion();
-                inSuggestion = false;
-            }
-            if (inSuggestions) {
-                inSuggestions = false;
-            }
-            continue;
-        }
-        
-        // Парсинг ключ-значение
-        QRegularExpression re(R"("([^"]+)"\s*,\s*"([^"]*)")");
-        QRegularExpressionMatch match = re.match(trimmed);
-        
-        if (match.hasMatch()) {
-            currentKey = match.captured(1);
-            currentValue = match.captured(2);
-            
-            if (currentKey == "status") {
-                response.success = (currentValue == "ok");
-            } else if (currentKey == "explanation") {
-                response.explanation = currentValue;
-            } else if (currentKey == "processing_time") {
-                response.processingTime = currentValue.toDouble();
-            } else if (currentKey == "error_message") {
-                response.errorMessage = currentValue;
-            } else if (currentKey == "suggestions") {
-                inSuggestions = true;
-            } else if (inSuggestions) {
-                // Парсинг suggestion
-                if (currentKey == "block_id") {
-                    currentSuggestion.blockId = currentValue.toInt();
-                } else if (currentKey == "start_line") {
-                    currentSuggestion.startLine = currentValue.toInt();
-                } else if (currentKey == "end_line") {
-                    currentSuggestion.endLine = currentValue.toInt();
-                } else if (currentKey == "original_code") {
-                    currentSuggestion.originalCode = currentValue;
-                } else if (currentKey == "suggested_code") {
-                    currentSuggestion.suggestedCode = currentValue;
-                } else if (currentKey == "explanation") {
-                    currentSuggestion.explanation = currentValue;
-                } else if (currentKey == "confidence") {
-                    currentSuggestion.confidence = currentValue.toDouble();
-                }
+
+    if (result.success) {
+        response.success = result.value.get("status").asString() == "ok";
+        response.errorMessage = result.value.get("error_message").asString();
+        response.explanation = result.value.get("explanation").asString();
+        response.processingTime = result.value.get("processing_time").asNumber();
+
+        // Parse suggestions array
+        CollectionParser::Value suggestionsValue = result.value.get("suggestions");
+        if (suggestionsValue.isArray()) {
+            for (const auto& suggestionValue : suggestionsValue.asArray()) {
+                CodeSuggestion suggestion;
+                suggestion.blockId = suggestionValue.get("block_id").asNumber();
+                suggestion.startLine = suggestionValue.get("start_line").asNumber();
+                suggestion.endLine = suggestionValue.get("end_line").asNumber();
+                suggestion.originalCode = suggestionValue.get("original_code").asString();
+                suggestion.suggestedCode = suggestionValue.get("suggested_code").asString();
+                suggestion.explanation = suggestionValue.get("explanation").asString();
+                suggestion.confidence = suggestionValue.get("confidence").asNumber();
+                response.suggestions.append(suggestion);
             }
         }
     }
-    
-    if (!response.success && response.errorMessage.isEmpty()) {
-        response.errorMessage = "Unknown error";
-    }
-    
+
     return response;
 }
 
@@ -422,7 +305,7 @@ QVector<CodeSuggestion> LLMClient::suggestModifications(
     int endLine,
     const QString& code,
     const QString& prompt) {
-    
+
     LLMRequest request;
     request.type = "code_modification";
     request.file = file;
@@ -430,9 +313,9 @@ QVector<CodeSuggestion> LLMClient::suggestModifications(
     request.endLine = endLine;
     request.prompt = prompt.isEmpty() ? "Improve this code" : prompt;
     request.codeContext = code;
-    
+
     LLMResponse response = sendRequest(request);
-    
+
     if (response.success) {
         return response.suggestions;
     } else {
@@ -446,7 +329,7 @@ QString LLMClient::explainCode(
     int startLine,
     int endLine,
     const QString& code) {
-    
+
     LLMRequest request;
     request.type = "explanation";
     request.file = file;
@@ -454,9 +337,9 @@ QString LLMClient::explainCode(
     request.endLine = endLine;
     request.prompt = "Explain this code in detail, including its purpose, logic, and potential improvements";
     request.codeContext = code;
-    
+
     LLMResponse response = sendRequest(request);
-    
+
     if (response.success) {
         return response.explanation;
     } else {
@@ -470,7 +353,7 @@ QString LLMClient::completeCode(
     int column,
     const QString& prefix,
     const QString& suffix) {
-    
+
     LLMRequest request;
     request.type = "completion";
     request.file = file;
@@ -479,13 +362,13 @@ QString LLMClient::completeCode(
     request.prompt = "Complete this code";
     request.codeContext = prefix;
     request.options["suffix"] = suffix;
-    
+
     LLMResponse response = sendRequest(request);
-    
+
     if (response.success && !response.suggestions.isEmpty()) {
         return response.suggestions[0].suggestedCode;
     }
-    
+
     return "";
 }
 
@@ -495,7 +378,7 @@ LLMResponse LLMClient::refactorCode(
     int endLine,
     const QString& code,
     const QString& goal) {
-    
+
     LLMRequest request;
     request.type = "refactoring";
     request.file = file;
@@ -504,7 +387,7 @@ LLMResponse LLMClient::refactorCode(
     request.prompt = "Refactor this code: " + goal;
     request.codeContext = code;
     request.options["goal"] = goal;
-    
+
     return sendRequest(request);
 }
 
@@ -513,7 +396,7 @@ LLMResponse LLMClient::generateDocumentation(
     int startLine,
     int endLine,
     const QString& code) {
-    
+
     LLMRequest request;
     request.type = "documentation";
     request.file = file;
@@ -521,7 +404,7 @@ LLMResponse LLMClient::generateDocumentation(
     request.endLine = endLine;
     request.prompt = "Generate comprehensive documentation for this code including @param, @return, and @method tags";
     request.codeContext = code;
-    
+
     return sendRequest(request);
 }
 
@@ -531,7 +414,7 @@ LLMResponse LLMClient::fixBugs(
     int endLine,
     const QString& code,
     const QString& errorMessage) {
-    
+
     LLMRequest request;
     request.type = "bug_fix";
     request.file = file;
@@ -540,7 +423,7 @@ LLMResponse LLMClient::fixBugs(
     request.prompt = "Fix bugs in this code. Error message: " + errorMessage;
     request.codeContext = code;
     request.options["error_message"] = errorMessage;
-    
+
     return sendRequest(request);
 }
 
@@ -549,7 +432,7 @@ LLMResponse LLMClient::generateTests(
     int startLine,
     int endLine,
     const QString& code) {
-    
+
     LLMRequest request;
     request.type = "test_generation";
     request.file = file;
@@ -557,7 +440,7 @@ LLMResponse LLMClient::generateTests(
     request.endLine = endLine;
     request.prompt = "Generate comprehensive unit tests for this code including edge cases";
     request.codeContext = code;
-    
+
     return sendRequest(request);
 }
 
@@ -567,7 +450,7 @@ LLMResponse LLMClient::optimizeCode(
     int endLine,
     const QString& code,
     const QString& optimizationGoal) {
-    
+
     LLMRequest request;
     request.type = "optimization";
     request.file = file;
@@ -576,7 +459,7 @@ LLMResponse LLMClient::optimizeCode(
     request.prompt = "Optimize this code for: " + optimizationGoal;
     request.codeContext = code;
     request.options["optimization_goal"] = optimizationGoal;
-    
+
     return sendRequest(request);
 }
 
@@ -637,9 +520,9 @@ void LLMClient::addToConversationHistory(const QString& role, const QString& con
     msg.role = role;
     msg.content = content;
     msg.timestamp = QDateTime::currentDateTime();
-    
+
     conversationHistory.append(msg);
-    
+
     // Ограничение размера истории
     if (conversationHistory.size() > 20) {
         conversationHistory.removeFirst();
@@ -660,9 +543,9 @@ QVector<ConversationMessage> LLMClient::getConversationHistory() const {
 // ============================================================================
 
 void LLMClient::saveSettings() {
-    QString configPath = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + 
+    QString configPath = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) +
                         "/llm_settings.conf";
-    
+
     QFile file(configPath);
     if (file.open(QIODevice::WriteOnly)) {
         QTextStream out(&file);
@@ -678,17 +561,17 @@ void LLMClient::saveSettings() {
 }
 
 void LLMClient::loadSettings() {
-    QString configPath = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + 
+    QString configPath = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) +
                         "/llm_settings.conf";
-    
+
     QFile file(configPath);
     if (file.open(QIODevice::ReadOnly)) {
         QTextStream in(&file);
         QString line;
-        
+
         while (!in.atEnd()) {
             line = in.readLine();
-            
+
             if (line.startsWith("server_url=")) {
                 serverURL = line.mid(11);
             } else if (line.startsWith("model=")) {
@@ -701,7 +584,7 @@ void LLMClient::loadSettings() {
                 timeout = line.mid(8).toInt();
             }
         }
-        
+
         file.close();
         LOG_INFO("LLM settings loaded");
     }
@@ -722,21 +605,21 @@ void LLMClient::onResponse(ResponseCallback callback) {
 void LLMClient::onNetworkReplyFinished(QNetworkReply* reply) {
     pendingReplies.removeOne(reply);
     reply->deleteLater();
-    
+
     LOG_DEBUG("Network reply finished");
 }
 
 void LLMClient::onNetworkError(QNetworkReply::NetworkError error) {
     lastError = "Network error: " + QString::number(error);
     LOG_ERROR(lastError.toStdString());
-    
+
     emit errorOccurred(lastError);
 }
 
 void LLMClient::onTimeout() {
     lastError = "Request timeout";
     LOG_ERROR(lastError.toStdString());
-    
+
     emit errorOccurred(lastError);
 }
 
@@ -797,10 +680,10 @@ LLMResponse LLMClient::requestMultipleSuggestions(
     const QString& file,
     const QString& code,
     const QString& prompt) {
-    
+
     LLMResponse combinedResponse;
     combinedResponse.success = true;
-    
+
     for (const auto& range : ranges) {
         LLMRequest request;
         request.type = "code_modification";
@@ -809,9 +692,9 @@ LLMResponse LLMClient::requestMultipleSuggestions(
         request.endLine = range.second;
         request.prompt = prompt;
         request.codeContext = code;
-        
+
         LLMResponse response = sendRequest(request);
-        
+
         if (response.success) {
             combinedResponse.suggestions.append(response.suggestions);
         } else {
@@ -819,7 +702,7 @@ LLMResponse LLMClient::requestMultipleSuggestions(
             combinedResponse.errorMessage += response.errorMessage + "; ";
         }
     }
-    
+
     return combinedResponse;
 }
 
@@ -828,12 +711,12 @@ LLMResponse LLMClient::requestMultipleSuggestions(
 // ============================================================================
 
 QString LLMClient::getCacheKey(const LLMRequest& request) const {
-    QString key = request.type + "|" + 
-                  request.file + "|" + 
-                  QString::number(request.startLine) + "|" + 
-                  QString::number(request.endLine) + "|" + 
+    QString key = request.type + "|" +
+                  request.file + "|" +
+                  QString::number(request.startLine) + "|" +
+                  QString::number(request.endLine) + "|" +
                   request.prompt;
-    
+
     // MD5 хеш для ключа
     QByteArray hash = QCryptographicHash::hash(key.toUtf8(), QCryptographicHash::Md5);
     return QString::fromUtf8(hash.toHex());
@@ -858,7 +741,7 @@ void LLMClient::cacheResponse(const QString& cacheKey, const LLMResponse& respon
     entry.response = response;
     entry.timestamp = QDateTime::currentDateTime();
     responseCache[cacheKey] = entry;
-    
+
     // Очистка старого кэша
     if (responseCache.size() > 100) {
         auto it = responseCache.begin();

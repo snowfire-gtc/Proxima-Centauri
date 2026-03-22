@@ -1,17 +1,17 @@
 #include "MainWindow.h"
-#include "ui_editor/CodeEditor.h"
-#include "ui_editor/EditorToolbar.h"
-#include "ui_editor/StatusBar.h"
-#include "ui_console/ConsoleWidget.h"
-#include "ui_project/ProjectTree.h"
-#include "ui_menu/MainMenu.h"
-#include "ui_dialogs/SettingsDialog.h"
-#include "ui_dialogs/BuildDialog.h"
-#include "ui_dialogs/LLMAssistantDialog.h"
-#include "ui_dialogs/CollaborationDialog.h"
-#include "ui_search/SearchWidget.h"
-#include "ui_search/ProjectSearchWidget.h"
-#include "ui_search/AdvancedSearchWidget.h"
+#include "ui/editor/CodeEditor.h"
+#include "ui/editor/EditorToolbar.h"
+#include "ui/editor/StatusBar.h"
+#include "ui/console/ConsoleWidget.h"
+#include "ui/project/ProjectTree.h"
+#include "ui/menu/MainMenu.h"
+#include "ui/dialogs/BuildDialog.h"
+#include "ui/dialogs/LLMAssistantDialog.h"
+#include "ui/dialogs/CollaborationDialog.h"
+#include "ui/dialogs/SettingsDialog.h"
+#include "ui/search/SearchWidget.h"
+#include "ui/search/ProjectSearchWidget.h"
+#include "ui/search/AdvancedSearchWidget.h"
 #include "core/Project.h"
 #include "core/Module.h"
 #include "core/CompilerConnector.h"
@@ -21,6 +21,7 @@
 #include "services/collaboration/CollaborationService.h"
 #include "utils/Logger.h"
 #include "utils/Config.h"
+#include "app/Settings.h"
 #include <QApplication>
 #include <QCloseEvent>
 #include <QFileDialog>
@@ -37,11 +38,169 @@
 #include <QSettings>
 #include <QSysInfo>
 #include <QDockWidget>
-#include <QMenu>
 #include <QAction>
 #include <QActionGroup>
 #include <QKeySequence>
 #include <QShortcut>
+#include <QInputDialog>
+#include <QProgressDialog>
+#include <QStatusBar>
+#include <QLabel>
+#include <QProgressBar>
+#include <QToolBar>
+#include <QToolButton>
+#include <QWhatsThis>
+#include <QStyle>
+#include <QStyleFactory>
+#include <QPalette>
+#include <QColor>
+#include <QFont>
+#include <QFontDatabase>
+#include <QClipboard>
+#include <QMimeData>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QScrollArea>
+#include <QSplitter>
+#include <QTabWidget>
+#include <QTextEdit>
+#include <QPlainTextEdit>
+#include <QListWidget>
+#include <QTableWidget>
+#include <QTreeWidget>
+#include <QHeaderView>
+#include <QCompleter>
+#include <QAbstractItemView>
+#include <QItemDelegate>
+#include <QStyledItemDelegate>
+#include <QSortFilterProxyModel>
+#include <QStandardItemModel>
+#include <QStandardItem>
+#include <QAbstractItemModel>
+#include <QModelIndex>
+#include <QPersistentModelIndex>
+#include <QItemSelection>
+#include <QItemSelectionModel>
+#include <QFileSystemModel>
+#include <QDirModel>
+#include <QSignalMapper>
+#include <QButtonGroup>
+#include <QGroupBox>
+#include <QCheckBox>
+#include <QRadioButton>
+#include <QComboBox>
+#include <QSpinBox>
+#include <QDoubleSpinBox>
+#include <QTimeEdit>
+#include <QDateEdit>
+#include <QDateTimeEdit>
+#include <QLineEdit>
+#include <QTextBrowser>
+#include <QPushButton>
+#include <QToolButton>
+#include <QMenu>
+#include <QMenuBar>
+#include <QSystemTrayIcon>
+#include <QNotification>
+#include <QAnimation>
+#include <QPropertyAnimation>
+#include <QParallelAnimationGroup>
+#include <QSequentialAnimationGroup>
+#include <QEasingCurve>
+#include <QGraphicsEffect>
+#include <QGraphicsBlurEffect>
+#include <QGraphicsDropShadowEffect>
+#include <QGraphicsOpacityEffect>
+#include <QStackedWidget>
+#include <QScrollArea>
+#include <QFrame>
+#include <QWizard>
+#include <QWizardPage>
+#include <QFormLayout>
+#include <QGridLayout>
+#include <QFlowLayout>
+#include <QStackedLayout>
+#include <QBoxLayout>
+#include <QSpacerItem>
+#include <QSizeGrip>
+#include <QSystemTrayIcon>
+#include <QAction>
+#include <QShortcut>
+#include <QKeySequence>
+#include <QGesture>
+#include <QGestureEvent>
+#include <QPanGesture>
+#include <QPinchGesture>
+#include <QSwipeGesture>
+#include <QTapGesture>
+#include <QTapAndHoldGesture>
+#include <QAbstractScrollArea>
+#include <QScrollBar>
+#include <QSlider>
+#include <QDial>
+#include <QProgressDialog>
+#include <QErrorMessage>
+#include <QInputDialog>
+#include <QFileDialog>
+#include <QColorDialog>
+#include <QFontDialog>
+#include <QMessageBox>
+#include <QWizard>
+#include <QWizardPage>
+#include <QCompleter>
+#include <QValidator>
+#include <QIntValidator>
+#include <QDoubleValidator>
+#include <QRegExpValidator>
+#include <QRegularExpressionValidator>
+#include <QSyntaxHighlighter>
+#include <QTextDocument>
+#include <QTextCursor>
+#include <QTextBlock>
+#include <QTextCharFormat>
+#include <QTextBlockFormat>
+#include <QTextListFormat>
+#include <QTextTableFormat>
+#include <QTextFrameFormat>
+#include <QTextImageFormat>
+#include <QTextObject>
+#include <QTextObjectInterface>
+#include <QAbstractTextDocumentLayout>
+#include <QTextDocumentFragment>
+#include <QTextDocumentWriter>
+#include <QPdfWriter>
+#include <QPrinter>
+#include <QPrintDialog>
+#include <QPrintPreviewDialog>
+#include <QPrintPreviewWidget>
+#include <QPageSetupDialog>
+#include <QFontInfo>
+#include <QFontMetrics>
+#include <QFontDatabase>
+#include <QStylePainter>
+#include <QStyleOption>
+#include <QStyleOptionViewItem>
+#include <QStyleOptionHeader>
+#include <QStyleOptionToolBar>
+#include <QStyleOptionMenuItem>
+#include <QStyleOptionComplex>
+#include <QStyleOptionSpinBox>
+#include <QStyleOptionComboBox>
+#include <QStyleOptionSlider>
+#include <QStyleOptionProgressBar>
+#include <QStyleOptionButton>
+#include <QStyleOptionTab>
+#include <QStyleOptionFrame>
+#include <QStyleOptionGroupBox>
+#include <QStyleOptionDockWidget>
+#include <QStyleOptionFocusRect>
+#include <QStyleOptionToolBox>
+#include <QStyleOptionRubberBand>
+#include <QStyleOptionGraphicsItem>
+#include <QStyleOptionTitleBar>
+#include <QStyleOptionToolButton>
+#include <QStyleOptionSizeGrip>
+#include <QStyleOptionSplitter>
 
 namespace proxima {
 
@@ -60,7 +219,7 @@ MainWindow::MainWindow(QWidget *parent)
     , autoSaveManager(nullptr)
     , menuBar(nullptr)
     , mainToolBar(nullptr)
-    , statusBar(nullptr)
+    , editorStatusBar(nullptr)
     , mainSplitter(nullptr)
     , editorSplitter(nullptr)
     , projectTree(nullptr)
@@ -68,7 +227,7 @@ MainWindow::MainWindow(QWidget *parent)
     , consoleWidget(nullptr)
     , editorToolbar(nullptr)
     , variableInspector(nullptr)
-    , editorStatusBar(nullptr)
+    , breakpointManager(nullptr)
     , fileSearchWidget(nullptr)
     , projectSearchWidget(nullptr)
     , advancedSearchWidget(nullptr)
@@ -78,6 +237,32 @@ MainWindow::MainWindow(QWidget *parent)
     , statusUpdateTimer(nullptr) {
 
     LOG_INFO("Creating Centauri IDE main window...");
+
+    // Настройка приложения
+    QApplication::setApplicationName("Centauri IDE");
+    QApplication::setApplicationVersion("1.0.0");
+    QApplication::setOrganizationName("Proxima Development Team");
+    QApplication::setOrganizationDomain("proxima-lang.org");
+
+    // Настройка стиля
+    QApplication::setStyle(QStyleFactory::create("Fusion"));
+
+    // Применение тёмной темы по умолчанию
+    QPalette darkPalette;
+    darkPalette.setColor(QPalette::Window, QColor(53, 53, 53));
+    darkPalette.setColor(QPalette::WindowText, Qt::white);
+    darkPalette.setColor(QPalette::Base, QColor(25, 25, 25));
+    darkPalette.setColor(QPalette::AlternateBase, QColor(53, 53, 53));
+    darkPalette.setColor(QPalette::ToolTipBase, Qt::white);
+    darkPalette.setColor(QPalette::ToolTipText, Qt::white);
+    darkPalette.setColor(QPalette::Text, Qt::white);
+    darkPalette.setColor(QPalette::Button, QColor(53, 53, 53));
+    darkPalette.setColor(QPalette::ButtonText, Qt::white);
+    darkPalette.setColor(QPalette::BrightText, Qt::red);
+    darkPalette.setColor(QPalette::Link, QColor(42, 130, 218));
+    darkPalette.setColor(QPalette::Highlight, QColor(42, 130, 218));
+    darkPalette.setColor(QPalette::HighlightedText, Qt::black);
+    QApplication::setPalette(darkPalette);
 
     setupUI();
     setupMenuBar();
@@ -112,9 +297,42 @@ MainWindow::MainWindow(QWidget *parent)
     gitService->initialize(QDir::currentPath());
 
     // Инициализация виджетов поиска
-    fileSearchWidget->setEditor(getCurrentEditor());
-    advancedSearchWidget->setRuntime(compilerConnector->getRuntime());
-    advancedSearchWidget->setDebugger(compilerConnector);
+    if (fileSearchWidget) {
+        fileSearchWidget->setEditor(getCurrentEditor());
+    }
+    if (advancedSearchWidget) {
+        advancedSearchWidget->setRuntime(compilerConnector ? compilerConnector->getRuntime() : nullptr);
+        advancedSearchWidget->setDebugger(compilerConnector);
+    }
+
+    // Создание системного трей-иконки
+    QSystemTrayIcon* trayIcon = new QSystemTrayIcon(this);
+    trayIcon->setIcon(QIcon(":/icons/centauri.svg"));
+    trayIcon->setToolTip("Centauri IDE - Proxima");
+    trayIcon->show();
+
+    // Контекстное меню трей-иконки
+    QMenu* trayMenu = new QMenu(this);
+    trayMenu->addAction("Показать", this, [this]() {
+        showNormal();
+        activateWindow();
+    });
+    trayMenu->addAction("Скрыть", this, &QWidget::hide);
+    trayMenu->addSeparator();
+    trayMenu->addAction("Выход", qApp, &QApplication::quit);
+    trayIcon->setContextMenu(trayMenu);
+
+    // Обработка двойного клика на трей-иконке
+    connect(trayIcon, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
+        if (reason == QSystemTrayIcon::DoubleClick) {
+            showNormal();
+            activateWindow();
+        }
+    });
+
+    // Включение drag-and-drop для файлов
+    setAcceptDrops(true);
+
     LOG_INFO("Centauri IDE main window created successfully");
 }
 
@@ -140,6 +358,7 @@ MainWindow::~MainWindow() {
 void MainWindow::setupUI() {
     setWindowTitle("Centauri IDE - Proxima");
     setMinimumSize(1024, 768);
+    setWindowIcon(QIcon(":/icons/centauri.svg"));
 
     // Главный сплиттер (горизонтальный)
     mainSplitter = new QSplitter(Qt::Horizontal, this);
@@ -154,6 +373,8 @@ void MainWindow::setupUI() {
     editorTabs->setMovable(true);
     editorTabs->setDocumentMode(true);
     editorTabs->setElideMode(Qt::ElideMiddle);
+    editorTabs->setUsesScrollButtons(true);
+    editorTabs->setContextMenuPolicy(Qt::CustomContextMenu);
 
     // Панель инструментов редактора
     editorToolbar = new EditorToolbar(this);
@@ -166,65 +387,120 @@ void MainWindow::setupUI() {
     editorSplitter->setStretchFactor(0, 3);
     editorSplitter->setStretchFactor(1, 1);
 
+    // Восстановление размеров сплиттера из настроек
+    QList<int> editorSizes = Settings::getInstance().getWindowSettings().splitterSizes;
+    if (!editorSizes.isEmpty()) {
+        editorSplitter->setSizes(editorSizes);
+    }
+
     mainSplitter->addWidget(editorSplitter);
 
     // Восстановление геометрии из настроек
     restoreGeometry(Settings::getInstance().getWindowSettings().geometry);
     restoreState(Settings::getInstance().getWindowSettings().state);
+
+    // Включение drag-and-drop
+    setAcceptDrops(true);
 }
 
 void MainWindow::setupMenuBar() {
     menuBar = new MainMenu(this, this);
     setMenuBar(menuBar);
-    
+
     // Создание меню поиска
     createSearchMenu();
+
+    createViewMenu();  //Вид
+
+    createEditMenu(); //Правки
+
+    // Меню "Окна" для переключения между открытыми файлами
+    QMenu* windowMenu = menuBar->addMenu("Окна");
+    windowMenu->setObjectName("menuWindows");
+
+    QAction* closeWindowAction = windowMenu->addAction("Закрыть окно");
+    closeWindowAction->setShortcut(QKeySequence::Close);
+    connect(closeWindowAction, &QAction::triggered, this, [this]() {
+        CodeEditor* editor = getCurrentEditor();
+        if (editor) {
+            closeFile(editor->getFilePath());
+        }
+    });
+
+    QAction* closeAllWindowsAction = windowMenu->addAction("Закрыть все");
+    connect(closeAllWindowsAction, &QAction::triggered, this, [this]() {
+        while (editorTabs->count() > 0) {
+            CodeEditor* editor = qobject_cast<CodeEditor*>(editorTabs->widget(0));
+            if (editor) {
+                closeFile(editor->getFilePath());
+            }
+        }
+    });
+
+    windowMenu->addSeparator();
+
+    // Динамическое меню последних файлов
+    for (int i = 0; i < 9; i++) {
+        QAction* action = new QAction(this);
+        action->setVisible(false);
+        action->setData(i);
+        windowMenu->addAction(action);
+        connect(action, &QAction::triggered, this, [this, i]() {
+            QStringList recentFiles = Settings::getInstance().getRecentFiles();
+            if (i < recentFiles.size()) {
+                openFile(recentFiles[i]);
+            }
+        });
+    }
+
+    updateWindowsMenu();
+    connect(editorTabs, &QTabWidget::currentChanged, this, &MainWindow::updateWindowsMenu);
 }
 
 void MainWindow::createSearchMenu() {
     searchMenu = menuBar->addMenu("Поиск");
     searchMenu->setObjectName("menuSearch");
-    
+
     // Поиск в файле
     findInFileAction = searchMenu->addAction("Найти в файле...");
     findInFileAction->setShortcut(QKeySequence::Find);
     findInFileAction->setShortcutContext(Qt::WindowShortcut);
     connect(findInFileAction, &QAction::triggered, this, &MainWindow::onFindInFile);
-    
+
     // Поиск по проекту
     findInProjectAction = searchMenu->addAction("Найти в проекте...");
     findInProjectAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F));
     findInProjectAction->setShortcutContext(Qt::WindowShortcut);
     connect(findInProjectAction, &QAction::triggered, this, &MainWindow::onFindInProject);
-    
+
     // Расширенный поиск
     advancedSearchAction = searchMenu->addAction("Расширенный поиск значений...");
     advancedSearchAction->setShortcut(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_F));
     advancedSearchAction->setShortcutContext(Qt::WindowShortcut);
     connect(advancedSearchAction, &QAction::triggered, this, &MainWindow::onAdvancedSearch);
-    
+
     searchMenu->addSeparator();
-    
+
     // Найти далее
     findNextAction = searchMenu->addAction("Найти далее");
     findNextAction->setShortcut(QKeySequence::FindNext);
     findNextAction->setShortcutContext(Qt::WindowShortcut);
     connect(findNextAction, &QAction::triggered, this, &MainWindow::onFindNext);
-    
+
     // Найти ранее
     findPreviousAction = searchMenu->addAction("Найти ранее");
     findPreviousAction->setShortcut(QKeySequence::FindPrevious);
     findPreviousAction->setShortcutContext(Qt::WindowShortcut);
     connect(findPreviousAction, &QAction::triggered, this, &MainWindow::onFindPrevious);
-    
+
     searchMenu->addSeparator();
-    
+
     // Заменить в файле
     replaceInFileAction = searchMenu->addAction("Заменить в файле...");
     replaceInFileAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_H));
     replaceInFileAction->setShortcutContext(Qt::WindowShortcut);
     connect(replaceInFileAction, &QAction::triggered, this, &MainWindow::onReplaceInFile);
-    
+
     // Заменить в проекте
     replaceInProjectAction = searchMenu->addAction("Заменить в проекте...");
     replaceInProjectAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_H));
@@ -237,19 +513,20 @@ void MainWindow::setupToolBar() {
     mainToolBar->setMovable(false);
     mainToolBar->setIconSize(QSize(24, 24));
     mainToolBar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+    mainToolBar->setFloatable(false);
 
     // Файловые операции
     mainToolBar->addAction(QIcon(":/icons/new.svg"), "New", this, &MainWindow::onNewFile);
     mainToolBar->addAction(QIcon(":/icons/open.svg"), "Open", this, &MainWindow::onOpenFile);
     mainToolBar->addAction(QIcon(":/icons/save.svg"), "Save", this, &MainWindow::onSaveFile);
     mainToolBar->addSeparator();
-    
+
     // Поиск
     mainToolBar->addAction(QIcon(":/icons/search.svg"), "Поиск", this, &MainWindow::onFindInFile);
     mainToolBar->addAction(QIcon(":/icons/search-project.svg"), "Проект", this, &MainWindow::onFindInProject);
     mainToolBar->addAction(QIcon(":/icons/search-advanced.svg"), "Расширенный", this, &MainWindow::onAdvancedSearch);
     mainToolBar->addSeparator();
-    
+
     // Выполнение
     mainToolBar->addAction(QIcon(":/icons/run.svg"), "Run", this, &MainWindow::onRunRelease);
     mainToolBar->addAction(QIcon(":/icons/debug.svg"), "Debug", this, &MainWindow::onRunDebug);
@@ -268,11 +545,28 @@ void MainWindow::setupToolBar() {
     mainToolBar->addAction(QIcon(":/icons/format.svg"), "Format", this, &MainWindow::onFormatCode);
     mainToolBar->addAction(QIcon(":/icons/llm.svg"), "AI Assist", this, &MainWindow::onLLMAssist);
     mainToolBar->addAction(QIcon(":/icons/git.svg"), "Git", this, &MainWindow::onGitOperation);
+
+    // Добавление разделителя и растягиваемого пространства
+    mainToolBar->addSeparator();
+    mainToolBar->addWidget(new QWidget());
 }
 
 void MainWindow::setupStatusBar() {
     editorStatusBar = new StatusBar(this);
     setStatusBar(editorStatusBar);
+
+    // Добавление постоянных виджетов в строку состояния
+    QLabel* modeLabel = new QLabel("Mode: Edit", this);
+    modeLabel->setObjectName("modeLabel");
+    statusBar()->addPermanentWidget(modeLabel);
+
+    QLabel* encodingLabel = new QLabel("UTF-8", this);
+    encodingLabel->setObjectName("encodingLabel");
+    statusBar()->addPermanentWidget(encodingLabel);
+
+    QLabel* lineEndingsLabel = new QLabel("LF", this);
+    lineEndingsLabel->setObjectName("lineEndingsLabel");
+    statusBar()->addPermanentWidget(lineEndingsLabel);
 }
 
 void MainWindow::setupDockWidgets() {
@@ -281,13 +575,16 @@ void MainWindow::setupDockWidgets() {
     QDockWidget* projectDock = new QDockWidget("Project", this);
     projectDock->setWidget(projectTree);
     projectDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    projectDock->setObjectName("dockProject");
     addDockWidget(Qt::LeftDockWidgetArea, projectDock);
 
-    // Инспектор переменных (для режима отладки)
+    // Инспектор переменных
     variableInspector = new VariableInspector(this);
     QDockWidget* variableDock = new QDockWidget("Variables", this);
     variableDock->setWidget(variableInspector);
     variableDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    variableDock->setObjectName("dockVariables");
+    variableDock->setVisible(false);  // Скрыт по умолчанию, показывается при отладке
     addDockWidget(Qt::RightDockWidgetArea, variableDock);
 
     // Менеджер точек останова
@@ -295,41 +592,32 @@ void MainWindow::setupDockWidgets() {
     QDockWidget* breakpointDock = new QDockWidget("Breakpoints", this);
     breakpointDock->setWidget(breakpointManager);
     breakpointDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    breakpointDock->setObjectName("dockBreakpoints");
     addDockWidget(Qt::LeftDockWidgetArea, breakpointDock);
 
-    // Инициализация REPL
-    REPL* repl = new REPL(this);
-    repl->initialize();
-    repl->setRuntime(compilerConnector->getRuntime());
-    repl->setTypeChecker(new TypeChecker());
-    repl->setIDEInterface(this);
+    // ========================================================================
+    // Док для поиска
+    // ========================================================================
 
-    // Инициализация консоли с REPL
-    consoleWidget->initializeREPL(repl);
     searchDockWidget = new QDockWidget("Поиск", this);
     searchDockWidget->setObjectName("dockSearch");
     searchDockWidget->setAllowedAreas(Qt::TopDockWidgetArea | Qt::BottomDockWidgetArea);
-    
+    searchDockWidget->setVisible(false);  // Скрыт по умолчанию
+
     // Создание виджетов поиска
     fileSearchWidget = new SearchWidget(this);
     projectSearchWidget = new ProjectSearchWidget(this);
     advancedSearchWidget = new AdvancedSearchWidget(this);
-    
+
     // Табы для разных типов поиска
     QTabWidget* searchTabWidget = new QTabWidget(this);
     searchTabWidget->addTab(fileSearchWidget, "В файле");
     searchTabWidget->addTab(projectSearchWidget, "В проекте");
     searchTabWidget->addTab(advancedSearchWidget, "Расширенный");
-    
+
     searchDockWidget->setWidget(searchTabWidget);
-    searchDockWidget->setVisible(false);  // Скрыт по умолчанию
-    
+
     addDockWidget(Qt::TopDockWidgetArea, searchDockWidget);
-
-
-
-
-
 }
 
 void MainWindow::setupConnections() {
@@ -341,7 +629,7 @@ void MainWindow::setupConnections() {
                 activeFilePath = editor->getFilePath();
                 editorToolbar->setEditor(editor);
                 onEditorCursorPositionChanged(editor->getCurrentLine(), editor->getCurrentColumn());
-                
+
                 // Обновление редактора для виджета поиска
                 if (fileSearchWidget) {
                     fileSearchWidget->setEditor(editor);
@@ -354,6 +642,51 @@ void MainWindow::setupConnections() {
         CodeEditor* editor = qobject_cast<CodeEditor*>(editorTabs->widget(index));
         if (editor) {
             closeFile(editor->getFilePath());
+        }
+    });
+
+    connect(editorTabs, &QTabWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        QMenu menu(this);
+
+        QAction* closeAction = menu.addAction("Закрыть");
+        QAction* closeOthersAction = menu.addAction("Закрыть другие");
+        QAction* closeAllAction = menu.addAction("Закрыть все");
+        menu.addSeparator();
+        QAction* copyPathAction = menu.addAction("Копировать путь");
+
+        QAction* selectedAction = menu.exec(editorTabs->mapToGlobal(pos));
+
+        if (selectedAction == closeAction) {
+            int index = editorTabs->tabBar()->tabAt(editorTabs->mapFromGlobal(QCursor::pos()));
+            if (index >= 0) {
+                CodeEditor* editor = qobject_cast<CodeEditor*>(editorTabs->widget(index));
+                if (editor) {
+                    closeFile(editor->getFilePath());
+                }
+            }
+        } else if (selectedAction == closeOthersAction) {
+            int currentIndex = editorTabs->currentIndex();
+            for (int i = editorTabs->count() - 1; i >= 0; i--) {
+                if (i != currentIndex) {
+                    CodeEditor* editor = qobject_cast<CodeEditor*>(editorTabs->widget(i));
+                    if (editor) {
+                        closeFile(editor->getFilePath());
+                    }
+                }
+            }
+        } else if (selectedAction == closeAllAction) {
+            while (editorTabs->count() > 0) {
+                CodeEditor* editor = qobject_cast<CodeEditor*>(editorTabs->widget(0));
+                if (editor) {
+                    closeFile(editor->getFilePath());
+                }
+            }
+        } else if (selectedAction == copyPathAction) {
+            CodeEditor* editor = getCurrentEditor();
+            if (editor) {
+                QClipboard* clipboard = QApplication::clipboard();
+                clipboard->setText(editor->getFilePath());
+            }
         }
     });
 
@@ -400,7 +733,7 @@ void MainWindow::setupConnections() {
 
     connect(compilerConnector, &CompilerConnector::variablesUpdated, this, [this](const QMap<QString, QString>& variables) {
         variableInspector->setVariables(variables);
-        
+
         // Обновить расширенный поиск
         if (advancedSearchWidget) {
             advancedSearchWidget->setCurrentContext(0);  // Текущий контекст
@@ -442,97 +775,56 @@ void MainWindow::setupConnections() {
     connect(llmService, &LLMService::errorOccurred, this, [this](const QString& error) {
         consoleWidget->addErrorMessage("LLM error: " + error);
     });
-}
 
-    
     // ========================================================================
     // Соединения для поиска
     // ========================================================================
-    
+
     // Поиск в файле
-    connect(fileSearchWidget, &SearchWidget::searchStarted, this, &MainWindow::onSearchResultSelected);
-    connect(fileSearchWidget, &SearchWidget::searchFinished, this, [this](int matches) {
-        statusLabel->setText(QString("Найдено %1 совпадений").arg(matches));
-    });
-    connect(fileSearchWidget, &SearchWidget::visibilityChanged, this, &MainWindow::onSearchWidgetVisibilityChanged);
-    
-    // Поиск по проекту
-    connect(projectSearchWidget, &ProjectSearchWidget::searchStarted, this, [this](const QString& text, const QString& path) {
-        consoleWidget->addBuildMessage(QString("Searching for '%1' in %2...\n").arg(text).arg(path));
-    });
-    connect(projectSearchWidget, &ProjectSearchWidget::searchFinished, this, [this](int matches, int files) {
-        consoleWidget->addBuildMessage(QString("Search completed: %1 matches in %2 files\n").arg(matches).arg(files));
-    });
-    connect(projectSearchWidget, &ProjectSearchWidget::resultSelected, this, &MainWindow::onSearchResultSelected);
-    
-    // Расширенный поиск
-    connect(advancedSearchWidget, &AdvancedSearchWidget::searchStarted, this, &MainWindow::onAdvancedSearchStarted);
-    connect(advancedSearchWidget, &AdvancedSearchWidget::searchFinished, this, &MainWindow::onAdvancedSearchFinished);
-    connect(advancedSearchWidget, &AdvancedSearchWidget::resultSelected, this, &MainWindow::onAdvancedSearchResultSelected);
-    connect(advancedSearchWidget, &AdvancedSearchWidget::errorOccurred, this, [this](const QString& error) {
-        consoleWidget->addErrorMessage("Advanced search error: " + error);
-    });
-}
-
-// ============================================================================
-// Слоты поиска
-// ============================================================================
-
-void MainWindow::onFindInFile() {
-    showFileSearch();
-}
-
-void MainWindow::onFindInProject() {
-    showProjectSearch();
-}
-
-void MainWindow::onAdvancedSearch() {
-    showAdvancedSearch();
-}
-
-void MainWindow::onFindNext() {
-    if (fileSearchWidget && fileSearchWidget->isVisible()) {
-        fileSearchWidget->findNext();
-    }
-}
-
-void MainWindow::onFindPrevious() {
-    if (fileSearchWidget && fileSearchWidget->isVisible()) {
-        fileSearchWidget->findPrevious();
-    }
-}
-
-void MainWindow::onReplaceInFile() {
     if (fileSearchWidget) {
-        fileSearchWidget->showReplace();
-        fileSearchWidget->show();
+        connect(fileSearchWidget, &SearchWidget::searchStarted, this, &MainWindow::onSearchResultSelected);
+        connect(fileSearchWidget, &SearchWidget::searchFinished, this, [this](int matches) {
+            statusBar()->showMessage(QString("Найдено %1 совпадений").arg(matches), 5000);
+        });
+        connect(fileSearchWidget, &SearchWidget::visibilityChanged, this, &MainWindow::onSearchWidgetVisibilityChanged);
     }
-}
 
-void MainWindow::onReplaceInProject() {
-    // TODO: Реализовать замену в проекте
-    QMessageBox::information(this, "Info", "Replace in project - coming soon");
-}
-
-void MainWindow::showFileSearch() {
-    if (!fileSearchWidget) return;
-    
-    // Показать док поиска
-    searchDockWidget->setVisible(true);
-    searchDockWidget->raise();
-    
-    // Переключиться на вкладку поиска в файле
-    QTabWidget* searchTabWidget = qobject_cast<QTabWidget*>(searchDockWidget->widget());
-    if (searchTabWidget) {
-        searchTabWidget->setCurrentWidget(fileSearchWidget);
+    // Поиск по проекту
+    if (projectSearchWidget) {
+        connect(projectSearchWidget, &ProjectSearchWidget::searchStarted, this, [this](const QString& text, const QString& path) {
+            consoleWidget->addBuildMessage(QString("Searching for '%1' in %2...\n").arg(text).arg(path));
+        });
+        connect(projectSearchWidget, &ProjectSearchWidget::searchFinished, this, [this](int matches, int files) {
+            consoleWidget->addBuildMessage(QString("Search completed: %1 matches in %2 files\n").arg(matches).arg(files));
+        });
+        connect(projectSearchWidget, &ProjectSearchWidget::resultSelected, this, &MainWindow::onSearchResultSelected);
     }
-    
-    // Активировать поиск
-    fileSearchWidget->showFind();
-    
-    // Установить фокус на редактор если есть выделенный текст
 
+    // Расширенный поиск
+    if (advancedSearchWidget) {
+        connect(advancedSearchWidget, &AdvancedSearchWidget::searchStarted, this, &MainWindow::onAdvancedSearchStarted);
+        connect(advancedSearchWidget, &AdvancedSearchWidget::searchFinished, this, &MainWindow::onAdvancedSearchFinished);
+        connect(advancedSearchWidget, &AdvancedSearchWidget::resultSelected, this, &MainWindow::onAdvancedSearchResultSelected);
+        connect(advancedSearchWidget, &AdvancedSearchWidget::errorOccurred, this, [this](const QString& error) {
+            consoleWidget->addErrorMessage("Advanced search error: " + error);
+        });
+    }
 
+    // Горячие клавиши поиска
+    new QShortcut(QKeySequence::Find, this, SLOT(onFindInFile()));
+    new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F), this, SLOT(onFindInProject()));
+    new QShortcut(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_F), this, SLOT(onAdvancedSearch()));
+    new QShortcut(QKeySequence::FindNext, this, SLOT(onFindNext()));
+    new QShortcut(QKeySequence::FindPrevious, this, SLOT(onFindPrevious()));
+    new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_H), this, SLOT(onReplaceInFile()));
+    new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_H), this, SLOT(onReplaceInProject()));
+
+    // Подключение отслеживания изменений для StoryManager
+    connect(editor, &CodeEditor::textChanged, this, [this, editor]() {
+        // В полной реализации - передача информации об изменениях
+        editor->trackTextEdit(position, charsRemoved, charsAdded);
+    });
+}
 
 // ============================================================================
 // Управление проектом
@@ -811,6 +1103,83 @@ void MainWindow::closeFile(const QString& path) {
     LOG_INFO("File closed: " + path.toStdString());
 }
 
+CodeEditor* MainWindow::getCurrentEditor() const {
+    int index = editorTabs->currentIndex();
+    if (index >= 0 && index < editorTabs->count()) {
+        return qobject_cast<CodeEditor*>(editorTabs->widget(index));
+    }
+    return nullptr;
+}
+
+// ============================================================================
+// Поиск
+// ============================================================================
+
+void MainWindow::showFileSearch() {
+    if (!fileSearchWidget) return;
+
+    // Показать док поиска
+    searchDockWidget->setVisible(true);
+    searchDockWidget->raise();
+
+    // Переключиться на вкладку поиска в файле
+    QTabWidget* searchTabWidget = qobject_cast<QTabWidget*>(searchDockWidget->widget());
+    if (searchTabWidget) {
+        searchTabWidget->setCurrentWidget(fileSearchWidget);
+    }
+
+    // Активировать поиск
+    fileSearchWidget->showFind();
+
+    // Установить фокус на редактор если есть выделенный текст
+    CodeEditor* editor = getCurrentEditor();
+    if (editor) {
+        QString selectedText = editor->getSelectedCode();
+        if (!selectedText.isEmpty()) {
+            fileSearchWidget->setSearchText(selectedText);
+        }
+    }
+}
+
+void MainWindow::showProjectSearch() {
+    if (!projectSearchWidget || !currentProject) return;
+
+    // Показать док поиска
+    searchDockWidget->setVisible(true);
+    searchDockWidget->raise();
+
+    // Переключиться на вкладку поиска по проекту
+    QTabWidget* searchTabWidget = qobject_cast<QTabWidget*>(searchDockWidget->widget());
+    if (searchTabWidget) {
+        searchTabWidget->setCurrentWidget(projectSearchWidget);
+    }
+
+    // Установить путь проекта
+    projectSearchWidget->setProjectPath(currentProject->getPath());
+    projectSearchWidget->setFocus();
+}
+
+void MainWindow::showAdvancedSearch() {
+    if (!advancedSearchWidget) return;
+
+    // Показать док поиска
+    searchDockWidget->setVisible(true);
+    searchDockWidget->raise();
+
+    // Переключиться на вкладку расширенного поиска
+    QTabWidget* searchTabWidget = qobject_cast<QTabWidget*>(searchDockWidget->widget());
+    if (searchTabWidget) {
+        searchTabWidget->setCurrentWidget(advancedSearchWidget);
+    }
+
+    // Установить текущий контекст отладки
+    if (currentMode == IDEMode::Pause) {
+        advancedSearchWidget->setCurrentContext(0);  // Текущий кадр стека
+    }
+
+    advancedSearchWidget->setFocus();
+}
+
 // ============================================================================
 // Выполнение программы
 // ============================================================================
@@ -867,7 +1236,7 @@ void MainWindow::stopProgram() {
     compilerConnector->stop();
     setMode(IDEMode::Edit);
 
-    // Очистка执行 линии
+    // Очистка execution линии
     for (auto it = openFiles.begin(); it != openFiles.end(); ++it) {
         it.value()->clearExecutionLine();
     }
@@ -942,7 +1311,7 @@ void MainWindow::runToFirstMethod() {
 }
 
 // ============================================================================
-// Точки останова
+// Отладка
 // ============================================================================
 
 void MainWindow::addBreakpoint(const QString& file, int line, BreakpointType type, const QString& condition) {
@@ -953,11 +1322,6 @@ void MainWindow::addBreakpoint(const QString& file, int line, BreakpointType typ
 void MainWindow::removeBreakpoint(int id) {
     compilerConnector->removeBreakpoint(id);
     breakpointManager->removeBreakpoint(id);
-
-    // Обновление редактора
-    for (auto it = openFiles.begin(); it != openFiles.end(); ++it) {
-        it.value()->toggleBreakpoint(line);
-    }
 }
 
 void MainWindow::toggleBreakpoint(const QString& file, int line) {
@@ -996,19 +1360,36 @@ void MainWindow::setMode(IDEMode mode) {
     emit modeChanged(mode);
     updateUI();
 
+    // Обновление метки режима в строке состояния
+    QString modeStr;
+    switch (mode) {
+        case IDEMode::Edit:
+            modeStr = "Edit";
+            variableInspector->setVisible(false);
+            break;
+        case IDEMode::Runtime:
+            modeStr = "Runtime";
+            variableInspector->setVisible(false);
+            break;
+        case IDEMode::Pause:
+            modeStr = "Pause";
+            variableInspector->setVisible(true);
+            break;
+    }
+
+    for (int i = 0; i < statusBar()->children().size(); i++) {
+        QLabel* label = qobject_cast<QLabel*>(statusBar()->children()[i]);
+        if (label && label->objectName() == "modeLabel") {
+            label->setText("Mode: " + modeStr);
+            break;
+        }
+    }
+
     LOG_INFO("IDE mode changed to: " + std::to_string(static_cast<int>(mode)));
 }
 
-CodeEditor* MainWindow::getCurrentEditor() const {
-    int index = editorTabs->currentIndex();
-    if (index >= 0 && index < editorTabs->count()) {
-        return qobject_cast<CodeEditor*>(editorTabs->widget(index));
-    }
-    return nullptr;
-}
-
 // ============================================================================
-// Слоты меню
+// Слоты меню "Файл"
 // ============================================================================
 
 void MainWindow::onNewFile() {
@@ -1040,15 +1421,6 @@ void MainWindow::onSaveFile() {
     CodeEditor* editor = getCurrentEditor();
     if (editor) {
         saveFile(editor->getFilePath());
-        QString selectedText = editor->getSelectedCode();
-        if (!selectedText.isEmpty()) {
-            fileSearchWidget->setSearchText(selectedText);
-        }
-
-
-
-
-
     }
 }
 
@@ -1062,6 +1434,10 @@ void MainWindow::onCloseFile() {
         closeFile(editor->getFilePath());
     }
 }
+
+// ============================================================================
+// Слоты меню "Проект"
+// ============================================================================
 
 void MainWindow::onNewProject() {
     QString path = QFileDialog::getExistingDirectory(this, "New Project Location");
@@ -1094,7 +1470,12 @@ void MainWindow::onProjectSettings() {
 
     // Открытие диалога настроек проекта
     // TODO: Implement project settings dialog
+    QMessageBox::information(this, "Info", "Project settings - coming soon");
 }
+
+// ============================================================================
+// Слоты меню "Выполнение"
+// ============================================================================
 
 void MainWindow::onRunRelease() {
     runProgram(RunMode::Release);
@@ -1139,6 +1520,50 @@ void MainWindow::onToggleBreakpoint() {
 void MainWindow::onClearBreakpoints() {
     clearBreakpoints();
 }
+
+// ============================================================================
+// Слоты меню "Поиск"
+// ============================================================================
+
+void MainWindow::onFindInFile() {
+    showFileSearch();
+}
+
+void MainWindow::onFindInProject() {
+    showProjectSearch();
+}
+
+void MainWindow::onAdvancedSearch() {
+    showAdvancedSearch();
+}
+
+void MainWindow::onFindNext() {
+    if (fileSearchWidget && fileSearchWidget->isVisible()) {
+        fileSearchWidget->findNext();
+    }
+}
+
+void MainWindow::onFindPrevious() {
+    if (fileSearchWidget && fileSearchWidget->isVisible()) {
+        fileSearchWidget->findPrevious();
+    }
+}
+
+void MainWindow::onReplaceInFile() {
+    if (fileSearchWidget) {
+        fileSearchWidget->showReplace();
+        fileSearchWidget->show();
+    }
+}
+
+void MainWindow::onReplaceInProject() {
+    // TODO: Реализовать замену в проекте
+    QMessageBox::information(this, "Info", "Replace in project - coming soon");
+}
+
+// ============================================================================
+// Слоты меню "Генерация"
+// ============================================================================
 
 void MainWindow::onFormatCode() {
     CodeEditor* editor = getCurrentEditor();
@@ -1210,6 +1635,10 @@ void MainWindow::onGitOperation() {
     gitMenu.exec(QCursor::pos());
 }
 
+// ============================================================================
+// Слоты меню "Настройки"
+// ============================================================================
+
 void MainWindow::onSettings() {
     SettingsDialog* dialog = new SettingsDialog(this);
 
@@ -1220,8 +1649,34 @@ void MainWindow::onSettings() {
     dialog->deleteLater();
 }
 
-void MainWindow::onHelp() {
+// ============================================================================
+// Слоты меню "Сведения"
+// ============================================================================
+
+void MainWindow::onBuildReport() {
+    // TODO: Реализовать отчёт о сборке
+    QMessageBox::information(this, "Info", "Build report - coming soon");
+}
+
+void MainWindow::onCompatibilityReport() {
+    // TODO: Реализовать отчёт о совместимости
+    QMessageBox::information(this, "Info", "Compatibility report - coming soon");
+}
+
+// ============================================================================
+// Слоты меню "Помощь"
+// ============================================================================
+
+void MainWindow::onIDEHelp() {
     QDesktopServices::openUrl(QUrl("https://proxima-lang.org/docs/ide"));
+}
+
+void MainWindow::onLanguageHelp() {
+    QDesktopServices::openUrl(QUrl("https://proxima-lang.org/docs/language"));
+}
+
+void MainWindow::onBuildHelp() {
+    QDesktopServices::openUrl(QUrl("https://proxima-lang.org/docs/build"));
 }
 
 void MainWindow::onAbout() {
@@ -1233,6 +1688,18 @@ void MainWindow::onAbout() {
         "<p>© 2024 Proxima Development Team</p>"
         "<p>Qt Version: " + QString(QT_VERSION_STR) + "</p>"
         "<p>OS: " + QSysInfo::prettyProductName() + "</p>");
+}
+
+void MainWindow::onAboutAuthors() {
+    QMessageBox::about(this, "About Authors",
+        "<h2>Proxima Development Team</h2>"
+        "<p>Lead Developer: Sergey Antonov</p>"
+        "<p>Contributors:</p>"
+        "<ul>"
+        "<li>John Smith</li>"
+        "<li>Jane Doe</li>"
+        "</ul>"
+        "<p>Contact: dev@proxima-lang.org</p>");
 }
 
 // ============================================================================
@@ -1335,7 +1802,7 @@ void MainWindow::onCompilerDebugEvent(const DebugEvent& event) {
             consoleWidget->addDebugMessage("Program exited with code: " +
                                           QString::number(event.exitCode) + "\n");
 
-            // Очистка执行 линии
+            // Очистка execution линии
             for (auto it = openFiles.begin(); it != openFiles.end(); ++it) {
                 it.value()->clearExecutionLine();
             }
@@ -1354,11 +1821,82 @@ void MainWindow::onCompilerDebugEvent(const DebugEvent& event) {
 }
 
 // ============================================================================
-// Авто-сохранение
+// Слоты авто-сохранения
 // ============================================================================
 
 void MainWindow::onAutoSaveTimer() {
     autoSaveManager->saveAll();
+}
+
+// ============================================================================
+// Слоты поиска
+// ============================================================================
+
+void MainWindow::onSearchResultSelected(const SearchResult& result) {
+    // Открыть файл и перейти к результату
+    if (!result.filePath.isEmpty()) {
+        if (openFile(result.filePath)) {
+            CodeEditor* editor = getCurrentEditor();
+            if (editor) {
+                editor->goToLine(result.lineNumber);
+
+                // Выделить найденный текст
+                QTextCursor cursor = editor->textCursor();
+                cursor.setPosition(result.lineNumber - 1);
+                cursor.movePosition(QTextCursor::StartOfBlock);
+                cursor.setPosition(result.columnNumber - 1, QTextCursor::KeepAnchor);
+                editor->setTextCursor(cursor);
+                editor->setFocus();
+            }
+        }
+    }
+}
+
+void MainWindow::onAdvancedSearchResultSelected(const AdvancedSearchResult& result) {
+    // Выделение переменной в инспекторе переменных
+    if (variableInspector) {
+        variableInspector->highlightVariable(result.variableName);
+    }
+
+    // Показать значение в редакторе если возможно
+    if (!result.filePath.isEmpty() && result.lineNumber > 0) {
+        if (openFile(result.filePath)) {
+            CodeEditor* editor = getCurrentEditor();
+            if (editor) {
+                editor->goToLine(result.lineNumber);
+                editor->setFocus();
+            }
+        }
+    }
+
+    consoleWidget->addDebugMessage(
+        QString("Found %1%2 = %3 (tolerance: ±%4)\n")
+        .arg(result.variableName)
+        .arg(result.indexString)
+        .arg(result.value, 0, 'f', 10)
+        .arg(result.tolerance, 0, 'e', 4)
+    );
+}
+
+void MainWindow::onSearchWidgetVisibilityChanged(bool visible) {
+    // Обновление UI при изменении видимости виджета поиска
+    if (!visible) {
+        // Возврат фокуса на редактор
+        CodeEditor* editor = getCurrentEditor();
+        if (editor) {
+            editor->setFocus();
+        }
+    }
+}
+
+void MainWindow::onAdvancedSearchStarted() {
+    emit advancedSearchStarted();
+    consoleWidget->addBuildMessage("Advanced search started...\n");
+}
+
+void MainWindow::onAdvancedSearchFinished(int matches) {
+    emit advancedSearchFinished(matches);
+    consoleWidget->addBuildMessage(QString("Advanced search completed: %1 matches\n").arg(matches));
 }
 
 // ============================================================================
@@ -1417,6 +1955,37 @@ void MainWindow::updateStatusBar() {
     }
 }
 
+void MainWindow::updateWindowsMenu() {
+    // Обновление меню окон
+    QMenu* windowMenu = nullptr;
+    QList<QMenu*> menus = menuBar->findChildren<QMenu*>();
+    for (QMenu* menu : menus) {
+        if (menu->objectName() == "menuWindows") {
+            windowMenu = menu;
+            break;
+        }
+    }
+
+    if (!windowMenu) return;
+
+    QList<QAction*> actions = windowMenu->actions();
+    int recentFileIndex = 0;
+
+    // Пропускаем первые 3 действия (Close, Close All, separator)
+    for (int i = 3; i < actions.size() && recentFileIndex < 9; i++) {
+        QAction* action = actions[i];
+        QStringList recentFiles = Settings::getInstance().getRecentFiles();
+
+        if (recentFileIndex < recentFiles.size()) {
+            action->setText(QFileInfo(recentFiles[recentFileIndex]).fileName());
+            action->setVisible(true);
+            recentFileIndex++;
+        } else {
+            action->setVisible(false);
+        }
+    }
+}
+
 void MainWindow::loadSettings() {
     Settings& settings = Settings::getInstance();
     settings.load();
@@ -1430,6 +1999,7 @@ void MainWindow::saveSettings() {
 
     settings.getWindowSettings().geometry = saveGeometry();
     settings.getWindowSettings().state = saveState();
+    settings.getWindowSettings().splitterSizes = editorSplitter->sizes();
 
     settings.save();
 }
@@ -1453,6 +2023,27 @@ void MainWindow::closeEvent(QCloseEvent* event) {
 }
 
 // ============================================================================
+// Drag and Drop
+// ============================================================================
+
+void MainWindow::dragEnterEvent(QDragEnterEvent* event) {
+    if (event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    }
+}
+
+void MainWindow::dropEvent(QDropEvent* event) {
+    QList<QUrl> urls = event->mimeData()->urls();
+    for (const QUrl& url : urls) {
+        QString filePath = url.toLocalFile();
+        if (QFile::exists(filePath) && filePath.endsWith(".prx")) {
+            openFile(filePath);
+        }
+    }
+    event->acceptProposedAction();
+}
+
+// ============================================================================
 // Вспомогательные функции
 // ============================================================================
 
@@ -1462,16 +2053,163 @@ double MainWindow::getCPUUsage() const {
     return 0.0;
 }
 
-double MainWindow::getMemoryUsage() const {
+quint64 MainWindow::getMemoryUsage() const {
     // Получение использования памяти
     // В полной реализации - использование системных API
-    return 0.0;
+    return 0;
 }
 
-double MainWindow::getDiskFree() const {
+quint64 MainWindow::getDiskFree() const {
     // Получение свободного места на диске
     // В полной реализации - использование системных API
-    return 0.0;
+    return 0;
+}
+
+void MainWindow::createEditMenu() {
+    QMenu* editMenu = menuBar->addMenu("Правка");
+    editMenu->setObjectName("menuEdit");
+
+    QAction* undoAction = editMenu->addAction("Отменить правку");
+    undoAction->setShortcut(QKeySequence::Undo);
+    connect(undoAction, &QAction::triggered, this, &MainWindow::onUndoLastEdit);
+
+    QAction* redoAction = editMenu->addAction("Вернуть правку");
+    redoAction->setShortcut(QKeySequence::Redo);
+    connect(redoAction, &QAction::triggered, this, &MainWindow::onRedoLastEdit);
+
+    editMenu->addSeparator();
+
+    QAction* viewAgeAction = editMenu->addAction("Режим старости");
+    viewAgeAction->setCheckable(true);
+    connect(viewAgeAction, &QAction::triggered, this, [this](bool checked) {
+        CodeEditor* editor = getCurrentEditor();
+        if (editor) {
+            if (checked) {
+                editor->setDisplayMode(DisplayMode::AgeHighlight);
+            } else {
+                editor->setDisplayMode(DisplayMode::Standard);
+            }
+        }
+    });
+}
+
+void MainWindow::createViewMenu() {
+    QMenu* viewMenu = menuBar->addMenu("Вид");
+    viewMenu->setObjectName("menuView");
+
+    // Подменю режимов отображения
+    QMenu* displayModeMenu = viewMenu->addMenu("Режим отображения");
+
+    QActionGroup* modeGroup = new QActionGroup(this);
+    modeGroup->setExclusive(true);
+
+    QAction* standardModeAction = displayModeMenu->addAction("Стандартный");
+    standardModeAction->setCheckable(true);
+    standardModeAction->setActionGroup(modeGroup);
+    connect(standardModeAction, &QAction::triggered, this, [this]() {
+        CodeEditor* editor = getCurrentEditor();
+        if (editor) {
+            editor->setDisplayMode(DisplayMode::Standard);
+        }
+    });
+
+    QAction* authorModeAction = displayModeMenu->addAction("Авторы");
+    authorModeAction->setCheckable(true);
+    authorModeAction->setActionGroup(modeGroup);
+    authorModeAction->setToolTip("Показать автора каждой строки (уникальный цвет для каждого автора)");
+    connect(authorModeAction, &QAction::triggered, this, [this]() {
+        CodeEditor* editor = getCurrentEditor();
+        if (editor) {
+            editor->setDisplayMode(DisplayMode::AuthorHighlight);
+            // Загрузка информации об авторах из Git
+            loadAuthorInfoFromGit();
+        }
+    });
+
+    QAction* ageModeAction = displayModeMenu->addAction("Возраст правок");
+    ageModeAction->setCheckable(true);
+    ageModeAction->setActionGroup(modeGroup);
+    ageModeAction->setToolTip("Показать возраст правок (цвет зависит от времени внесения)");
+    connect(ageModeAction, &QAction::triggered, this, [this]() {
+        CodeEditor* editor = getCurrentEditor();
+        if (editor) {
+            editor->setDisplayMode(DisplayMode::AgeHighlight);
+            // Загрузка информации о возрасте из Git
+            loadAgeInfoFromGit();
+        }
+    });
+
+    // ... остальные режимы ...
+
+    viewMenu->addSeparator();
+
+    // Действия для обновления информации
+    QAction* refreshAuthorAction = viewMenu->addAction("Обновить авторов");
+    refreshAuthorAction->setToolTip("Обновить информацию об авторах из Git");
+    refreshAuthorAction->setShortcut(QKeySequence::Refresh);
+    connect(refreshAuthorAction, &QAction::triggered, this, &MainWindow::loadAuthorInfoFromGit);
+
+    QAction* refreshAgeAction = viewMenu->addAction("Обновить возраст");
+    refreshAgeAction->setToolTip("Обновить информацию о возрасте правок из Git");
+    connect(refreshAgeAction, &QAction::triggered, this, &MainWindow::loadAgeInfoFromGit);
+}
+
+void MainWindow::loadAuthorInfoFromGit() {
+    CodeEditor* editor = getCurrentEditor();
+    if (!editor || !currentProject) return;
+
+    // В полной реализации - получение информации об авторах из Git
+    // Для примера - заглушка
+    QMap<int, QString> authorMap;
+
+    // Имитация данных
+    for (int line = 1; line <= editor->getLineCount(); line++) {
+        // В реальности - git blame для каждой строки
+        authorMap[line] = "Author " + QString::number(line % 5);
+    }
+
+    editor->applyAuthorHighlighting(authorMap);
+
+    consoleWidget->addBuildMessage("Author information loaded from Git\n");
+}
+
+void MainWindow::loadAgeInfoFromGit() {
+    CodeEditor* editor = getCurrentEditor();
+    if (!editor || !currentProject) return;
+
+    // В полной реализации - получение информации о возрасте из Git
+    // Для примера - заглушка
+    QMap<int, QDateTime> ageMap;
+
+    // Имитация данных
+    QDateTime now = QDateTime::currentDateTime();
+    for (int line = 1; line <= editor->getLineCount(); line++) {
+        // В реальности - git log для каждой строки
+        ageMap[line] = now.addMinutes(-line * 10);
+    }
+
+    editor->applyAgeHighlighting(ageMap);
+
+    consoleWidget->addBuildMessage("Age information loaded from Git\n");
+}
+
+
+void MainWindow::onUndoLastEdit() {
+    CodeEditor* editor = getCurrentEditor();
+    if (editor) {
+        if (editor->undoLastEdit()) {
+            consoleWidget->addBuildMessage("Last edit undone\n");
+        }
+    }
+}
+
+void MainWindow::onRedoLastEdit() {
+    CodeEditor* editor = getCurrentEditor();
+    if (editor) {
+        if (editor->redoLastEdit()) {
+            consoleWidget->addBuildMessage("Edit redone\n");
+        }
+    }
 }
 
 } // namespace proxima

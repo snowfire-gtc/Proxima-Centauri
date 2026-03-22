@@ -929,6 +929,8 @@ private:
      * Пиктографическое главное меню приложения
      */
     void setupMenuBar();
+    void createViewMenu();
+    void createEditMenu();
 
     /**
      * @brief Настройка панели инструментов

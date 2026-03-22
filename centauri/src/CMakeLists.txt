@@ -72,9 +72,11 @@ set(IDE_HEADERS
     src/services/git/GitService.h
     src/services/llm/LLMService.h
     src/services/collaboration/CollaborationService.h
+    src/services/plugins/PluginManager.h
     src/utils/Logger.h
     src/utils/Config.h
     src/utils/Helpers.h
+    docs/DocGenerator.h
 )
 
 set(IDE_RESOURCES
@@ -86,7 +88,7 @@ set(IDE_RESOURCES
 # Создать исполняемый файл IDE
 add_executable(centauri WIN32 ${IDE_SOURCES} ${IDE_HEADERS} ${IDE_RESOURCES})
 
-target_link_libraries(centauri 
+target_link_libraries(centauri
     Qt5::Widgets
     Qt5::Core
     Qt5::Network
@@ -98,7 +100,7 @@ if(ProximaCompiler_FOUND)
     target_compile_definitions(centauri PRIVATE HAVE_PROXIMA_COMPILER)
 endif()
 
-target_include_directories(centauri PRIVATE 
+target_include_directories(centauri PRIVATE
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/../proxima-compiler/src
 )

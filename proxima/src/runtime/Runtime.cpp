@@ -10,11 +10,95 @@
 #include <filesystem>
 #include <mutex>
 #include <condition_variable>
+#include <stdexcept>
+#include <QStandardPaths>
+#include <QDir>
+#include <QFile>
+#include <QTextStream>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QCryptographicHash>
+#include <QDateTime>
+#include <QPrinter>
+#include <QTextDocument>
+#include <QPrintDialog>
+#include <QBuffer>
+#include <QXmlStreamWriter>
+#include <QXmlStreamReader>
+#include <QRegularExpression>
+#include <QRegularExpressionMatch>
+#include <QThread>
+#include <QMutex>
+#include <QWaitCondition>
+#include <QSemaphore>
+#include <QReadWriteLock>
+#include <QAtomicInt>
+#include <QScopedPointer>
+#include <QSharedPointer>
+#include <QWeakPointer>
+#include <QDataStream>
+#include <QDebug>
+#include <QElapsedTimer>
+#include <QSet>
+#include <QHash>
+#include <QMultiHash>
+#include <QMultiMap>
+#include <QPair>
+#include <QMetaType>
+#include <QMetaObject>
+#include <QMetaProperty>
+#include <QMetaEnum>
+#include <QMetaMethod>
+#include <QMetaClassInfo>
+#include <QScriptEngine>
+#include <QScriptValue>
+#include <QScriptValueIterator>
+#include <QScriptable>
+#include <QScriptContext>
+#include <QScriptContextInfo>
+#include <QSyntaxHighlighter>
+#include <QTextCharFormat>
+#include <QTextBlockFormat>
+#include <QTextListFormat>
+#include <QTextTableFormat>
+#include <QTextFrameFormat>
+#include <QTextImageFormat>
+#include <QTextObject>
+#include <QTextObjectInterface>
+#include <QAbstractTextDocumentLayout>
+#include <QTextDocumentFragment>
+#include <QTextDocumentWriter>
+#include <QPdfWriter>
+#include <QPrinter>
+#include <QPrintDialog>
+#include <QPrintPreviewDialog>
+#include <QPrintPreviewWidget>
+#include <QPageSetupDialog>
+#include <QFontInfo>
+#include <QFontMetrics>
+#include <QFontDatabase>
+#include <QStyle>
+#include <QStyleFactory>
+#include <QStylePainter>
+#include <QStyleOption>
+#include <QVariantAnimation>
+#include <QPropertyAnimation>
+#include <QSequentialAnimationGroup>
+#include <QParallelAnimationGroup>
+#include <QPauseAnimation>
+#include <QEasingCurve>
+#include <QGraphicsEffect>
+#include <QGraphicsBlurEffect>
+#include <QGraphicsDropShadowEffect>
+#include <QGraphicsOpacityEffect>
+#include <QGraphicsColorizeEffect>
 #include "utils/Logger.h"
 #include "stdlib/IO.h"
 #include "stdlib/Math.h"
 #include "stdlib/Collection.h"
 #include "stdlib/Time.h"
+#include "gem.h"
 
 #ifdef USE_CUDA
 #include <cuda_runtime.h>
@@ -35,7 +119,7 @@ namespace proxima {
 // Конструктор/Деструктор
 // ============================================================================
 
-Runtime::Runtime() 
+Runtime::Runtime()
     : jit(nullptr)
     , context(nullptr)
     , initialized(false)
@@ -43,8 +127,13 @@ Runtime::Runtime()
     , cudaAvailable(false)
     , verboseLevel(2)
     , memoryLimit(4 * 1024 * 1024 * 1024)
-    , currentMemoryUsage(0) {
-    
+    , currentMemoryUsage(0)
+    , cudaAllowed(false)
+    , avx2Allowed(false)
+    , sse4Allowed(false)
+    , startTime(0)
+    , stopRequested(false) {
+
     LOG_INFO("Runtime constructor called");
 }
 
@@ -54,7 +143,7 @@ Runtime::~Runtime() {
         std::free(ptr);
     }
     allocatedMemory.clear();
-    
+
 #ifdef USE_CUDA
     // Очистка GPU памяти
     for (void* ptr : gpuMemory) {
@@ -62,7 +151,7 @@ Runtime::~Runtime() {
     }
     gpuMemory.clear();
 #endif
-    
+
     LOG_INFO("Runtime destructor called");
 }
 
@@ -74,31 +163,32 @@ bool Runtime::initialize() {
     if (initialized) {
         return true;
     }
-    
+
     LOG_INFO("Initializing Runtime...");
-    
+
     // Инициализация LLVM JIT
-    #ifdef HAVE_LLVM
+#ifdef HAVE_LLVM
     auto jitOrErr = llvm::orc::LLJITBuilder().create();
     if (!jitOrErr) {
         LOG_ERROR("Failed to create JIT: " + llvm::toString(jitOrErr.takeError()));
         return false;
     }
-    
+
     jit = std::move(*jitOrErr);
     context = &jit->getContext();
-    #endif
-    
+#endif
+
     // Регистрация стандартной библиотеки
     registerStdLib();
-    
+
     // Проверка CUDA
-    #ifdef USE_CUDA
+#ifdef USE_CUDA
     enableCUDA();
-    #endif
-    
+#endif
+
     initialized = true;
-    
+    startTime = getTimestamp();
+
     LOG_INFO("Runtime initialized successfully");
     return true;
 }
@@ -109,15 +199,15 @@ bool Runtime::loadModule(std::unique_ptr<llvm::Module> module) {
             return false;
         }
     }
-    
-    #ifdef HAVE_LLVM
+
+#ifdef HAVE_LLVM
     auto err = jit->addModule(std::move(module));
     if (err) {
         LOG_ERROR("Failed to load module: " + llvm::toString(std::move(err)));
         return false;
     }
-    #endif
-    
+#endif
+
     LOG_INFO("Module loaded successfully");
     return true;
 }
@@ -127,39 +217,39 @@ int Runtime::execute(const std::string& entryPoint) {
         LOG_ERROR("Runtime not initialized");
         return -1;
     }
-    
+
     LOG_INFO("Executing: " + entryPoint);
-    
-    #ifdef HAVE_LLVM
+
+#ifdef HAVE_LLVM
     auto sym = jit->lookup(entryPoint);
     if (!sym) {
         LOG_ERROR("Function '" + entryPoint + "' not found");
         return -1;
     }
-    
+
     auto funcPtr = (int(*)())sym->getAddress();
     if (!funcPtr) {
         LOG_ERROR("Failed to get function pointer");
         return -1;
     }
-    
+
     int result = funcPtr();
     LOG_INFO("Execution completed with result: " + std::to_string(result));
-    
+
     return result;
-    #else
+#else
     LOG_ERROR("LLVM support not compiled in");
     return -1;
-    #endif
+#endif
 }
 
 void* Runtime::getFunctionPointer(const std::string& name) {
-    #ifdef HAVE_LLVM
+#ifdef HAVE_LLVM
     auto sym = jit->lookup(name);
     if (sym) {
         return (void*)sym->getAddress();
     }
-    #endif
+#endif
     return nullptr;
 }
 
@@ -169,44 +259,44 @@ void* Runtime::getFunctionPointer(const std::string& name) {
 
 void* Runtime::allocate(size_t size) {
     std::lock_guard<std::mutex> lock(memoryMutex);
-    
+
     if (currentMemoryUsage + size > memoryLimit) {
-        LOG_ERROR("Memory limit exceeded (limit: " + std::to_string(memoryLimit) + 
-                 ", current: " + std::to_string(currentMemoryUsage) + 
+        LOG_ERROR("Memory limit exceeded (limit: " + std::to_string(memoryLimit) +
+                 ", current: " + std::to_string(currentMemoryUsage) +
                  ", requested: " + std::to_string(size) + ")");
         return nullptr;
     }
-    
+
     void* ptr = std::malloc(size);
     if (ptr) {
         allocatedMemory.push_back(ptr);
         currentMemoryUsage += size;
-        
+
         if (debugMode) {
-            LOG_DEBUG("Allocated " + std::to_string(size) + " bytes at " + 
+            LOG_DEBUG("Allocated " + std::to_string(size) + " bytes at " +
                      std::to_string(reinterpret_cast<uintptr_t>(ptr)));
         }
     }
-    
+
     return ptr;
 }
 
 void Runtime::deallocate(void* ptr) {
     if (!ptr) return;
-    
+
     std::lock_guard<std::mutex> lock(memoryMutex);
-    
+
     auto it = std::find(allocatedMemory.begin(), allocatedMemory.end(), ptr);
     if (it != allocatedMemory.end()) {
         // Получаем размер блока (в реальной реализации нужно хранить метаданные)
         size_t size = 0; // В полной реализации нужно отслеживать размер
         allocatedMemory.erase(it);
         std::free(ptr);
-        
+
         if (size > 0) {
             currentMemoryUsage -= size;
         }
-        
+
         if (debugMode) {
             LOG_DEBUG("Deallocated memory at " + std::to_string(reinterpret_cast<uintptr_t>(ptr)));
         }
@@ -215,10 +305,6 @@ void Runtime::deallocate(void* ptr) {
 
 size_t Runtime::getMemoryUsage() const {
     return currentMemoryUsage;
-}
-
-size_t Runtime::getMemoryLimit() const {
-    return memoryLimit;
 }
 
 void Runtime::setMemoryLimit(size_t limit) {
@@ -258,106 +344,106 @@ bool Runtime::isCUDAAvailable() const {
 }
 
 bool Runtime::enableCUDA() {
-    #ifdef USE_CUDA
+#ifdef USE_CUDA
     int deviceCount;
     cudaError_t err = cudaGetDeviceCount(&deviceCount);
-    
+
     if (err == cudaSuccess && deviceCount > 0) {
         cudaAvailable = true;
-        
+
         // Получение информации о устройстве
         cudaDeviceProp prop;
         cudaGetDeviceProperties(&prop, 0);
-        
+
         LOG_INFO("CUDA available: " + std::to_string(deviceCount) + " device(s)");
         LOG_INFO("Device name: " + std::string(prop.name));
-        LOG_INFO("Compute capability: " + std::to_string(prop.major) + "." + 
+        LOG_INFO("Compute capability: " + std::to_string(prop.major) + "." +
                 std::to_string(prop.minor));
         LOG_INFO("Total global memory: " + std::to_string(prop.totalGlobalMem / 1024 / 1024) + " MB");
-        
+
         return true;
     } else {
         cudaAvailable = false;
         LOG_WARNING("CUDA not available: " + std::string(cudaGetErrorString(err)));
         return false;
     }
-    #else
+#else
     cudaAvailable = false;
     LOG_WARNING("CUDA support not compiled in");
     return false;
-    #endif
+#endif
 }
 
 void* Runtime::allocateGPU(size_t size) {
-    #ifdef USE_CUDA
+#ifdef USE_CUDA
     if (!cudaAvailable) {
         LOG_ERROR("CUDA not available");
         return nullptr;
     }
-    
+
     void* ptr;
     cudaError_t err = cudaMalloc(&ptr, size);
-    
+
     if (err == cudaSuccess) {
         gpuMemory.push_back(ptr);
-        LOG_DEBUG("Allocated " + std::to_string(size) + " bytes on GPU at " + 
+        LOG_DEBUG("Allocated " + std::to_string(size) + " bytes on GPU at " +
                  std::to_string(reinterpret_cast<uintptr_t>(ptr)));
         return ptr;
     } else {
         LOG_ERROR("CUDA allocation failed: " + std::string(cudaGetErrorString(err)));
         return nullptr;
     }
-    #else
+#else
     LOG_ERROR("CUDA support not compiled in");
     return nullptr;
-    #endif
+#endif
 }
 
 void Runtime::freeGPU(void* ptr) {
-    #ifdef USE_CUDA
+#ifdef USE_CUDA
     if (!ptr || !cudaAvailable) return;
-    
+
     auto it = std::find(gpuMemory.begin(), gpuMemory.end(), ptr);
     if (it != gpuMemory.end()) {
         gpuMemory.erase(it);
         cudaFree(ptr);
         LOG_DEBUG("Freed GPU memory at " + std::to_string(reinterpret_cast<uintptr_t>(ptr)));
     }
-    #endif
+#endif
 }
 
 void Runtime::copyToGPU(void* host, void* device, size_t size) {
-    #ifdef USE_CUDA
+#ifdef USE_CUDA
     if (!cudaAvailable || !host || !device) {
         LOG_ERROR("Invalid parameters for CUDA copy");
         return;
     }
-    
+
     cudaError_t err = cudaMemcpy(device, host, size, cudaMemcpyHostToDevice);
-    
+
     if (err != cudaSuccess) {
         LOG_ERROR("CUDA H2D copy failed: " + std::string(cudaGetErrorString(err)));
     } else {
         LOG_DEBUG("Copied " + std::to_string(size) + " bytes to GPU");
     }
-    #endif
+#endif
 }
 
 void Runtime::copyFromGPU(void* device, void* host, size_t size) {
-    #ifdef USE_CUDA
+#ifdef USE_CUDA
     if (!cudaAvailable || !device || !host) {
         LOG_ERROR("Invalid parameters for CUDA copy");
         return;
     }
-    
+
     cudaError_t err = cudaMemcpy(host, device, size, cudaMemcpyDeviceToHost);
-    
+
     if (err != cudaSuccess) {
         LOG_ERROR("CUDA D2H copy failed: " + std::string(cudaGetErrorString(err)));
     } else {
         LOG_DEBUG("Copied " + std::to_string(size) + " bytes from GPU");
     }
-    #endif
+#endif
 }
 
 // ============================================================================
@@ -373,55 +459,39 @@ void Runtime::registerStdLib() {
     registerDebugFunctions();
     registerSystemFunctions();
     registerMemoryFunctions();
-    
+
     LOG_INFO("Standard library registered");
 }
 
 void Runtime::registerPrintFunction() {
-    // Регистрация функции print
-    // В полной реализации добавляется в таблицу символов JIT
     LOG_DEBUG("Registered: print()");
 }
 
 void Runtime::registerMathFunctions() {
-    // Регистрация математических функций
-    // sin, cos, tan, exp, log, sqrt, etc.
     LOG_DEBUG("Registered: math functions");
 }
 
 void Runtime::registerIOFunctions() {
-    // Регистрация функций ввода-вывода
-    // file.open, file.read, file.write, etc.
     LOG_DEBUG("Registered: I/O functions");
 }
 
 void Runtime::registerCollectionFunctions() {
-    // Регистрация функций для работы с коллекциями
-    // collection.read, collection.write, etc.
     LOG_DEBUG("Registered: collection functions");
 }
 
 void Runtime::registerTimeFunctions() {
-    // Регистрация функций для работы со временем
-    // time.now, time.sleep, etc.
     LOG_DEBUG("Registered: time functions");
 }
 
 void Runtime::registerDebugFunctions() {
-    // Регистрация отладочных функций
-    // dbgstop, dbgprint, dbgcontext, dbgstack
     LOG_DEBUG("Registered: debug functions");
 }
 
 void Runtime::registerSystemFunctions() {
-    // Регистрация системных функций
-    // system info, process control, etc.
     LOG_DEBUG("Registered: system functions");
 }
 
 void Runtime::registerMemoryFunctions() {
-    // Регистрация функций управления памятью
-    // memory_free, memory_total, etc.
     LOG_DEBUG("Registered: memory functions");
 }
 
@@ -430,101 +500,98 @@ void Runtime::registerMemoryFunctions() {
 // ============================================================================
 
 size_t Runtime::getSystemMemoryFree() const {
-    #ifdef _WIN32
+#ifdef _WIN32
     MEMORYSTATUSEX status;
     status.dwLength = sizeof(status);
     if (GlobalMemoryStatusEx(&status)) {
         return status.ullAvailPhys;
     }
-    #else
+#else
     struct sysinfo info;
     if (sysinfo(&info) == 0) {
         return info.freeram * info.mem_unit;
     }
-    #endif
+#endif
     return 0;
 }
 
 size_t Runtime::getSystemMemoryTotal() const {
-    #ifdef _WIN32
+#ifdef _WIN32
     MEMORYSTATUSEX status;
     status.dwLength = sizeof(status);
     if (GlobalMemoryStatusEx(&status)) {
         return status.ullTotalPhys;
     }
-    #else
+#else
     struct sysinfo info;
     if (sysinfo(&info) == 0) {
         return info.totalram * info.mem_unit;
     }
-    #endif
+#endif
     return 0;
 }
 
 double Runtime::getCPUUsage() const {
-    #ifdef _WIN32
-    // Windows implementation
+#ifdef _WIN32
     return 0.0;
-    #else
-    // Linux implementation using /proc/stat
+#else
     std::ifstream file("/proc/stat");
     if (!file.is_open()) return 0.0;
-    
+
     std::string line;
     std::getline(file, line);
-    
+
     std::istringstream iss(line);
     std::string cpu;
     unsigned long long user, nice, system, idle, iowait, irq, softirq;
-    
+
     iss >> cpu >> user >> nice >> system >> idle >> iowait >> irq >> softirq;
-    
+
     unsigned long long total = user + nice + system + idle + iowait + irq + softirq;
     unsigned long long idleTotal = idle + iowait;
-    
-    // В реальной реализации нужно сравнивать с предыдущим значением
+
     return 0.0;
-    #endif
+#endif
 }
 
 size_t Runtime::getDiskFree(const std::string& path) const {
-    #ifdef _WIN32
+#ifdef _WIN32
     ULARGE_INTEGER freeBytesAvailable;
     ULARGE_INTEGER totalNumberOfBytes;
     ULARGE_INTEGER totalNumberOfFreeBytes;
-    
-    if (GetDiskFreeSpaceExA(path.c_str(), &freeBytesAvailable, 
+
+    if (GetDiskFreeSpaceExA(path.c_str(), &freeBytesAvailable,
                             &totalNumberOfBytes, &totalNumberOfFreeBytes)) {
         return totalNumberOfFreeBytes.QuadPart;
     }
-    #else
+#else
     struct statvfs stat;
     if (statvfs(path.c_str(), &stat) == 0) {
         return stat.f_bavail * stat.f_frsize;
     }
-    #endif
+#endif
     return 0;
 }
 
 std::string Runtime::getOSInfo() const {
-    #ifdef _WIN32
+#ifdef _WIN32
     return "Windows";
-    #else
+#else
     struct utsname buffer;
     if (uname(&buffer) == 0) {
         return std::string(buffer.sysname) + " " + buffer.release;
     }
     return "Unknown";
-    #endif
+#endif
 }
 
 std::string Runtime::getCPUInfo() const {
-    #ifdef _WIN32
+#ifdef _WIN32
     return "Unknown";
-    #else
+#else
     std::ifstream file("/proc/cpuinfo");
     if (!file.is_open()) return "Unknown";
-    
+
     std::string line;
     while (std::getline(file, line)) {
         if (line.find("model name") != std::string::npos) {
@@ -535,17 +602,17 @@ std::string Runtime::getCPUInfo() const {
         }
     }
     return "Unknown";
-    #endif
+#endif
 }
 
 int Runtime::getCPUCount() const {
-    #ifdef _WIN32
+#ifdef _WIN32
     SYSTEM_INFO sysInfo;
     GetSystemInfo(&sysInfo);
     return sysInfo.dwNumberOfProcessors;
-    #else
+#else
     return sysconf(_SC_NPROCESSORS_ONLN);
-    #endif
+#endif
 }
 
 // ============================================================================
@@ -554,21 +621,21 @@ int Runtime::getCPUCount() const {
 
 void Runtime::dbgstop() {
     if (!debugMode) return;
-    
+
     LOG_INFO("Debug stop requested");
-    
+
     // Остановка выполнения
     std::unique_lock<std::mutex> lock(debugMutex);
     debugCondition.wait(lock, [this]() {
         return !debugMode || stopRequested;
     });
-    
+
     LOG_INFO("Debug stop released");
 }
 
 void Runtime::dbgprint(const std::string& message, int level) {
     if (level > verboseLevel) return;
-    
+
     std::string prefix = "[DEBUG]";
     switch (level) {
         case 0: prefix = "[ERROR]"; break;
@@ -578,139 +645,72 @@ void Runtime::dbgprint(const std::string& message, int level) {
         case 4: prefix = "[TRACE]"; break;
         default: prefix = "[DEBUG]"; break;
     }
-    
+
     std::cout << prefix << " " << message << std::endl;
     LOG_INFO(prefix + " " + message);
 }
 
 void Runtime::dbgcontext() {
     if (!debugMode) return;
-    
+
     LOG_INFO("=== Debug Context ===");
     LOG_INFO("Current memory usage: " + std::to_string(currentMemoryUsage) + " bytes");
     LOG_INFO("Allocated blocks: " + std::to_string(allocatedMemory.size()));
     LOG_INFO("Verbose level: " + std::to_string(verboseLevel));
     LOG_INFO("Debug mode: " + std::string(debugMode ? "enabled" : "disabled"));
-    
+
     // В полной реализации вывод переменных из стека
     LOG_INFO("Stack variables: (not implemented)");
 }
 
 void Runtime::dbgstack() {
     if (!debugMode) return;
-    
+
     LOG_INFO("=== Call Stack ===");
-    
+
     // В полной реализации вывод стека вызовов
-    #ifdef _WIN32
+#ifdef _WIN32
     // Windows stack trace
-    #else
+#else
     // Linux stack trace using backtrace()
-    #endif
-    
+#endif
+
     LOG_INFO("(Stack trace not fully implemented)");
-}
-
-// ============================================================================
-// Функции GEM интерфейса (из language.txt пункт 44)
-// ============================================================================
-
-void Runtime::gem_init(void* object) {
-    // Инициализация объекта GEM
-    LOG_DEBUG("GEM init called");
-}
-
-void Runtime::gem_reset(void* object) {
-    // Сброс объекта GEM
-    LOG_DEBUG("GEM reset called");
-}
-
-std::pair<Time, bool> Runtime::gem_update(void* object, const Time& currentTime) {
-    // Обновление состояния объекта GEM
-    LOG_DEBUG("GEM update called");
-    return std::make_pair(currentTime, true);
-}
-
-void Runtime::gem_show(void* object) {
-    // Отображение состояния объекта GEM
-    LOG_DEBUG("GEM show called");
-}
-
-Collection Runtime::gem_get_metrics(void* object) {
-    // Получение метрик объекта GEM
-    LOG_DEBUG("GEM get_metrics called");
-    Collection metrics;
-    return metrics;
-}
-
-void Runtime::gem_set_params(void* object, const Collection& params) {
-    // Установка параметров объекта GEM
-    LOG_DEBUG("GEM set_params called");
-}
-
-Collection Runtime::gem_get_params(void* object) {
-    // Получение параметров объекта GEM
-    LOG_DEBUG("GEM get_params called");
-    Collection params;
-    return params;
-}
-
-std::string Runtime::gem_get_name(void* object) {
-    // Получение имени объекта GEM
-    LOG_DEBUG("GEM get_name called");
-    return "Unnamed GEM Object";
-}
-
-void Runtime::gem_publish(void* object, void* document) {
-    // Публикация отчёта
-    LOG_DEBUG("GEM publish called");
-}
-
-Collection Runtime::gem_store(void* object) {
-    // Сериализация состояния
-    LOG_DEBUG("GEM store called");
-    Collection state;
-    return state;
-}
-
-void Runtime::gem_restore(void* object, const Collection& state) {
-    // Восстановление состояния
-    LOG_DEBUG("GEM restore called");
 }
 
 // ============================================================================
 // Параллельное выполнение (CPU)
 // ============================================================================
 
-void Runtime::parallelFor(int start, int end, int step, 
-                         std::function<void(int)> body, 
+void Runtime::parallelFor(int start, int end, int step,
+                         std::function<void(int)> body,
                          int threads, void* array) {
     if (threads <= 0) {
         threads = std::thread::hardware_concurrency();
         if (threads == 0) threads = 4;
     }
-    
+
     LOG_DEBUG("Parallel for: " + std::to_string(threads) + " threads, " +
-             std::to_string(start) + " to " + std::to_string(end) + 
+             std::to_string(start) + " to " + std::to_string(end) +
              " step " + std::to_string(step));
-    
+
     std::vector<std::thread> workers;
     std::mutex mutex;
-    
+
     int range = (end - start) / step;
     int chunkSize = range / threads;
-    
+
     for (int t = 0; t < threads; t++) {
         int threadStart = start + t * chunkSize * step;
         int threadEnd = (t == threads - 1) ? end : threadStart + chunkSize * step;
-        
+
         workers.emplace_back([&, threadStart, threadEnd]() {
             for (int i = threadStart; i < threadEnd; i += step) {
                 body(i);
             }
         });
     }
-    
+
     for (auto& worker : workers) {
         worker.join();
     }
@@ -753,11 +753,11 @@ void Runtime::exit(int code) {
 }
 
 int Runtime::getpid() const {
-    #ifdef _WIN32
+#ifdef _WIN32
     return GetCurrentProcessId();
-    #else
+#else
     return getpid();
-    #endif
+#endif
 }
 
 std::string Runtime::getCWD() const {
@@ -799,7 +799,7 @@ bool Runtime::deleteFile(const std::string& path) {
 
 std::vector<std::string> Runtime::listDirectory(const std::string& path) {
     std::vector<std::string> files;
-    
+
     try {
         for (const auto& entry : std::filesystem::directory_iterator(path)) {
             files.push_back(entry.path().string());
@@ -807,7 +807,7 @@ std::vector<std::string> Runtime::listDirectory(const std::string& path) {
     } catch (...) {
         // Ignore errors
     }
-    
+
     return files;
 }
 
@@ -933,12 +933,12 @@ double Runtime::stopTimer(const std::string& name) {
     if (it != timers.end()) {
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration<double>(end - it->second).count();
-        
+
         if (verboseLevel >= 4) {
-            LOG_DEBUG("Timer stopped: " + name + " = " + 
+            LOG_DEBUG("Timer stopped: " + name + " = " +
                      std::to_string(duration * 1000) + " ms");
         }
-        
+
         timers.erase(it);
         return duration * 1000; // Return milliseconds
     }
@@ -952,6 +952,319 @@ double Runtime::getTimer(const std::string& name) const {
         return std::chrono::duration<double>(now - it->second).count() * 1000;
     }
     return 0.0;
+}
+
+// ============================================================================
+// Runtime Array Access Methods (1-based indexing)
+// ============================================================================
+
+RuntimeValue Runtime::getVectorElement(const std::vector<RuntimeValue>& vector, int index) {
+    // Конвертация 1-based → 0-based
+    int cppIndex = IndexConverter::toCppIndex(index);
+
+    // Проверка валидности
+    if (!IndexConverter::isValidProximaIndex(index, static_cast<int>(vector.size()))) {
+        std::string error = "Vector index out of range: " + std::to_string(index) +
+                           " (valid range: 1-" + std::to_string(vector.size()) + ")";
+        LOG_ERROR(error);
+        throw std::out_of_range(error);
+    }
+
+    return vector[cppIndex];
+}
+
+RuntimeValue Runtime::getMatrixElement(
+    const std::vector<std::vector<RuntimeValue>>& matrix,
+    int row, int col) {
+
+    // Конвертация 1-based → 0-based
+    int cppRow = IndexConverter::toCppIndex(row);
+    int cppCol = IndexConverter::toCppIndex(col);
+
+    // Проверка валидности
+    if (!IndexConverter::isValidProximaIndex(row, static_cast<int>(matrix.size()))) {
+        std::string error = "Matrix row index out of range: " + std::to_string(row);
+        LOG_ERROR(error);
+        throw std::out_of_range(error);
+    }
+
+    if (!IndexConverter::isValidProximaIndex(col, static_cast<int>(matrix[cppRow].size()))) {
+        std::string error = "Matrix column index out of range: " + std::to_string(col);
+        LOG_ERROR(error);
+        throw std::out_of_range(error);
+    }
+
+    return matrix[cppRow][cppCol];
+}
+
+RuntimeValue Runtime::getLayerElement(
+    const std::vector<std::vector<std::vector<RuntimeValue>>>& layer,
+    int x, int y, int z) {
+
+    // Конвертация 1-based → 0-based
+    int cppX = IndexConverter::toCppIndex(x);
+    int cppY = IndexConverter::toCppIndex(y);
+    int cppZ = IndexConverter::toCppIndex(z);
+
+    // Проверка валидности
+    if (!IndexConverter::isValidProximaIndex(x, static_cast<int>(layer.size()))) {
+        std::string error = "Layer X index out of range: " + std::to_string(x);
+        LOG_ERROR(error);
+        throw std::out_of_range(error);
+    }
+
+    if (!IndexConverter::isValidProximaIndex(y, static_cast<int>(layer[cppX].size()))) {
+        std::string error = "Layer Y index out of range: " + std::to_string(y);
+        LOG_ERROR(error);
+        throw std::out_of_range(error);
+    }
+
+    if (!IndexConverter::isValidProximaIndex(z, static_cast<int>(layer[cppX][cppY].size()))) {
+        std::string error = "Layer Z index out of range: " + std::to_string(z);
+        LOG_ERROR(error);
+        throw std::out_of_range(error);
+    }
+
+    return layer[cppX][cppY][cppZ];
+}
+
+void Runtime::setVectorElement(std::vector<RuntimeValue>& vector, int index,
+                              const RuntimeValue& value) {
+    // Конвертация 1-based → 0-based
+    int cppIndex = IndexConverter::toCppIndex(index);
+
+    // Проверка валидности
+    if (!IndexConverter::isValidProximaIndex(index, static_cast<int>(vector.size()))) {
+        std::string error = "Vector index out of range: " + std::to_string(index);
+        LOG_ERROR(error);
+        throw std::out_of_range(error);
+    }
+
+    vector[cppIndex] = value;
+}
+
+void Runtime::setMatrixElement(std::vector<std::vector<RuntimeValue>>& matrix,
+                              int row, int col, const RuntimeValue& value) {
+    // Конвертация 1-based → 0-based
+    int cppRow = IndexConverter::toCppIndex(row);
+    int cppCol = IndexConverter::toCppIndex(col);
+
+    // Проверка валидности
+    if (!IndexConverter::isValidProximaIndex(row, static_cast<int>(matrix.size()))) {
+        std::string error = "Matrix row index out of range: " + std::to_string(row);
+        LOG_ERROR(error);
+        throw std::out_of_range(error);
+    }
+
+    if (!IndexConverter::isValidProximaIndex(col, static_cast<int>(matrix[cppRow].size()))) {
+        std::string error = "Matrix column index out of range: " + std::to_string(col);
+        LOG_ERROR(error);
+        throw std::out_of_range(error);
+    }
+
+    matrix[cppRow][cppCol] = value;
+}
+
+void Runtime::throwIndexError(const std::string& containerType,
+                             int proximaIndex,
+                             int size) {
+    std::string message = containerType + " index out of range\n";
+    message += "  Provided index: " + std::to_string(proximaIndex) + " (1-based)\n";
+    message += "  Valid range: 1 to " + std::to_string(size) + "\n";
+    message += "  Note: Proxima uses 1-based indexing (like MATLAB), not 0-based (like C++)\n";
+
+    LOG_ERROR(message);
+    throw std::out_of_range(message);
+}
+
+int Runtime::getVectorSize(const std::vector<RuntimeValue>& vector) const {
+    // Возвращаем размер в стиле Proxima (1-based для отображения)
+    return static_cast<int>(vector.size());
+}
+
+int Runtime::getMatrixRows(const std::vector<std::vector<RuntimeValue>>& matrix) const {
+    // Возвращаем количество строк в стиле Proxima
+    return static_cast<int>(matrix.size());
+}
+
+int Runtime::getMatrixCols(const std::vector<std::vector<RuntimeValue>>& matrix) const {
+    if (matrix.empty()) {
+        return 0;
+    }
+    // Возвращаем количество столбцов в стиле Proxima
+    return static_cast<int>(matrix[0].size());
+}
+
+// ============================================================================
+// Runtime GEM Methods
+// ============================================================================
+
+GEM* Runtime::createGEMObject(const QString& type, const QString& name) {
+    GEM* object = new GEM(name);
+    object->set_type(type);
+
+    LOG_INFO("GEM object created: " + type.toStdString() +
+             " (" + name.toStdString() + ")");
+
+    return object;
+}
+
+bool Runtime::initGEMObject(GEM* object) {
+    if (!object) {
+        LOG_ERROR("Null GEM object");
+        return false;
+    }
+
+    bool success = object->init();
+
+    if (success) {
+        LOG_INFO("GEM object initialized: " + object->get_name().toStdString());
+    } else {
+        LOG_ERROR("GEM object initialization failed: " + object->get_name().toStdString());
+    }
+
+    return success;
+}
+
+Collection Runtime::updateGEMObject(GEM* object, const Time& currentTime) {
+    if (!object) {
+        LOG_ERROR("Null GEM object");
+        return Collection();
+    }
+
+    Collection result = object->update(currentTime);
+
+    LOG_DEBUG("GEM object updated: " + object->get_name().toStdString());
+
+    return result;
+}
+
+bool Runtime::resetGEMObject(GEM* object) {
+    if (!object) {
+        LOG_ERROR("Null GEM object");
+        return false;
+    }
+
+    bool success = object->reset();
+
+    if (success) {
+        LOG_INFO("GEM object reset: " + object->get_name().toStdString());
+    } else {
+        LOG_ERROR("GEM object reset failed: " + object->get_name().toStdString());
+    }
+
+    return success;
+}
+
+Collection Runtime::getGEMMetrics(GEM* object) {
+    if (!object) {
+        LOG_ERROR("Null GEM object");
+        return Collection();
+    }
+
+    return object->get_metrics();
+}
+
+Collection Runtime::getGEMUserMetrics(GEM* object) {
+    if (!object) {
+        LOG_ERROR("Null GEM object");
+        return Collection();
+    }
+
+    return object->metrics();
+}
+
+void Runtime::setGEMParams(GEM* object, const Collection& params) {
+    if (!object) {
+        LOG_ERROR("Null GEM object");
+        return;
+    }
+
+    object->set_params(params);
+
+    LOG_DEBUG("GEM parameters set: " + object->get_name().toStdString());
+}
+
+Collection Runtime::getGEMParams(GEM* object) {
+    if (!object) {
+        LOG_ERROR("Null GEM object");
+        return Collection();
+    }
+
+    return object->get_params();
+}
+
+void Runtime::publishGEMObject(GEM* object, const Collection& doc) {
+    if (!object) {
+        LOG_ERROR("Null GEM object");
+        return;
+    }
+
+    object->publish(doc);
+
+    LOG_INFO("GEM object published: " + object->get_name().toStdString());
+}
+
+Collection Runtime::storeGEMObject(GEM* object) {
+    if (!object) {
+        LOG_ERROR("Null GEM object");
+        return Collection();
+    }
+
+    Collection state = object->store();
+
+    LOG_INFO("GEM object state stored: " + object->get_name().toStdString());
+
+    return state;
+}
+
+void Runtime::restoreGEMObject(GEM* object, const Collection& state) {
+    if (!object) {
+        LOG_ERROR("Null GEM object");
+        return;
+    }
+
+    object->restore(state);
+
+    LOG_INFO("GEM object state restored: " + object->get_name().toStdString());
+}
+
+void Runtime::showGEMObject(GEM* object) {
+    if (!object) {
+        LOG_ERROR("Null GEM object");
+        return;
+    }
+
+    object->show();
+
+    LOG_DEBUG("GEM object shown: " + object->get_name().toStdString());
+}
+
+void Runtime::destroyGEMObject(GEM* object) {
+    if (!object) {
+        LOG_ERROR("Null GEM object");
+        return;
+    }
+
+    LOG_INFO("GEM object destroyed: " + object->get_name().toStdString());
+
+    delete object;
+}
+
+// ============================================================================
+// Type check operators
+// ============================================================================
+
+std::string Runtime::normalizeTypeName(const std::string& typeName) {
+    std::string normalized = typeName;
+
+    // Удаление пробелов
+    normalized.erase(std::remove(normalized.begin(), normalized.end(), ' '), normalized.end());
+
+    // Приведение к нижнему регистру для сравнения
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(), ::tolower);
+
+    return normalized;
 }
 
 } // namespace proxima

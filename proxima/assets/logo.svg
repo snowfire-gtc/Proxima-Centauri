@@ -4,14 +4,16 @@
     <bx:grid x="363.806" y="295.431" width="8.829" height="8.829"/>
     <bx:export>
       <bx:file format="png" path="logo.png"/>
+      <bx:file format="png" href="#object-0" path="logo128.png" width="128" height="120"/>
+      <bx:file format="png" href="#object-0" width="512" height="479" path="logo512.png"/>
     </bx:export>
     <style bx:fonts="Aldrich">@import url(https://fonts.googleapis.com/css2?family=Aldrich%3Aital%2Cwght%400%2C400&amp;display=swap);</style>
   </defs>
-  <rect x="-24.67" y="-4.755" width="547.398" height="512.082" style="stroke: rgb(0, 0, 0);"/>
-  <path d="M 168.568 339.576 L 106.765 233.628 L 168.568 127.68 L 251.817 127.68 L 297.327 299.576 L 322.172 299.576 L 360.639 233.628 L 322.172 167.68 L 287.325 167.68 L 287.325 127.68 L 345.148 127.68 L 406.951 233.628 L 345.148 339.576 L 262.732 339.576 L 216.283 167.68 L 191.544 167.68 L 153.077 233.628 L 191.544 299.576 L 225.522 299.576 L 225.522 339.576 L 168.568 339.576 Z" style="fill: rgb(87, 187, 132); stroke: rgb(87, 187, 132); stroke-width: 17px; stroke-opacity: 0.61;"/>
-  <rect x="134.252" y="224.799" width="247.212" height="17.658" style="paint-order: fill; fill-rule: nonzero; fill-opacity: 0.78; fill: rgb(87, 187, 132);"/>
+  <rect x="-24.67" y="-4.755" width="547.398" height="512.082" style="stroke: rgb(0, 0, 0);" id="object-0"/>
+  <path d="M 168.568 339.576 L 106.765 233.628 L 168.568 127.68 L 251.817 127.68 L 297.327 299.576 L 322.172 299.576 L 360.639 233.628 L 322.172 167.68 L 287.325 167.68 L 287.325 127.68 L 345.148 127.68 L 406.951 233.628 L 345.148 339.576 L 262.732 339.576 L 216.283 167.68 L 191.544 167.68 L 153.077 233.628 L 191.544 299.576 L 225.522 299.576 L 225.522 339.576 L 168.568 339.576 Z" style="fill: rgb(87, 187, 132); stroke-width: 4px; stroke: rgb(255, 255, 255);"/>
+  <rect x="160.739" y="224.799" width="194.238" height="17.658" style="paint-order: fill; fill-rule: nonzero; fill-opacity: 0.78; fill: rgba(255, 255, 255, 0.94);"/>
   <ellipse style="stroke: rgba(0, 0, 0, 0.153); stroke-width: 22px; fill: rgb(87, 187, 132);" cx="160.739" cy="233.628" rx="26.487" ry="26.487"/>
   <ellipse style="stroke: rgba(0, 0, 0, 0.153); stroke-width: 22px; fill: rgb(87, 187, 132);" cx="257.858" cy="233.628" rx="35.316" ry="35.316"/>
   <ellipse style="stroke: rgba(0, 0, 0, 0.153); stroke-width: 22px; fill: rgb(87, 187, 132);" cx="354.977" cy="233.628" rx="26.487" ry="26.487"/>
-  <text style="fill: rgb(188, 218, 198); font-family: Aldrich; font-size: 26px; stroke: rgba(50, 71, 75, 0.56); white-space: pre;" x="138.775" y="379.805">Proxima Centauri</text>
+  <text style="fill: rgb(255, 255, 255); font-family: Aldrich; font-size: 26px; stroke: rgba(255, 255, 255, 0.56); stroke-width: 0px; white-space: pre;" x="141.982" y="379.971">Proxima Centauri</text>
 </svg>

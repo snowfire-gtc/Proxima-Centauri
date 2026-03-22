@@ -1,0 +1,75 @@
+// examples/gem_example.prx (Proxima code)
+
+namespace("gem_example");
+
+// Пользовательский класс наследуется от GEM
+class MyProcessor : public gem
+public:
+    constructor()
+        .name = "MyProcessor";
+        .processedCount = 0;
+        .errorCount = 0;
+    end
+    
+    // Переопределение metrics() для пользовательских метрик
+    metrics() : collection
+        // Базовые метрики
+        m: collection = get_metrics();
+        
+        // Пользовательские метрики
+        m["processed_count"] = .processedCount;
+        m["error_count"] = .errorCount;
+        m["error_rate"] = .errorCount / max(.processedCount, 1);
+        
+        return m;
+    end
+    
+    // Переопределение update()
+    update(time_current: time) : [time_next_call: time, is_alive: bool]
+        result = super.update(time_current);
+        
+        // Пользовательская логика
+        .processedCount = .processedCount + 1;
+        
+        return result;
+    end
+    
+protected:
+    processedCount: int32;
+    errorCount: int32;
+end
+
+main() : int32
+    // Создание GEM объекта
+    processor: MyProcessor = MyProcessor();
+    
+    // Инициализация
+    processor.init();
+    
+    // Обновление
+    t: time = time.now();
+    result = processor.update(t);
+    
+    // Получение базовых метрик (внутреннее состояние)
+    metrics: collection = processor.get_metrics();
+    print("Update count: %d\n", metrics["update_count"]);
+    print("Exec time: %.3f ms\n", metrics["exec_time"]);
+    
+    // Получение пользовательских метрик
+    userMetrics: collection = processor.metrics();
+    print("Processed: %d\n", userMetrics["processed_count"]);
+    print("Error rate: %.2f\n", userMetrics["error_rate"]);
+    
+    // Сохранение состояния
+    state: collection = processor.store();
+    
+    // Восстановление состояния
+    processor.restore(state);
+    
+    // Отображение
+    processor.show();
+    
+    return 0;
+end
+
+end

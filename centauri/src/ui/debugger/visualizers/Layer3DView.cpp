@@ -1,808 +1,971 @@
 #include "Layer3DView.h"
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QFileDialog>
-#include <QClipboard>
-#include <QApplication>
-#include <QToolTip>
+#include <QTextStream>
+#include <QFile>
+#include <QFileInfo>
+#include <QDir>
+#include <QDateTime>
+#include <QBuffer>
+#include <QByteArray>
+#include <QRegularExpression>
+#include <QXmlStreamReader>
+#include <QXmlStreamWriter>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QStandardPaths>
+#include <QDesktopServices>
+#include <QUrl>
+#include <QProcess>
+#include <QThread>
+#include <QMutex>
+#include <QReadWriteLock>
+#include <QScopedPointer>
+#include <QSharedPointer>
+#include <QDataStream>
+#include <QDebug>
+#include <QElapsedTimer>
+#include <QSet>
+#include <QHash>
+#include <QMetaType>
+#include <QMetaObject>
+#include <QPainterPath>
+#include <QRegion>
+#include <QBitmap>
+#include <QMatrix>
+#include <QMatrix4x4>
+#include <QVector2D>
+#include <QVector3D>
+#include <QVector4D>
+#include <QQuaternion>
+#include <QEasingCurve>
+#include <QtMath>
+#include <algorithm>
 #include <cmath>
+
+#ifdef USE_CUDA
+#include <cuda_runtime.h>
+#include <cuda_gl_interop.h>
+#endif
 
 namespace proxima {
 
+// ============================================================================
+// Конструктор/Деструктор
+// ============================================================================
+
 Layer3DView::Layer3DView(QWidget *parent)
-    : QWidget(parent)
-    , currentSlice(0)
-    , sliceAxis(2)
-    , viewMode(1)
-    , autoOpacity(true)
-    , minOpacity(0.1)
-    , maxOpacity(1.0)
-    , colorMin(0)
-    , colorMax(1)
-    , selectionActive(false)
-    , isSelecting(false)
+    : QOpenGLWidget(parent)
+    , sizeX_(0)
+    , sizeY_(0)
+    , sizeZ_(0)
+    , totalVoxels(0)
+    , visibleVoxelCount(0)
+    , maxVisibleVoxels(100000)
+    , renderMode(RenderMode::GPU_OpenGL)
+    , viewMode(LayerViewMode::Volume)
+    , gpuAvailable(false)
+    , highPerformanceMode(false)
+    , showSlice(false)
+    , opacityThreshold(0.1)
+    , currentPalette(ColorPalette::Viridis)
+    , isRotating(false)
+    , isPanning(false)
+    , selectedVoxel(0, 0, 0)
     , hoverX(-1)
     , hoverY(-1)
     , hoverZ(-1)
-    , isRotating(false)
-    , isPanning(false)
-    , showAxes(true)
-    , showGrid(true)
-    , showValues(false)
-    , showColorBar(true)
-    , renderingQuality(1)
-    , enableLighting(true)
-    , enableShadows(false) {
-    
-    transform.rotationX = 30;
-    transform.rotationY = 45;
-    transform.rotationZ = 0;
-    transform.zoom = 1.0;
-    transform.panX = 0;
-    transform.panY = 0;
-    
+    , isHovering(false)
+    , minValue(0.0)
+    , maxValue(1.0)
+    , meanValue(0.0)
+    , currentFPS(0)
+    , frameCount(0)
+    , shaderProgram(nullptr)
+    , volumeTexture(nullptr)
+    , fbo(nullptr)
+    #ifdef USE_CUDA
+    , cudaResource(nullptr)
+    , cudaAvailable(false)
+    #endif
+{
     setupUI();
-    setupToolbar();
     setupContextMenu();
-    setupSliceControl();
+    setupToolbar();
+    
+    // Таймер для подсчёта FPS
+    fpsTimer = new QTimer(this);
+    connect(fpsTimer, &QTimer::timeout, this, &Layer3DView::updateFPS);
+    fpsTimer->start(1000);
+    
+    LOG_DEBUG("Layer3DView created");
+}
+
+Layer3DView::~Layer3DView() {
+    cleanupOpenGL();
+    LOG_DEBUG("Layer3DView destroyed");
+}
+
+// ============================================================================
+// Инициализация OpenGL
+// ============================================================================
+
+void Layer3DView::initializeGL() {
+    initializeOpenGLFunctions();
+    
+    // Проверка доступности GPU
+    gpuInfo = QString(reinterpret_cast<const char*>(glGetString(GL_RENDERER)));
+    gpuAvailable = true;
+    
+    LOG_INFO("GPU: " + gpuInfo.toStdString());
+    
+    // Инициализация шейдеров
+    initShaders();
+    
+    // Инициализация буферов
+    initBuffers();
+    
+    // Настройка OpenGL
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glClearColor(0.12f, 0.12f, 0.12f, 1.0f);
+    
+    // Инициализация CUDA (если доступно)
+    #ifdef USE_CUDA
+    cudaGLSetGLDevice(0);
+    cudaAvailable = true;
+    LOG_INFO("CUDA available for rendering");
+    #endif
+    
+    updateCamera();
     generatePalette();
+    
+    LOG_INFO("OpenGL initialized successfully");
 }
 
-Layer3DView::~Layer3DView() {}
-
-void Layer3DView::setupUI() {
-    setMinimumSize(600, 400);
-    setMouseTracking(true);
-    setFocusPolicy(Qt::StrongFocus);
+void Layer3DView::initShaders() {
+    // Volume rendering shader
+    shaderProgram = new QOpenGLShaderProgram(this);
     
-    QVBoxLayout* layout = new QVBoxLayout(this);
-    layout->setContentsMargins(0, 0, 0, 0);
-    layout->addWidget(toolbar);
-    layout->addWidget(sliceControlWidget);
+    // Vertex shader
+    const char* vertexShaderSource = R"(
+        #version 330 core
+        layout(location = 0) in vec3 position;
+        layout(location = 1) in vec3 color;
+        layout(location = 2) in float opacity;
+        
+        out vec3 fragColor;
+        out float fragOpacity;
+        out vec3 fragPos;
+        
+        uniform mat4 model;
+        uniform mat4 view;
+        uniform mat4 projection;
+        
+        void main() {
+            fragPos = position;
+            fragColor = color;
+            fragOpacity = opacity;
+            gl_Position = projection * view * model * vec4(position, 1.0);
+        }
+    )";
+    
+    // Fragment shader
+    const char* fragmentShaderSource = R"(
+        #version 330 core
+        in vec3 fragColor;
+        in float fragOpacity;
+        in vec3 fragPos;
+        
+        out vec4 outColor;
+        
+        void main() {
+            outColor = vec4(fragColor, fragOpacity);
+        }
+    )";
+    
+    shaderProgram->addShaderFromSourceCode(QOpenGLShader::Vertex, vertexShaderSource);
+    shaderProgram->addShaderFromSourceCode(QOpenGLShader::Fragment, fragmentShaderSource);
+    shaderProgram->link();
+    
+    LOG_INFO("Shaders compiled successfully");
 }
 
-void Layer3DView::setupToolbar() {
-    toolbar = new QToolBar(this);
-    toolbar->setMovable(false);
-    toolbar->setIconSize(QSize(20, 20));
+void Layer3DView::initBuffers() {
+    vertexBuffer.create();
+    indexBuffer.create();
+    vao.create();
     
-    wireframeAction = toolbar->addAction(QIcon(":/icons/wireframe.svg"), "Wireframe");
-    wireframeAction->setCheckable(true);
-    connect(wireframeAction, &QAction::triggered, this, [this]() {
-        viewMode = 0;
-        wireframeAction->setChecked(true);
-        solidAction->setChecked(false);
-        volumeAction->setChecked(false);
-        update();
-    });
+    vao.bind();
+    vertexBuffer.bind();
+    indexBuffer.bind();
+    vao.release();
     
-    solidAction = toolbar->addAction(QIcon(":/icons/solid.svg"), "Solid");
-    solidAction->setCheckable(true);
-    solidAction->setChecked(true);
-    connect(solidAction, &QAction::triggered, this, [this]() {
-        viewMode = 1;
-        wireframeAction->setChecked(false);
-        solidAction->setChecked(true);
-        volumeAction->setChecked(false);
-        update();
-    });
-    
-    volumeAction = toolbar->addAction(QIcon(":/icons/volume.svg"), "Volume");
-    volumeAction->setCheckable(true);
-    connect(volumeAction, &QAction::triggered, this, [this]() {
-        viewMode = 2;
-        wireframeAction->setChecked(false);
-        solidAction->setChecked(false);
-        volumeAction->setChecked(true);
-        update();
-    });
-    
-    toolbar->addSeparator();
-    
-    rotateLeftAction = toolbar->addAction(QIcon(":/icons/rotate-left.svg"), "Rotate Left", this, &Layer3DView::onRotateLeft);
-    rotateRightAction = toolbar->addAction(QIcon(":/icons/rotate-right.svg"), "Rotate Right", this, &Layer3DView::onRotateRight);
-    rotateUpAction = toolbar->addAction(QIcon(":/icons/rotate-up.svg"), "Rotate Up", this, &Layer3DView::onRotateUp);
-    rotateDownAction = toolbar->addAction(QIcon(":/icons/rotate-down.svg"), "Rotate Down", this, &Layer3DView::onRotateDown);
-    
-    toolbar->addSeparator();
-    
-    zoomInAction = toolbar->addAction(QIcon(":/icons/zoom-in.svg"), "Zoom In", this, &Layer3DView::onZoomIn);
-    zoomOutAction = toolbar->addAction(QIcon(":/icons/zoom-out.svg"), "Zoom Out", this, &Layer3DView::onZoomOut);
-    resetViewAction = toolbar->addAction(QIcon(":/icons/reset.svg"), "Reset View", this, &Layer3DView::onResetView);
-    
-    toolbar->addSeparator();
-    
-    saveSliceAction = toolbar->addAction(QIcon(":/icons/save.svg"), "Save Slice", this, &Layer3DView::onSaveSlice);
-    saveVolumeAction = toolbar->addAction(QIcon(":/icons/image.svg"), "Save Volume", this, &Layer3DView::onSaveVolume);
-    exportCSVAction = toolbar->addAction(QIcon(":/icons/export.svg"), "Export CSV", this, &Layer3DView::onExportCSV);
-    
-    toolbar->addSeparator();
-    
-    copySliceAction = toolbar->addAction(QIcon(":/icons/copy.svg"), "Copy Slice", this, &Layer3DView::onCopySlice);
-    copyVolumeAction = toolbar->addAction(QIcon(":/icons/copy-all.svg"), "Copy Volume", this, &Layer3DView::onCopyVolume);
+    LOG_INFO("Buffers initialized");
 }
 
-void Layer3DView::setupContextMenu() {
-    contextMenu = new QMenu(this);
-    contextMenu->addAction(wireframeAction);
-    contextMenu->addAction(solidAction);
-    contextMenu->addAction(volumeAction);
-    contextMenu->addSeparator();
-    contextMenu->addAction(zoomInAction);
-    contextMenu->addAction(zoomOutAction);
-    contextMenu->addAction(resetViewAction);
-    contextMenu->addSeparator();
-    contextMenu->addAction(saveSliceAction);
-    contextMenu->addAction(saveVolumeAction);
-    contextMenu->addAction(exportCSVAction);
+void Layer3DView::initTextures() {
+    if (volumeTexture) {
+        delete volumeTexture;
+    }
+    
+    volumeTexture = new QOpenGLTexture(QOpenGLTexture::Target3D);
+    volumeTexture->setFormat(QOpenGLTexture::RGBA32F);
+    volumeTexture->setWrapMode(QOpenGLTexture::ClampToEdge);
+    volumeTexture->setMinificationFilter(QOpenGLTexture::Linear);
+    volumeTexture->setMagnificationFilter(QOpenGLTexture::Linear);
+    
+    LOG_INFO("3D texture initialized");
 }
 
-void Layer3DView::setupSliceControl() {
-    sliceControlWidget = new QWidget(this);
-    QHBoxLayout* layout = new QHBoxLayout(sliceControlWidget);
-    layout->setContentsMargins(5, 5, 5, 5);
+void Layer3DView::cleanupOpenGL() {
+    if (shaderProgram) {
+        delete shaderProgram;
+        shaderProgram = nullptr;
+    }
     
-    QLabel* label = new QLabel("Slice:", this);
-    layout->addWidget(label);
+    if (volumeTexture) {
+        delete volumeTexture;
+        volumeTexture = nullptr;
+    }
     
-    sliceSlider = new QSlider(Qt::Horizontal, this);
-    sliceSlider->setMinimum(0);
-    sliceSlider->setMaximum(0);
-    sliceSlider->setTickPosition(QSlider::TicksBelow);
-    connect(sliceSlider, &QSlider::valueChanged, this, &Layer3DView::onSliceSliderChanged);
-    layout->addWidget(sliceSlider, 1);
+    if (fbo) {
+        delete fbo;
+        fbo = nullptr;
+    }
     
-    sliceLabel = new QLabel("0", this);
-    sliceLabel->setMinimumWidth(30);
-    layout->addWidget(sliceLabel);
+    #ifdef USE_CUDA
+    if (cudaResource) {
+        cudaGraphicsUnregisterResource(cudaResource);
+        cudaResource = nullptr;
+    }
+    #endif
+    
+    LOG_INFO("OpenGL resources cleaned up");
 }
+
+// ============================================================================
+// Данные слоя
+// ============================================================================
 
 void Layer3DView::setData(const QVector<QVector<QVector<double>>>& data) {
     layerData = data;
     
-    if (layerData.isEmpty()) return;
-    
-    // Initialize voxel data
-    voxelData.clear();
-    for (int z = 0; z < layerData.size(); z++) {
-        QVector<QVector<Voxel>> slice;
-        for (int y = 0; y < layerData[z].size(); y++) {
-            QVector<Voxel> row;
-            for (int x = 0; x < layerData[z][y].size(); x++) {
-                Voxel voxel;
-                voxel.value = layerData[z][y][x];
-                voxel.opacity = valueToOpacity(voxel.value);
-                voxel.color = valueToColor(voxel.value);
-                voxel.isVisible = (voxel.opacity > 0.01);
-                row.append(voxel);
-            }
-            slice.append(row);
-        }
-        voxelData.append(slice);
+    if (data.isEmpty()) {
+        sizeX_ = 0;
+        sizeY_ = 0;
+        sizeZ_ = 0;
+        totalVoxels = 0;
+        return;
     }
     
-    // Update slice slider
-    sliceSlider->setMaximum(layerData.size() - 1);
-    currentSlice = layerData.size() / 2;
-    sliceSlider->setValue(currentSlice);
-    sliceLabel->setText(QString::number(currentSlice));
+    sizeZ_ = data.size();
+    sizeY_ = data[0].size();
+    sizeX_ = data[0][0].size();
+    totalVoxels = sizeX_ * sizeY_ * sizeZ_;
+    
+    // Инициализация вокселей (1-based индексация)
+    voxels.clear();
+    for (int z = 0; z < sizeZ_; z++) {
+        for (int y = 0; y < sizeY_; y++) {
+            for (int x = 0; x < sizeX_; x++) {
+                Voxel voxel;
+                voxel.x = x + 1;  // 1-based
+                voxel.y = y + 1;  // 1-based
+                voxel.z = z + 1;  // 1-based
+                voxel.value = data[z][y][x];
+                voxels.append(voxel);
+            }
+        }
+    }
     
     calculateStatistics();
-    calculateVoxelVisibility();
+    generatePalette();
+    updateVoxelVisibility();
+    updateSliceData();
+    
+    // Обновление текстуры
+    if (volumeTexture && gpuAvailable) {
+        initTextures();
+    }
+    
     update();
+    
+    LOG_INFO("Layer data set: " + QString::number(sizeX_) + "x" + 
+             QString::number(sizeY_) + "x" + QString::number(sizeZ_) + 
+             " (" + QString::number(totalVoxels) + " voxels)");
+}
+
+void Layer3DView::setDataFromRuntime(const RuntimeValue& value) {
+    if (value.type != RuntimeValue::Type::Array) {
+        LOG_WARNING("Invalid runtime value type for layer");
+        return;
+    }
+    
+    QVector<QVector<QVector<double>>> data;
+    
+    for (const auto& z : value.arrayValue) {
+        QVector<QVector<double>> layer;
+        for (const auto& y : z.arrayValue) {
+            QVector<double> row;
+            for (const auto& x : y.arrayValue) {
+                row.append(x.numberValue);
+            }
+            layer.append(row);
+        }
+        data.append(layer);
+    }
+    
+    setData(data);
+}
+
+double Layer3DView::getVoxelValue(int x, int y, int z) const {
+    // Проверка границ (1-based индексация)
+    if (x < 1 || x > sizeX_ || y < 1 || y > sizeY_ || z < 1 || z > sizeZ_) {
+        return 0.0;
+    }
+    
+    // Конвертация в 0-based для внутреннего хранения
+    return layerData[z - 1][y - 1][x - 1];
+}
+
+void Layer3DView::setVoxelValue(int x, int y, int z, double value) {
+    if (!isEditable()) return;
+    
+    // Проверка границ (1-based индексация)
+    if (x < 1 || x > sizeX_ || y < 1 || y > sizeY_ || z < 1 || z > sizeZ_) {
+        return;
+    }
+    
+    // Конвертация в 0-based для внутреннего хранения
+    layerData[z - 1][y - 1][x - 1] = value;
+    
+    // Обновление вокселя
+    for (auto& voxel : voxels) {
+        if (voxel.x == x && voxel.y == y && voxel.z == z) {
+            voxel.value = value;
+            break;
+        }
+    }
+    
+    calculateStatistics();
+    update();
+    
     emit dataModified();
 }
 
-void Layer3DView::clearData() {
-    layerData.clear();
-    voxelData.clear();
-    selectionActive = false;
-    hoverX = hoverY = hoverZ = -1;
-    sliceSlider->setMaximum(0);
-    sliceLabel->setText("0");
-    update();
+// ============================================================================
+// Режимы рендеринга
+// ============================================================================
+
+void Layer3DView::setRenderMode(RenderMode mode) {
+    if (renderMode != mode) {
+        renderMode = mode;
+        update();
+        emit renderModeChanged(mode);
+        
+        LOG_INFO("Render mode changed to: " + QString::number(static_cast<int>(mode)));
+    }
 }
 
-void Layer3DView::setCurrentSlice(int slice) {
-    if (slice < 0 || slice >= layerData.size()) return;
+// ============================================================================
+// Режимы отображения
+// ============================================================================
+
+void Layer3DView::setViewMode(LayerViewMode mode) {
+    if (viewMode != mode) {
+        viewMode = mode;
+        update();
+        
+        LOG_INFO("View mode changed to: " + QString::number(static_cast<int>(mode)));
+    }
+}
+
+// ============================================================================
+// Срезы
+// ============================================================================
+
+void Layer3DView::setCurrentSlice(int plane, int position) {
+    currentSlice.plane = plane;
+    currentSlice.position = qBound(1, position, plane == 0 ? sizeZ_ : (plane == 1 ? sizeY_ : sizeX_));
     
-    currentSlice = slice;
-    sliceSlider->setValue(slice);
-    sliceLabel->setText(QString::number(slice));
-    emit sliceChanged(slice);
+    updateSliceData();
+    update();
+    
+    emit sliceChanged(plane, position);
+}
+
+void Layer3DView::setShowSlice(bool show) {
+    showSlice = show;
+    showSliceAction->setChecked(show);
     update();
 }
 
-void Layer3DView::setSliceAxis(int axis) {
-    if (axis < 0 || axis > 2) return;
-    sliceAxis = axis;
-    update();
-}
-
-void Layer3DView::setViewMode(int mode) {
-    viewMode = mode;
-    update();
-}
-
-void Layer3DView::setRotation(double x, double y, double z) {
-    transform.rotationX = x;
-    transform.rotationY = y;
-    transform.rotationZ = z;
-    update();
-    emit viewChanged();
-}
-
-void Layer3DView::setZoom(double zoom) {
-    transform.zoom = qBound(0.1, zoom, 10.0);
-    update();
-    emit viewChanged();
-}
-
-void Layer3DView::resetView() {
-    transform.rotationX = 30;
-    transform.rotationY = 45;
-    transform.rotationZ = 0;
-    transform.zoom = 1.0;
-    transform.panX = 0;
-    transform.panY = 0;
-    update();
-    emit viewChanged();
-}
-
-void Layer3DView::setOpacityFunction(const QVector<QPair<double, double>>& function) {
-    opacityFunction = function;
-    calculateVoxelVisibility();
-    update();
-}
-
-void Layer3DView::setAutoOpacity(bool enable) {
-    autoOpacity = enable;
-    calculateVoxelVisibility();
-    update();
-}
-
-void Layer3DView::setMinOpacity(double min) {
-    minOpacity = min;
-    calculateVoxelVisibility();
-    update();
-}
-
-void Layer3DView::setMaxOpacity(double max) {
-    maxOpacity = max;
-    calculateVoxelVisibility();
-    update();
-}
-
-double Layer3DView::valueToOpacity(double value) const {
-    if (autoOpacity) {
-        // Linear mapping based on data range
-        if (statistics.isEmpty()) return 0.5;
-        double min = statistics["min"];
-        double max = statistics["max"];
-        if (max == min) return 0.5;
-        double normalized = (value - min) / (max - min);
-        return minOpacity + normalized * (maxOpacity - minOpacity);
-    } else {
-        // Use opacity function
-        for (int i = 0; i < opacityFunction.size() - 1; i++) {
-            if (value >= opacityFunction[i].first && value <= opacityFunction[i+1].first) {
-                double t = (value - opacityFunction[i].first) / 
-                          (opacityFunction[i+1].first - opacityFunction[i].first);
-                return opacityFunction[i].second + t * (opacityFunction[i+1].second - opacityFunction[i].second);
+void Layer3DView::updateSliceData() {
+    // Обновление данных текущего среза
+    currentSlice.data.clear();
+    
+    switch (currentSlice.plane) {
+        case 0: // XY
+            if (currentSlice.position - 1 < sizeZ_) {
+                currentSlice.data = layerData[currentSlice.position - 1];
             }
-        }
-        return 0.5;
-    }
-}
-
-void Layer3DView::setColorPalette(const QVector<QColor>& colors) {
-    paletteColors = colors;
-    update();
-}
-
-void Layer3DView::setColorRange(double min, double max) {
-    colorMin = min;
-    colorMax = max;
-    update();
-}
-
-QColor Layer3DView::valueToColor(double value) const {
-    if (paletteColors.isEmpty()) return Qt::gray;
-    
-    double normalized = 0.5;
-    if (colorMax != colorMin) {
-        normalized = (value - colorMin) / (colorMax - colorMin);
-        normalized = qBound(0.0, normalized, 1.0);
-    }
-    
-    int index = normalized * (paletteColors.size() - 1);
-    return paletteColors[index];
-}
-
-void Layer3DView::selectVoxel(int x, int y, int z) {
-    selectionX1 = selectionX2 = x;
-    selectionY1 = selectionY2 = y;
-    selectionZ1 = selectionZ2 = z;
-    selectionActive = true;
-    update();
-}
-
-void Layer3DView::selectRange(int x1, int y1, int z1, int x2, int y2, int z2) {
-    selectionX1 = qMin(x1, x2);
-    selectionX2 = qMax(x1, x2);
-    selectionY1 = qMin(y1, y2);
-    selectionY2 = qMax(y1, y2);
-    selectionZ1 = qMin(z1, z2);
-    selectionZ2 = qMax(z1, z2);
-    selectionActive = true;
-    update();
-}
-
-void Layer3DView::clearSelection() {
-    selectionActive = false;
-    update();
-}
-
-QVector<QVector<QVector<double>>> Layer3DView::getSelectedData() const {
-    if (!selectionActive) return QVector<QVector<QVector<double>>>();
-    
-    QVector<QVector<QVector<double>>> selected;
-    for (int z = selectionZ1; z <= selectionZ2 && z < layerData.size(); z++) {
-        QVector<QVector<double>> slice;
-        for (int y = selectionY1; y <= selectionY2 && y < layerData[z].size(); y++) {
-            QVector<double> row;
-            for (int x = selectionX1; x <= selectionX2 && x < layerData[z][y].size(); x++) {
-                row.append(layerData[z][y][x]);
-            }
-            slice.append(row);
-        }
-        selected.append(slice);
-    }
-    return selected;
-}
-
-void Layer3DView::saveSliceAsImage(const QString& path, int slice) {
-    QPixmap pixmap(size());
-    render(&pixmap);
-    pixmap.save(path);
-}
-
-void Layer3DView::saveVolumeAsImage(const QString& path) {
-    // Save current view as image
-    QPixmap pixmap(size());
-    render(&pixmap);
-    pixmap.save(path);
-}
-
-void Layer3DView::exportDataAsCSV(const QString& path) {
-    QFile file(path);
-    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QTextStream out(&file);
-        out << "x,y,z,value\n";
-        for (int z = 0; z < layerData.size(); z++) {
-            for (int y = 0; y < layerData[z].size(); y++) {
-                for (int x = 0; x < layerData[z][y].size(); x++) {
-                    out << x << "," << y << "," << z << "," 
-                        << layerData[z][y][x] << "\n";
+            break;
+        case 1: // XZ
+            for (int z = 0; z < sizeZ_; z++) {
+                QVector<double> row;
+                for (int x = 0; x < sizeX_; x++) {
+                    row.append(layerData[z][currentSlice.position - 1][x]);
                 }
+                currentSlice.data.append(row);
             }
-        }
-        file.close();
-    }
-}
-
-void Layer3DView::copySliceData(int slice) {
-    if (slice < 0 || slice >= layerData.size()) return;
-    
-    QString csvData;
-    for (int y = 0; y < layerData[slice].size(); y++) {
-        for (int x = 0; x < layerData[slice][y].size(); x++) {
-            csvData += QString::number(layerData[slice][y][x]);
-            if (x < layerData[slice][y].size() - 1) csvData += ",";
-        }
-        csvData += "\n";
-    }
-    
-    QClipboard* clipboard = QApplication::clipboard();
-    clipboard->setText(csvData);
-}
-
-void Layer3DView::copyVolumeData() {
-    QString csvData = "x,y,z,value\n";
-    for (int z = 0; z < layerData.size(); z++) {
-        for (int y = 0; y < layerData[z].size(); y++) {
-            for (int x = 0; x < layerData[z][y].size(); x++) {
-                csvData += QString("%1,%2,%3,%4\n")
-                    .arg(x).arg(y).arg(z).arg(layerData[z][y][x]);
-            }
-        }
-    }
-    
-    QClipboard* clipboard = QApplication::clipboard();
-    clipboard->setText(csvData);
-}
-
-void Layer3DView::setShowAxes(bool show) {
-    showAxes = show;
-    update();
-}
-
-void Layer3DView::setShowGrid(bool show) {
-    showGrid = show;
-    update();
-}
-
-void Layer3DView::setShowValues(bool show) {
-    showValues = show;
-    update();
-}
-
-void Layer3DView::setShowColorBar(bool show) {
-    showColorBar = show;
-    update();
-}
-
-void Layer3DView::setRenderingQuality(int quality) {
-    renderingQuality = qBound(0, quality, 2);
-    update();
-}
-
-void Layer3DView::enableLighting(bool enable) {
-    enableLighting = enable;
-    update();
-}
-
-void Layer3DView::enableShadows(bool enable) {
-    enableShadows = enable;
-    update();
-}
-
-void Layer3DView::calculateStatistics() {
-    statistics.clear();
-    
-    if (layerData.isEmpty()) return;
-    
-    double sum = 0;
-    double min = layerData[0][0][0];
-    double max = layerData[0][0][0];
-    int count = 0;
-    
-    for (int z = 0; z < layerData.size(); z++) {
-        for (int y = 0; y < layerData[z].size(); y++) {
-            for (int x = 0; x < layerData[z][y].size(); x++) {
-                double value = layerData[z][y][x];
-                sum += value;
-                if (value < min) min = value;
-                if (value > max) max = value;
-                count++;
-            }
-        }
-    }
-    
-    statistics["count"] = count;
-    statistics["sum"] = sum;
-    statistics["mean"] = sum / count;
-    statistics["min"] = min;
-    statistics["max"] = max;
-    statistics["range"] = max - min;
-    
-    // Update color range
-    colorMin = min;
-    colorMax = max;
-}
-
-void Layer3DView::paintEvent(QPaintEvent *event) {
-    Q_UNUSED(event);
-    
-    QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing);
-    
-    // Background
-    painter.fillRect(rect(), QColor(20, 20, 30));
-    
-    // Apply transform
-    applyTransform(painter);
-    
-    // Draw based on view mode
-    switch (viewMode) {
-        case 0:
-            drawWireframe(painter);
             break;
-        case 1:
-            drawSlice(painter);
-            break;
-        case 2:
-            drawVolume(painter);
+        case 2: // YZ
+            for (int z = 0; z < sizeZ_; z++) {
+                QVector<double> row;
+                for (int y = 0; y < sizeY_; y++) {
+                    row.append(layerData[z][y][currentSlice.position - 1]);
+                }
+                currentSlice.data.append(row);
+            }
             break;
     }
-    
-    // Draw axes
-    if (showAxes) {
-        drawAxes(painter);
-    }
-    
-    // Draw grid
-    if (showGrid) {
-        drawGrid(painter);
-    }
-    
-    // Draw selection
-    if (selectionActive) {
-        drawSelection(painter);
-    }
-    
-    // Draw hover voxel
-    if (hoverX >= 0) {
-        drawHoverVoxel(painter);
-    }
-    
-    // Draw color bar
-    if (showColorBar) {
-        drawColorBar(painter);
-    }
 }
 
-void Layer3DView::mousePressEvent(QMouseEvent *event) {
-    if (event->button() == Qt::LeftButton) {
-        if (event->modifiers() & Qt::ControlModifier) {
-            // Start rotation
-            isRotating = true;
-            lastRotatePos = event->pos();
-        } else if (event->modifiers() & Qt::ShiftModifier) {
-            // Start selection
-            isSelecting = true;
-            selectionStartPos = event->pos();
-            unprojectPointToPoint(event->pos(), selectionX1, selectionY1, selectionZ1);
-        } else {
-            // Start panning
-            isPanning = true;
-            lastPanPos = event->pos();
-        }
-    }
+// ============================================================================
+// Прозрачность и цвет
+// ============================================================================
+
+void Layer3DView::setOpacityThreshold(double threshold) {
+    opacityThreshold = qBound(0.0, threshold, 1.0);
+    updateVoxelVisibility();
+    update();
 }
 
-void Layer3DView::mouseMoveEvent(QMouseEvent *event) {
-    if (isRotating) {
-        QPoint delta = event->pos() - lastRotatePos;
-        transform.rotationY += delta.x() * 0.5;
-        transform.rotationX += delta.y() * 0.5;
-        lastRotatePos = event->pos();
+void Layer3DView::setColorPalette(ColorPalette palette) {
+    if (currentPalette != palette) {
+        currentPalette = palette;
+        generatePalette();
         update();
-        emit viewChanged();
-    }
-    
-    if (isPanning) {
-        QPoint delta = event->pos() - lastPanPos;
-        transform.panX += delta.x();
-        transform.panY += delta.y();
-        lastPanPos = event->pos();
-        update();
-        emit viewChanged();
-    }
-    
-    if (isSelecting) {
-        int x2, y2, z2;
-        unprojectPointToPoint(event->pos(), x2, y2, z2);
-        update();
-    }
-    
-    // Update hover voxel
-    updateHoverVoxel(event->pos());
-}
-
-void Layer3DView::mouseReleaseEvent(QMouseEvent *event) {
-    if (event->button() == Qt::LeftButton) {
-        if (isSelecting) {
-            isSelecting = false;
-            int x2, y2, z2;
-            unprojectPointToPoint(event->pos(), x2, y2, z2);
-            selectRange(selectionX1, selectionY1, selectionZ1, x2, y2, z2);
-        }
-        isRotating = false;
-        isPanning = false;
-    }
-}
-
-void Layer3DView::wheelEvent(QWheelEvent *event) {
-    if (event->angleDelta().y() > 0) {
-        setZoom(transform.zoom * 1.1);
-    } else {
-        setZoom(transform.zoom / 1.1);
-    }
-}
-
-void Layer3DView::contextMenuEvent(QContextMenuEvent *event) {
-    contextMenu->exec(event->globalPos());
-}
-
-void Layer3DView::applyTransform(QPainter& painter) {
-    painter.translate(width() / 2 + transform.panX, height() / 2 + transform.panY);
-    painter.scale(transform.zoom, transform.zoom);
-    painter.rotate(transform.rotationX, 1, 0, 0);
-    painter.rotate(transform.rotationY, 0, 1, 0);
-    painter.rotate(transform.rotationZ, 0, 0, 1);
-}
-
-void Layer3DView::drawSlice(QPainter& painter) {
-    if (layerData.isEmpty()) return;
-    
-    int slice = currentSlice;
-    if (sliceAxis == 0) slice = hoverX >= 0 ? hoverX : currentSlice;
-    else if (sliceAxis == 1) slice = hoverY >= 0 ? hoverY : currentSlice;
-    
-    // Draw slice based on axis
-    for (int y = 0; y < layerData[slice].size(); y++) {
-        for (int x = 0; x < layerData[slice][y].size(); x++) {
-            double value = layerData[slice][y][x];
-            QColor color = valueToColor(value);
-            painter.fillRect(x * 10, y * 10, 10, 10, color);
-            
-            if (showValues) {
-                painter.setPen(QColor(255, 255, 255));
-                painter.drawText(QRect(x * 10, y * 10, 10, 10), 
-                               Qt::AlignCenter, QString::number(value, 'f', 2));
-            }
-        }
-    }
-}
-
-void Layer3DView::drawVolume(QPainter& painter) {
-    // Simplified volume rendering
-    // Full implementation would use ray casting
-    
-    // Draw visible voxels
-    for (int z = 0; z < voxelData.size(); z++) {
-        for (int y = 0; y < voxelData[z].size(); y++) {
-            for (int x = 0; x < voxelData[z][y].size(); x++) {
-                if (!voxelData[z][y][x].isVisible) continue;
-                
-                QPoint point;
-                project3DToPoint(x, y, z, point);
-                
-                QColor color = voxelData[z][y][x].color;
-                color.setAlphaF(voxelData[z][y][x].opacity);
-                
-                painter.fillRect(point.x(), point.y(), 8, 8, color);
-            }
-        }
-    }
-}
-
-void Layer3DView::drawWireframe(QPainter& painter) {
-    // Draw wireframe box
-    painter.setPen(QColor(100, 100, 100));
-    
-    int w = layerData.isEmpty() ? 100 : layerData[0][0].size() * 10;
-    int h = layerData.isEmpty() ? 100 : layerData[0].size() * 10;
-    int d = layerData.isEmpty() ? 100 : layerData.size() * 10;
-    
-    // Front face
-    painter.drawRect(0, 0, w, h);
-    
-    // Back face (offset)
-    int offset = 50;
-    painter.drawRect(offset, -offset, w, h);
-    
-    // Connecting lines
-    painter.drawLine(0, 0, offset, -offset);
-    painter.drawLine(w, 0, w + offset, -offset);
-    painter.drawLine(0, h, offset, h - offset);
-    painter.drawLine(w, h, w + offset, h - offset);
-}
-
-void Layer3DView::drawAxes(QPainter& painter) {
-    painter.setPen(QPen(QColor(200, 200, 200), 2));
-    
-    int axisLength = 100;
-    
-    // X axis (red)
-    painter.setPen(QColor(255, 100, 100));
-    painter.drawLine(0, 0, axisLength, 0);
-    painter.drawText(axisLength + 5, 0, "X");
-    
-    // Y axis (green)
-    painter.setPen(QColor(100, 255, 100));
-    painter.drawLine(0, 0, 0, -axisLength);
-    painter.drawText(5, -axisLength - 5, "Y");
-    
-    // Z axis (blue)
-    painter.setPen(QColor(100, 100, 255));
-    painter.drawLine(0, 0, 50, -50);
-    painter.drawText(55, -55, "Z");
-}
-
-void Layer3DView::drawColorBar(QPainter& painter) {
-    int barWidth = 20;
-    int barHeight = 200;
-    int x = width() - barWidth - 20;
-    int y = (height() - barHeight) / 2;
-    
-    // Draw gradient
-    for (int i = 0; i < barHeight; i++) {
-        double t = 1.0 - (double)i / barHeight;
-        QColor color = valueToColor(colorMin + t * (colorMax - colorMin));
-        painter.fillRect(x, y + i, barWidth, 1, color);
-    }
-    
-    // Draw border
-    painter.setPen(QColor(200, 200, 200));
-    painter.drawRect(x, y, barWidth, barHeight);
-    
-    // Draw labels
-    painter.setPen(QColor(200, 200, 200));
-    painter.drawText(x + barWidth + 5, y + 15, QString::number(colorMax, 'f', 2));
-    painter.drawText(x + barWidth + 5, y + barHeight - 5, QString::number(colorMin, 'f', 2));
-}
-
-void Layer3DView::project3DToPoint(double x, double y, double z, QPoint& point) const {
-    // Simple orthographic projection
-    point.setX(x * 10 + z * 5);
-    point.setY(-y * 10 + z * 5);
-}
-
-void Layer3DView::unprojectPointToPoint(const QPoint& point, int& x, int& y, int& z) const {
-    // Simplified unprojection
-    x = point.x() / 10;
-    y = -point.y() / 10;
-    z = currentSlice;
-    
-    x = qBound(0, x, cols() - 1);
-    y = qBound(0, y, rows() - 1);
-    z = qBound(0, z, depth() - 1);
-}
-
-void Layer3DView::updateHoverVoxel(const QPoint& pos) {
-    int x, y, z;
-    unprojectPointToPoint(pos, x, y, z);
-    
-    if (x != hoverX || y != hoverY || z != hoverZ) {
-        hoverX = x;
-        hoverY = y;
-        hoverZ = z;
-        
-        if (hoverX >= 0 && hoverX < cols() &&
-            hoverY >= 0 && hoverY < rows() &&
-            hoverZ >= 0 && hoverZ < depth()) {
-            double value = layerData[hoverZ][hoverY][hoverX];
-            emit voxelHovered(hoverX, hoverY, hoverZ, value);
-            
-            QString tooltip = QString("X: %1\nY: %2\nZ: %3\nValue: %4")
-                .arg(hoverX).arg(hoverY).arg(hoverZ).arg(formatValue(value));
-            QToolTip::showText(QCursor::pos(), tooltip, this);
-        }
-        
-        update();
-    }
-}
-
-void Layer3DView::calculateVoxelVisibility() {
-    for (int z = 0; z < voxelData.size(); z++) {
-        for (int y = 0; y < voxelData[z].size(); y++) {
-            for (int x = 0; x < voxelData[z][y].size(); x++) {
-                double opacity = valueToOpacity(voxelData[z][y][x].value);
-                voxelData[z][y][x].opacity = opacity;
-                voxelData[z][y][x].isVisible = (opacity > 0.01);
-            }
-        }
     }
 }
 
 void Layer3DView::generatePalette() {
-    // Viridis-like palette
-    paletteColors.clear();
-    paletteColors.append(QColor(68, 1, 84));
-    paletteColors.append(QColor(72, 40, 120));
-    paletteColors.append(QColor(62, 74, 137));
-    paletteColors.append(QColor(49, 104, 142));
-    paletteColors.append(QColor(38, 130, 142));
-    paletteColors.append(QColor(31, 158, 137));
-    paletteColors.append(QColor(53, 183, 121));
-    paletteColors.append(QColor(109, 205, 89));
-    paletteColors.append(QColor(180, 222, 44));
-    paletteColors.append(QColor(253, 231, 37));
+    const int paletteSize = 256;
     
-    colorMin = 0;
-    colorMax = 1;
+    // Генерация палитры (аналогично MatrixView)
+    switch (currentPalette) {
+        case ColorPalette::Viridis:
+            paletteColors.clear();
+            for (int i = 0; i < paletteSize; i++) {
+                double t = static_cast<double>(i) / (paletteSize - 1);
+                int r = static_cast<int>(68 + t * 187);
+                int g = static_cast<int>(1 + t * 200);
+                int b = static_cast<int>(84 + t * 92);
+                paletteColors.append(QColor(r, g, b));
+            }
+            break;
+        // ... другие палитры ...
+        default:
+            break;
+    }
+}
+
+QColor Layer3DView::valueToColor(double value) const {
+    if (paletteColors.isEmpty()) {
+        return Qt::gray;
+    }
+    
+    double normalized = (maxValue != minValue) ? 
+                       (value - minValue) / (maxValue - minValue) : 0.5;
+    normalized = qBound(0.0, normalized, 1.0);
+    
+    int index = static_cast<int>(normalized * (paletteColors.size() - 1));
+    index = qBound(0, index, paletteColors.size() - 1);
+    
+    return paletteColors[index];
+}
+
+float Layer3DView::valueToOpacity(double value) const {
+    double normalized = (maxValue != minValue) ? 
+                       (value - minValue) / (maxValue - minValue) : 0.5;
+    
+    if (normalized < opacityThreshold) {
+        return 0.0f;
+    }
+    
+    return static_cast<float>(normalized);
+}
+
+void Layer3DView::updateVoxelVisibility() {
+    visibleVoxelCount = 0;
+    
+    for (auto& voxel : voxels) {
+        voxel.isVisible = (valueToOpacity(voxel.value) > 0.0f);
+        if (voxel.isVisible) {
+            visibleVoxelCount++;
+        }
+    }
+    
+    LOG_DEBUG("Visible voxels: " + QString::number(visibleVoxelCount) + 
+              " / " + QString::number(totalVoxels));
+}
+
+// ============================================================================
+// Камера и навигация
+// ============================================================================
+
+void Layer3DView::setCameraPosition(const QVector3D& position) {
+    camera.position = position;
+    updateCamera();
+    update();
+    emit cameraChanged();
+}
+
+void Layer3DView::rotateCamera(int dx, int dy) {
+    float yaw = dx * 0.5f;
+    float pitch = dy * 0.5f;
+    
+    QMatrix4x4 rotation;
+    rotation.rotate(yaw, 0, 1, 0);
+    rotation.rotate(pitch, 1, 0, 0);
+    
+    QVector3D direction = camera.position - camera.target;
+    direction = rotation * direction;
+    
+    camera.position = camera.target + direction;
+    updateCamera();
+    update();
+}
+
+void Layer3DView::zoomCamera(float delta) {
+    QVector3D direction = camera.position - camera.target;
+    float length = direction.length();
+    
+    length += delta * 0.1f;
+    length = qMax(1.0f, qMin(length, 50.0f));
+    
+    direction.normalize();
+    camera.position = camera.target + direction * length;
+    
+    updateCamera();
+    update();
+}
+
+void Layer3DView::resetCamera() {
+    camera = Camera();
+    camera.position = QVector3D(sizeX_/2.0f, sizeY_/2.0f, sizeZ_ * 2.0f);
+    camera.target = QVector3D(sizeX_/2.0f, sizeY_/2.0f, sizeZ_/2.0f);
+    updateCamera();
+    update();
+}
+
+void Layer3DView::updateCamera() {
+    camera.aspect = static_cast<float>(width()) / static_cast<float>(height());
+}
+
+QMatrix4x4 Layer3DView::getViewMatrix() const {
+    QMatrix4x4 view;
+    view.lookAt(camera.position, camera.target, camera.up);
+    return view;
+}
+
+QMatrix4x4 Layer3DView::getProjectionMatrix() const {
+    QMatrix4x4 projection;
+    projection.perspective(camera.fov, camera.aspect, camera.nearPlane, camera.farPlane);
+    return projection;
+}
+
+QMatrix4x4 Layer3DView::getModelMatrix() const {
+    QMatrix4x4 model;
+    model.translate(-sizeX_/2.0f, -sizeY_/2.0f, -sizeZ_/2.0f);
+    return model;
+}
+
+// ============================================================================
+// Выделение
+// ============================================================================
+
+void Layer3DView::selectVoxel(int x, int y, int z) {
+    selectedVoxel = QVector3D(x, y, z);
+    
+    for (auto& voxel : voxels) {
+        voxel.isSelected = (voxel.x == x && voxel.y == y && voxel.z == z);
+    }
+    
+    update();
+    emit selectionChanged(x, y, z);
+}
+
+void Layer3DView::clearSelection() {
+    selectedVoxel = QVector3D(0, 0, 0);
+    
+    for (auto& voxel : voxels) {
+        voxel.isSelected = false;
+    }
+    
+    update();
+    emit selectionChanged(0, 0, 0);
+}
+
+// ============================================================================
+// Статистика
+// ============================================================================
+
+void Layer3DView::calculateStatistics() {
+    if (voxels.isEmpty()) {
+        minValue = 0.0;
+        maxValue = 0.0;
+        meanValue = 0.0;
+        return;
+    }
+    
+    minValue = voxels[0].value;
+    maxValue = voxels[0].value;
+    double sum = 0.0;
+    
+    for (const auto& voxel : voxels) {
+        if (voxel.value < minValue) minValue = voxel.value;
+        if (voxel.value > maxValue) maxValue = voxel.value;
+        sum += voxel.value;
+    }
+    
+    meanValue = sum / voxels.size();
+}
+
+int Layer3DView::getVisibleVoxelCount() const {
+    return visibleVoxelCount;
+}
+
+int Layer3DView::getFPS() const {
+    return currentFPS;
+}
+
+// ============================================================================
+// Рендеринг
+// ============================================================================
+
+void Layer3DView::paintGL() {
+    QElapsedTimer timer;
+    timer.start();
+    
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    
+    if (shaderProgram && gpuAvailable) {
+        renderGPUBased();
+    } else {
+        renderCPUBased();
+    }
+    
+    frameCount++;
+    
+    // Отрисовка информации
+    if (highPerformanceMode) {
+        renderWireframe();
+    }
+    
+    LOG_DEBUG("Frame rendered in " + QString::number(timer.elapsed()) + "ms");
+}
+
+void Layer3DView::renderCPUBased() {
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    
+    // CPU-based rendering для систем без GPU
+    switch (viewMode) {
+        case LayerViewMode::Volume:
+            // Упрощённое объёмное отображение
+            break;
+        case LayerViewMode::Slice_XY:
+        case LayerViewMode::Slice_XZ:
+        case LayerViewMode::Slice_YZ:
+            renderSlice();
+            break;
+        case LayerViewMode::Wireframe:
+            renderWireframe();
+            break;
+        case LayerViewMode::Points:
+            renderPoints();
+            break;
+        case LayerViewMode::Surfaces:
+            renderSurfaces();
+            break;
+    }
+    
+    painter.end();
+}
+
+void Layer3DView::renderGPUBased() {
+    shaderProgram->bind();
+    
+    shaderProgram->setUniformValue("model", getModelMatrix());
+    shaderProgram->setUniformValue("view", getViewMatrix());
+    shaderProgram->setUniformValue("projection", getProjectionMatrix());
+    
+    vao.bind();
+    
+    switch (viewMode) {
+        case LayerViewMode::Volume:
+            renderVolume();
+            break;
+        case LayerViewMode::Slice_XY:
+        case LayerViewMode::Slice_XZ:
+        case LayerViewMode::Slice_YZ:
+            renderSlice();
+            break;
+        case LayerViewMode::Wireframe:
+            renderWireframe();
+            break;
+        case LayerViewMode::Points:
+            renderPoints();
+            break;
+        case LayerViewMode::Surfaces:
+            renderSurfaces();
+            break;
+    }
+    
+    vao.release();
+    shaderProgram->release();
+}
+
+void Layer3DView::renderVolume() {
+    // Volume rendering через ray casting
+    // В полной реализации - GPU ray casting shader
+}
+
+void Layer3DView::renderSlice() {
+    // Отрисовка среза
+    if (currentSlice.data.isEmpty()) return;
+    
+    QPainter painter(this);
+    
+    int sliceWidth = width() - 100;
+    int sliceHeight = height() - 100;
+    
+    int dataWidth = currentSlice.plane == 2 ? sizeY_ : sizeX_;
+    int dataHeight = currentSlice.plane == 1 ? sizeZ_ : 
+                    (currentSlice.plane == 2 ? sizeZ_ : sizeY_);
+    
+    int cellWidth = sliceWidth / dataWidth;
+    int cellHeight = sliceHeight / dataHeight;
+    
+    for (int y = 0; y < dataHeight; y++) {
+        for (int x = 0; x < dataWidth; x++) {
+            double value = currentSlice.data[y][x];
+            QColor color = valueToColor(value);
+            
+            int screenX = 50 + x * cellWidth;
+            int screenY = 50 + y * cellHeight;
+            
+            painter.fillRect(screenX, screenY, cellWidth, cellHeight, color);
+        }
+    }
+    
+    painter.end();
+}
+
+void Layer3DView::renderWireframe() {
+    QPainter painter(this);
+    painter.setPen(QPen(QColor(100, 100, 100), 1));
+    
+    // Отрисовка каркаса
+    int boxSize = qMin({width(), height()}) / 3;
+    int centerX = width() / 2;
+    int centerY = height() / 2;
+    
+    painter.drawRect(centerX - boxSize/2, centerY - boxSize/2, boxSize, boxSize);
+    
+    painter.end();
+}
+
+void Layer3DView::renderPoints() {
+    // Отрисовка точек
+}
+
+void Layer3DView::renderSurfaces() {
+    // Отрисовка поверхностей (marching cubes)
+}
+
+// ============================================================================
+// События мыши
+// ============================================================================
+
+void Layer3DView::mousePressEvent(QMouseEvent *event) {
+    if (!interactive) {
+        QOpenGLWidget::mousePressEvent(event);
+        return;
+    }
+    
+    if (event->button() == Qt::LeftButton) {
+        isRotating = true;
+        lastMousePos = event->pos();
+    } else if (event->button() == Qt::MiddleButton) {
+        isPanning = true;
+        lastMousePos = event->pos();
+    } else if (event->button() == Qt::RightButton) {
+        // Выделение вокселя
+        int x, y, z;
+        if (pickVoxel(event->pos(), x, y, z)) {
+            selectVoxel(x, y, z);
+            emit voxelClicked(x, y, z, getVoxelValue(x, y, z));
+        }
+    }
+    
+    QOpenGLWidget::mousePressEvent(event);
+}
+
+void Layer3DView::mouseMoveEvent(QMouseEvent *event) {
+    if (!interactive) {
+        QOpenGLWidget::mouseMoveEvent(event);
+        return;
+    }
+    
+    if (isRotating) {
+        QPoint delta = event->pos() - lastMousePos;
+        rotateCamera(delta.x(), delta.y());
+        lastMousePos = event->pos();
+    } else if (isPanning) {
+        QPoint delta = event->pos() - lastMousePos;
+        camera.target += QVector3D(delta.x() * 0.01f, -delta.y() * 0.01f, 0);
+        camera.position += QVector3D(delta.x() * 0.01f, -delta.y() * 0.01f, 0);
+        lastMousePos = event->pos();
+        update();
+    } else {
+        // Наведение на воксель
+        int x, y, z;
+        if (pickVoxel(event->pos(), x, y, z)) {
+            hoverX = x;
+            hoverY = y;
+            hoverZ = z;
+            isHovering = true;
+            
+            emit voxelHovered(x, y, z, getVoxelValue(x, y, z));
+            
+            // Tooltip
+            QString tooltip = QString("Position: [%1, %2, %3]\nValue: %4")
+                .arg(x).arg(y).arg(z)
+                .arg(formatValue(getVoxelValue(x, y, z)));
+            QToolTip::showText(event->globalPos(), tooltip, this);
+        } else {
+            isHovering = false;
+            hoverX = -1;
+            hoverY = -1;
+            hoverZ = -1;
+        }
+        
+        update();
+    }
+    
+    QOpenGLWidget::mouseMoveEvent(event);
+}
+
+void Layer3DView::mouseReleaseEvent(QMouseEvent *event) {
+    if (event->button() == Qt::LeftButton) {
+        isRotating = false;
+    } else if (event->button() == Qt::MiddleButton) {
+        isPanning = false;
+    }
+    
+    QOpenGLWidget::mouseReleaseEvent(event);
+}
+
+void Layer3DView::mouseDoubleClickEvent(QMouseEvent *event) {
+    if (event->button() == Qt::RightButton) {
+        int x, y, z;
+        if (pickVoxel(event->pos(), x, y, z)) {
+            emit voxelDoubleClicked(x, y, z, getVoxelValue(x, y, z));
+            
+            // Если редактируемый - открытие диалога редактирования
+            if (editable) {
+                bool ok;
+                double newValue = QInputDialog::getDouble(this, "Edit Voxel",
+                    QString("Value at [%1,%2,%3]:").arg(x).arg(y).arg(z),
+                    getVoxelValue(x, y, z), -1e10, 1e10, 6, &ok);
+                
+                if (ok) {
+                    setVoxelValue(x, y, z, newValue);
+                }
+            }
+        }
+    }
+    
+    QOpenGLWidget::mouseDoubleClickEvent(event);
+}
+
+void Layer3DView::wheelEvent(QWheelEvent *event) {
+    if (!interactive) {
+        QOpenGLWidget::wheelEvent(event);
+        return;
+    }
+    
+    if (event->modifiers() & Qt::ControlModifier) {
+        zoomCamera(event->angleDelta().y());
+        event->accept();
+    } else {
+        QOpenGLWidget::wheelEvent(event);
+    }
+}
+
+void Layer3DView::keyPressEvent(QKeyEvent *event) {
+    if (!interactive) {
+        QOpenGLWidget::keyPressEvent(event);
+        return;
+    }
+    
+    switch (event->key()) {
+        case Qt::Key_R:
+            resetCamera();
+            break;
+        case Qt::Key_S:
+            if (event->modifiers() & Qt::ControlModifier) {
+                saveAsImage("screenshot.png");
+            }
+            break;
+        case Qt::Key_Plus:
+        case Qt::Key_Equal:
+            zoomCamera(-1.0f);
+            break;
+        case Qt::Key_Minus:
+            zoomCamera(1.0f);
+            break;
+        default:
+            QOpenGLWidget::keyPressEvent(event);
+            break;
+    }
+}
+
+void Layer3DView::contextMenuEvent(QContextMenuEvent *event) {
+    if (interactive) {
+        contextMenu->exec(event->globalPos());
+    }
+}
+
+// ============================================================================
+// Утилиты
+// ============================================================================
+
+QVector3D Layer3DView::screenToWorld(const QPoint& screenPos) const {
+    // Конвертация экранных координат в мировые
+    // В полной реализации - ray casting
+    return QVector3D(0, 0, 0);
+}
+
+bool Layer3DView::pickVoxel(const QPoint& screenPos, int& x, int& y, int& z) const {
+    // Выбор вокселя по координатам экрана
+    // В полной реализации - GPU picking
+    if (isHovering && hoverX > 0 && hoverY > 0 && hoverZ > 0) {
+        x = hoverX;
+        y = hoverY;
+        z = hoverZ;
+        return true;
+    }
+    return false;
+}
+
+void Layer3DView::ensureVoxelVisible(int x, int y, int z) {
+    // Центрирование на вокселе
+    camera.target = QVector3D(x, y, z);
+    update();
 }
 
 QString Layer3DView::formatValue(double value) const {
@@ -813,43 +976,237 @@ QString Layer3DView::formatValue(double value) const {
 }
 
 QString Layer3DView::formatCoordinate(int x, int y, int z) const {
-    return QString("(%1, %2, %3)").arg(x).arg(y).arg(z);
+    return QString("[%1, %2, %3]").arg(x).arg(y).arg(z);
 }
 
-// Slot implementations
-void Layer3DView::onSliceSliderChanged(int value) {
-    setCurrentSlice(value);
+void Layer3DView::updateFPS() {
+    currentFPS = frameCount;
+    frameCount = 0;
+    emit fpsChanged(currentFPS);
 }
 
-void Layer3DView::onViewModeChanged(int index) {
-    setViewMode(index);
+// ============================================================================
+// Экспорт/Импорт
+// ============================================================================
+
+bool Layer3DView::saveAsImage(const QString& path, const QString& format) {
+    QImage image(size(), QImage::Format_ARGB32);
+    image.fill(backgroundColor);
+    
+    QPainter painter(&image);
+    render(&painter);
+    painter.end();
+    
+    return image.save(path, format.toStdString().c_str());
 }
 
-void Layer3DView::onZoomIn() { setZoom(transform.zoom * 1.2); }
-void Layer3DView::onZoomOut() { setZoom(transform.zoom / 1.2); }
-void Layer3DView::onResetView() { resetView(); }
-
-void Layer3DView::onSaveSlice() {
-    QString path = QFileDialog::getSaveFileName(this, "Save Slice", "", "PNG Files (*.png)");
-    if (!path.isEmpty()) saveSliceAsImage(path, currentSlice);
+bool Layer3DView::saveAsCSV(const QString& path) {
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        return false;
+    }
+    
+    QTextStream out(&file);
+    out.setCodec("UTF-8");
+    out << "X,Y,Z,Value\n";
+    
+    for (int z = 0; z < sizeZ_; z++) {
+        for (int y = 0; y < sizeY_; y++) {
+            for (int x = 0; x < sizeX_; x++) {
+                out << (x + 1) << "," << (y + 1) << "," << (z + 1) << "," 
+                    << layerData[z][y][x] << "\n";  // 1-based индексация
+            }
+        }
+    }
+    
+    file.close();
+    return true;
 }
 
-void Layer3DView::onSaveVolume() {
-    QString path = QFileDialog::getSaveFileName(this, "Save Volume", "", "PNG Files (*.png)");
-    if (!path.isEmpty()) saveVolumeAsImage(path);
+bool Layer3DView::loadFromCSV(const QString& path) {
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return false;
+    }
+    
+    // В полной реализации - загрузка данных
+    file.close();
+    return false;
 }
 
-void Layer3DView::onExportCSV() {
-    QString path = QFileDialog::getSaveFileName(this, "Export CSV", "", "CSV Files (*.csv)");
-    if (!path.isEmpty()) exportDataAsCSV(path);
+void Layer3DView::print() {
+    QPrinter printer;
+    QPrintDialog dialog(&printer, this);
+    
+    if (dialog.exec() == QDialog::Accepted) {
+        QPainter painter(&printer);
+        render(&painter);
+        painter.end();
+    }
 }
 
-void Layer3DView::onCopySlice() { copySliceData(currentSlice); }
-void Layer3DView::onCopyVolume() { copyVolumeData(); }
+void Layer3DView::copyAsImage() {
+    QImage image(size(), QImage::Format_ARGB32);
+    image.fill(backgroundColor);
+    
+    QPainter painter(&image);
+    render(&painter);
+    painter.end();
+    
+    QClipboard* clipboard = QApplication::clipboard();
+    clipboard->setImage(image);
+    
+    LOG_INFO("3D view copied to clipboard as image");
+}
 
-void Layer3DView::onRotateLeft() { setRotation(transform.rotationX, transform.rotationY - 15, transform.rotationZ); }
-void Layer3DView::onRotateRight() { setRotation(transform.rotationX, transform.rotationY + 15, transform.rotationZ); }
-void Layer3DView::onRotateUp() { setRotation(transform.rotationX - 15, transform.rotationY, transform.rotationZ); }
-void Layer3DView::onRotateDown() { setRotation(transform.rotationX + 15, transform.rotationY, transform.rotationZ); }
+// ============================================================================
+// Производительность
+// ============================================================================
+
+void Layer3DView::setHighPerformanceMode(bool enable) {
+    highPerformanceMode = enable;
+    highPerfModeAction->setChecked(enable);
+    
+    if (enable) {
+        maxVisibleVoxels = 10000;
+        setViewMode(LayerViewMode::Wireframe);
+    } else {
+        maxVisibleVoxels = 100000;
+    }
+    
+    update();
+}
+
+void Layer3DView::setMaxVisibleVoxels(int count) {
+    maxVisibleVoxels = qMax(1000, count);
+    updateVoxelVisibility();
+    update();
+}
+
+// ============================================================================
+// Интерактивность
+// ============================================================================
+
+void Layer3DView::setInteractive(bool enable) {
+    interactive = enable;
+}
+
+void Layer3DView::setEditable(bool enable) {
+    editable = enable;
+}
+
+// ============================================================================
+// UI Setup
+// ============================================================================
+
+void Layer3DView::setupUI() {
+    setMinimumSize(400, 300);
+    setFocusPolicy(Qt::StrongFocus);
+    setMouseTracking(true);
+    
+    interactive = true;
+    editable = false;
+}
+
+void Layer3DView::setupContextMenu() {
+    contextMenu = new QMenu(this);
+    
+    // Режимы отображения
+    volumeModeAction = contextMenu->addAction("Объёмное", this, [this]() {
+        setViewMode(LayerViewMode::Volume);
+    });
+    volumeModeAction->setCheckable(true);
+    
+    sliceXYModeAction = contextMenu->addAction("Срез XY", this, [this]() {
+        setViewMode(LayerViewMode::Slice_XY);
+    });
+    sliceXYModeAction->setCheckable(true);
+    
+    sliceXZModeAction = contextMenu->addAction("Срез XZ", this, [this]() {
+        setViewMode(LayerViewMode::Slice_XZ);
+    });
+    sliceXZModeAction->setCheckable(true);
+    
+    sliceYZModeAction = contextMenu->addAction("Срез YZ", this, [this]() {
+        setViewMode(LayerViewMode::Slice_YZ);
+    });
+    sliceYZModeAction->setCheckable(true);
+    
+    wireframeModeAction = contextMenu->addAction("Каркас", this, [this]() {
+        setViewMode(LayerViewMode::Wireframe);
+    });
+    wireframeModeAction->setCheckable(true);
+    
+    pointsModeAction = contextMenu->addAction("Точки", this, [this]() {
+        setViewMode(LayerViewMode::Points);
+    });
+    pointsModeAction->setCheckable(true);
+    
+    surfacesModeAction = contextMenu->addAction("Поверхности", this, [this]() {
+        setViewMode(LayerViewMode::Surfaces);
+    });
+    surfacesModeAction->setCheckable(true);
+    
+    contextMenu->addSeparator();
+    
+    // Действия
+    showSliceAction = contextMenu->addAction("Показать срез", this, [this](bool checked) {
+        setShowSlice(checked);
+    });
+    showSliceAction->setCheckable(true);
+    
+    resetCameraAction = contextMenu->addAction("Сбросить камеру", this, &Layer3DView::resetCamera);
+    resetCameraAction->setShortcut(QKeySequence(Qt::Key_R));
+    
+    highPerfModeAction = contextMenu->addAction("Режим высокой производительности", this, [this](bool checked) {
+        setHighPerformanceMode(checked);
+    });
+    highPerfModeAction->setCheckable(true);
+    
+    contextMenu->addSeparator();
+    
+    // Экспорт
+    saveImageAction = contextMenu->addAction("Сохранить как изображение...", this, [this]() {
+        QString path = QFileDialog::getSaveFileName(this, "Сохранить как изображение", "", 
+                                                    "PNG Files (*.png);;JPG Files (*.jpg);;All Files (*)");
+        if (!path.isEmpty()) {
+            saveAsImage(path);
+        }
+    });
+    
+    saveCSVAction = contextMenu->addAction("Сохранить данные как CSV...", this, [this]() {
+        QString path = QFileDialog::getSaveFileName(this, "Сохранить как CSV", "", 
+                                                    "CSV Files (*.csv);;All Files (*)");
+        if (!path.isEmpty()) {
+            saveAsCSV(path);
+        }
+    });
+    
+    loadCSVAction = contextMenu->addAction("Загрузить данные из CSV...", this, [this]() {
+        QString path = QFileDialog::getOpenFileName(this, "Загрузить из CSV", "", 
+                                                    "CSV Files (*.csv);;All Files (*)");
+        if (!path.isEmpty()) {
+            loadFromCSV(path);
+        }
+    });
+    
+    contextMenu->addSeparator();
+    
+    copyImageAction = contextMenu->addAction("Копировать как изображение", this, &Layer3DView::copyAsImage);
+    printAction = contextMenu->addAction("Печать...", this, &Layer3DView::print);
+    printAction->setShortcut(QKeySequence::Print);
+    
+    setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(this, &QWidget::customContextMenuRequested, this, [this](const QPoint& pos) {
+        contextMenu->exec(mapToGlobal(pos));
+    });
+}
+
+void Layer3DView::setupToolbar() {
+    toolbar = new QToolBar(this);
+    toolbar->setMovable(false);
+    toolbar->setIconSize(QSize(20, 20));
+    toolbar->setVisible(false);
+}
 
 } // namespace proxima

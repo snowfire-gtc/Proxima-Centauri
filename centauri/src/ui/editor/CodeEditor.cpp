@@ -1,17 +1,131 @@
 #include "CodeEditor.h"
+#include <QTextCursor>
 #include <QTextBlock>
-#include <QPainter>
-#include <QKeyEvent>
+#include <QTextDocument>
+#include <QScrollBar>
+#include <QFile>
 #include <QFileInfo>
+#include <QDir>
 #include <QDateTime>
 #include <QMessageBox>
-
-#include "editor/SyntaxHighlighter.h"
+#include <QInputDialog>
+#include <QFileDialog>
+#include <QClipboard>
+#include <QApplication>
+#include <QToolTip>
+#include <QCompleter>
+#include <QAbstractItemView>
+#include <QTimer>
+#include <QMenu>
+#include <QAction>
+#include <QShortcut>
+#include <QKeySequence>
+#include <QPainter>
+#include <QPaintEvent>
+#include <QResizeEvent>
+#include <QKeyEvent>
+#include <QFocusEvent>
+#include <QContextMenuEvent>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QWheelEvent>
+#include <QMimeData>
+#include <QUrl>
+#include <QBuffer>
+#include <QByteArray>
+#include <QRegularExpression>
+#include <QRegularExpressionMatch>
+#include <QRegularExpressionMatchIterator>
+#include <QXmlStreamReader>
+#include <QXmlStreamWriter>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QStandardPaths>
+#include <QDesktopServices>
+#include <QProcess>
+#include <QThread>
+#include <QMutex>
+#include <QWaitCondition>
+#include <QSemaphore>
+#include <QReadWriteLock>
+#include <QAtomicInt>
+#include <QAtomicPointer>
+#include <QScopedPointer>
+#include <QSharedPointer>
+#include <QWeakPointer>
+#include <QExplicitlySharedDataPointer>
+#include <QImplicitlySharedDataPointer>
+#include <QDataStream>
+#include <QDebug>
+#include <QElapsedTimer>
+#include <QQueue>
+#include <QSet>
+#include <QHash>
+#include <QMultiHash>
+#include <QMultiMap>
+#include <QPair>
+#include <QTuple>
+#include <QTypeInfo>
+#include <QMetaType>
+#include <QMetaObject>
+#include <QMetaProperty>
+#include <QMetaEnum>
+#include <QMetaMethod>
+#include <QMetaClassInfo>
+#include <QScriptEngine>
+#include <QScriptValue>
+#include <QScriptValueIterator>
+#include <QScriptable>
+#include <QScriptContext>
+#include <QScriptContextInfo>
+#include <QSyntaxHighlighter>
+#include <QTextCharFormat>
+#include <QTextBlockFormat>
+#include <QTextListFormat>
+#include <QTextTableFormat>
+#include <QTextFrameFormat>
+#include <QTextImageFormat>
+#include <QTextObject>
+#include <QTextObjectInterface>
+#include <QAbstractTextDocumentLayout>
+#include <QTextDocumentFragment>
+#include <QTextDocumentWriter>
+#include <QPdfWriter>
+#include <QPrinter>
+#include <QPrintDialog>
+#include <QPrintPreviewDialog>
+#include <QPrintPreviewWidget>
+#include <QPageSetupDialog>
+#include <QFontInfo>
+#include <QFontMetrics>
+#include <QFontDatabase>
+#include <QStyle>
+#include <QStyleFactory>
+#include <QStylePainter>
+#include <QStyleOption>
+#include <QVariantAnimation>
+#include <QPropertyAnimation>
+#include <QSequentialAnimationGroup>
+#include <QParallelAnimationGroup>
+#include <QPauseAnimation>
+#include <QEasingCurve>
+#include <QGraphicsEffect>
+#include <QGraphicsBlurEffect>
+#include <QGraphicsDropShadowEffect>
+#include <QGraphicsOpacityEffect>
+#include <QGraphicsColorizeEffect>
 
 namespace proxima {
 
+// ============================================================================
+// LineNumberArea Implementation
+// ============================================================================
+
 LineNumberArea::LineNumberArea(CodeEditor *editor)
-    : QWidget(editor), editor(editor) {}
+    : QWidget(editor)
+    , editor(editor) {
+}
 
 QSize LineNumberArea::sizeHint() const {
     return QSize(editor->lineNumberAreaWidth(), 0);
@@ -21,75 +135,240 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
     editor->lineNumberAreaPaintEvent(event);
 }
 
+// ============================================================================
+// Конструктор/Деструктор
+// ============================================================================
+
 CodeEditor::CodeEditor(QWidget *parent)
     : QPlainTextEdit(parent)
+    , lineNumberArea(nullptr)
+    , highlighter(nullptr)
+    , foldingManager(nullptr)
     , modified(false)
     , displayMode(DisplayMode::Standard)
-    , currentExecutionLine(-1) {
+    , currentExecutionLine(-1)
+    , foldTimer(nullptr)
+    , autoCompletionEnabled(true)
+    , completionPopup(nullptr)
+    , showLineNumbers(true)
+    , showWhitespace(false)
+    , showIndentGuides(true)
+    , highlightCurrentLine(true)
+    , wordWrap(false)
+    , wordCount(0) {
 
     setupEditor();
+    setupConnections();
+    setupShortcuts();
+    setupContextMenu();
 
+    LOG_DEBUG("CodeEditor created");
+}
+
+CodeEditor::~CodeEditor() {
+    LOG_DEBUG("CodeEditor destroyed");
+}
+
+// ============================================================================
+// Настройка редактора
+// ============================================================================
+
+void CodeEditor::setupEditor() {
+    // Настройка шрифта
+    QFont font("Consolas", 11);
+    font.setStyleHint(QFont::Monospace);
+    font.setFixedPitch(true);
+    setFont(font);
+
+    // Настройка табов (4 пробела)
+    setTabStopDistance(4 * QFontMetrics(font).horizontalAdvance(' '));
+
+    // Настройка переноса слов
+    setLineWrapMode(wordWrap ? QPlainTextEdit::WidgetWidth : QPlainTextEdit::NoWrap);
+
+    // Создание области номеров строк
     lineNumberArea = new LineNumberArea(this);
 
+    // Создание подсветки синтаксиса
+    highlighter = new SyntaxHighlighter(document());
+
+    // Создание менеджера сворачивания
+    foldingManager = &CodeFoldingManager::getInstance();
+    foldingManager->initialize(document());
+
+    // Создание popup автодополнения
+    completionPopup = new QListWidget(this);
+    completionPopup->setWindowFlags(Qt::Popup | Qt::FramelessWindowHint);
+    completionPopup->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    completionPopup->setSelectionBehavior(QAbstractItemView::SelectRows);
+    completionPopup->setSelectionMode(QAbstractItemView::SingleSelection);
+    completionPopup->setVisible(false);
+
+    connect(completionPopup, &QListWidget::itemActivated, this, [this](QListWidgetItem* item) {
+        insertCompletion(item->text());
+    });
+
+    // Таймер для анализа сворачивания
+    foldTimer = new QTimer(this);
+    foldTimer->setSingleShot(true);
+    foldTimer->setInterval(500);
+    connect(foldTimer, &QTimer::timeout, this, &CodeEditor::onFoldTimerTimeout);
+
+    // Обновление ширины области номеров строк
+    updateLineNumberAreaWidth(0);
+
+    // Подсветка текущей строки
+    highlightCurrentLine();
+
+    // Стиль редактора
+    setStyleSheet(
+        "QPlainTextEdit { "
+        "  background-color: #1e1e1e; "
+        "  color: #d4d4d4; "
+        "  selection-background-color: #264f78; "
+        "  selection-color: #ffffff; "
+        "}"
+    );
+}
+
+void CodeEditor::setupConnections() {
     connect(this, &CodeEditor::blockCountChanged,
             this, &CodeEditor::updateLineNumberAreaWidth);
     connect(this, &CodeEditor::updateRequest,
             this, &CodeEditor::updateLineNumberArea);
     connect(this, &CodeEditor::cursorPositionChanged,
             this, &CodeEditor::highlightCurrentLine);
-
-    updateLineNumberAreaWidth(0);
-    highlightCurrentLine();
+    connect(this, &CodeEditor::cursorPositionChanged, this, [this]() {
+        emit cursorPositionChanged(getCurrentLine(), getCurrentColumn());
+    });
+    connect(this, &CodeEditor::modificationChanged, this, [this](bool m) {
+        modified = m;
+        emit fileModified(m);
+    });
+    connect(this, &CodeEditor::textChanged, this, [this]() {
+        foldTimer->start();
+        wordCount = 0; // Сброс для пересчёта
+    });
 }
 
-CodeEditor::~CodeEditor() {}
-
-void CodeEditor::setupEditor() {
-    // Set font
-    QFont font("Consolas", 11);
-    font.setStyleHint(QFont::Monospace);
-    setFont(font);
-
-    // Set tab width
-    setTabStopDistance(4 * fontMetrics().horizontalAdvance(' '));
-
-    // Enable line wrapping option
-    // setLineWrapMode(LineWrapMode::NoWrap);
-
-    // Создание подсветки синтаксиса
-    syntaxHighlighter = new SyntaxHighlighter(document());
-    syntaxHighlighter->setFilePath(filePath);
-
-    // Подключение к изменениям режима отображения
-    connect(this, &CodeEditor::displayModeChanged, syntaxHighlighter,
-            [this](DisplayMode mode) {
-        syntaxHighlighter->setDisplayMode(mode);
+void CodeEditor::setupShortcuts() {
+    // F9 - переключение точки останова
+    QShortcut* breakpointShortcut = new QShortcut(QKeySequence(Qt::Key_F9), this);
+    connect(breakpointShortcut, &QShortcut::activated, this, [this]() {
+        toggleBreakpoint(getCurrentLine());
     });
 
-    // Set line number area color
-    setStyleSheet("QPlainTextEdit { background-color: #1e1e1e; color: #d4d4d4; }");
+    // Ctrl+Space - автодополнение
+    QShortcut* completionShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Space), this);
+    connect(completionShortcut, &QShortcut::activated, this, &CodeEditor::triggerAutoCompletion);
 
-    // Connect to folding manager
-    CodeFoldingManager::getInstance().connectToEditor(this);
-    CodeFoldingManager::getInstance().initialize(document());
+    // Ctrl+I - отступ
+    QShortcut* indentShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_I), this);
+    connect(indentShortcut, &QShortcut::activated, this, &CodeEditor::indentSelection);
 
-    // Connect folding signals
-    connect(&CodeFoldingManager::getInstance(), &CodeFoldingManager::foldStateChanged,
-            this, &CodeEditor::onFoldStateChanged);
-    connect(&CodeFoldingManager::getInstance(), &CodeFoldingManager::visibilityChanged,
-            this, &CodeEditor::onVisibilityChanged);
+    // Ctrl+U - убрать отступ
+    QShortcut* unindentShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_U), this);
+    connect(unindentShortcut, &QShortcut::activated, this, &CodeEditor::unindentSelection);
 
-    // Connect to snippet manager
-    SnippetManager::getInstance().setDocument(document());
+    // Ctrl+/ - закомментировать
+    QShortcut* commentShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Slash), this);
+    connect(commentShortcut, &QShortcut::activated, this, &CodeEditor::commentSelection);
 
-    // Connect snippet signals
-    connect(&SnippetManager::getInstance(), &SnippetManager::sessionStarted,
-            this, &CodeEditor::onSnippetSessionStarted);
-    connect(&SnippetManager::getInstance(), &SnippetManager::sessionEnded,
-            this, &CodeEditor::onSnippetSessionEnded);
-    connect(&SnippetManager::getInstance(), &SnippetManager::placeholderNavigated,
-            this, &CodeEditor::onPlaceholderNavigated);
+    // Ctrl+Shift+/ - раскомментировать
+    QShortcut* uncommentShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Slash), this);
+    connect(uncommentShortcut, &QShortcut::activated, this, &CodeEditor::uncommentSelection);
+
+    // Ctrl+D - дублировать строку
+    QShortcut* duplicateShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_D), this);
+    connect(duplicateShortcut, &QShortcut::activated, this, &CodeEditor::duplicateLine);
+
+    // Ctrl+L - удалить строку
+    QShortcut* deleteLineShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_L), this);
+    connect(deleteLineShortcut, &QShortcut::activated, this, &CodeEditor::deleteLine);
+
+    // Alt+Up - переместить строку вверх
+    QShortcut* moveUpShortcut = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_Up), this);
+    connect(moveUpShortcut, &QShortcut::activated, this, &CodeEditor::moveLineUp);
+
+    // Alt+Down - переместить строку вниз
+    QShortcut* moveDownShortcut = new QShortcut(QKeySequence(Qt::ALT | Qt::Key_Down), this);
+    connect(moveDownShortcut, &QShortcut::activated, this, &CodeEditor::moveLineDown);
+
+    // Ctrl+Shift+F - форматировать код
+    QShortcut* formatShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_F), this);
+    connect(formatShortcut, &QShortcut::activated, this, &CodeEditor::formatCode);
+
+    // Ctrl+M - свернуть все
+    QShortcut* foldAllShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_M), this);
+    connect(foldAllShortcut, &QShortcut::activated, this, &CodeEditor::foldAll);
+
+    // Ctrl+Shift+M - развернуть все
+    QShortcut* unfoldAllShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M), this);
+    connect(unfoldAllShortcut, &QShortcut::activated, this, &CodeEditor::unfoldAll);
 }
+
+void CodeEditor::setupContextMenu() {
+    contextMenu = new QMenu(this);
+
+    undoAction = contextMenu->addAction("Отменить", this, &CodeEditor::undo);
+    undoAction->setShortcut(QKeySequence::Undo);
+
+    redoAction = contextMenu->addAction("Повторить", this, &CodeEditor::redo);
+    redoAction->setShortcut(QKeySequence::Redo);
+
+    contextMenu->addSeparator();
+
+    cutAction = contextMenu->addAction("Вырезать", this, &CodeEditor::cut);
+    cutAction->setShortcut(QKeySequence::Cut);
+
+    copyAction = contextMenu->addAction("Копировать", this, &CodeEditor::copy);
+    copyAction->setShortcut(QKeySequence::Copy);
+
+    pasteAction = contextMenu->addAction("Вставить", this, &CodeEditor::paste);
+    pasteAction->setShortcut(QKeySequence::Paste);
+
+    selectAllAction = contextMenu->addAction("Выделить всё", this, &CodeEditor::selectAll);
+    selectAllAction->setShortcut(QKeySequence::SelectAll);
+
+    contextMenu->addSeparator();
+
+    commentAction = contextMenu->addAction("Закомментировать", this, &CodeEditor::commentSelection);
+    uncommentAction = contextMenu->addAction("Раскомментировать", this, &CodeEditor::uncommentSelection);
+
+    contextMenu->addSeparator();
+
+    indentAction = contextMenu->addAction("Увеличить отступ", this, &CodeEditor::indentSelection);
+    unindentAction = contextMenu->addAction("Уменьшить отступ", this, &CodeEditor::unindentSelection);
+
+    contextMenu->addSeparator();
+
+    duplicateLineAction = contextMenu->addAction("Дублировать строку", this, &CodeEditor::duplicateLine);
+    deleteLineAction = contextMenu->addAction("Удалить строку", this, &CodeEditor::deleteLine);
+
+    contextMenu->addSeparator();
+
+    formatCodeAction = contextMenu->addAction("Форматировать код", this, &CodeEditor::formatCode);
+
+    contextMenu->addSeparator();
+
+    toggleBreakpointAction = contextMenu->addAction("Точка останова", this, [this]() {
+        toggleBreakpoint(getCurrentLine());
+    });
+
+    contextMenu->addSeparator();
+
+    foldAllAction = contextMenu->addAction("Свернуть всё", this, &CodeEditor::foldAll);
+    unfoldAllAction = contextMenu->addAction("Развернуть всё", this, &CodeEditor::unfoldAll);
+
+    setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(this, &CodeEditor::customContextMenuRequested, this, [this](const QPoint& pos) {
+        contextMenu->exec(mapToGlobal(pos));
+    });
+}
+
+// ============================================================================
+// Операции с файлами
+// ============================================================================
 
 bool CodeEditor::loadFile(const QString& path) {
     QFile file(path);
@@ -99,31 +378,40 @@ bool CodeEditor::loadFile(const QString& path) {
     }
 
     QTextStream in(&file);
+    in.setCodec("UTF-8");
     setPlainText(in.readAll());
     file.close();
 
     filePath = path;
     modified = false;
-    clearBreakpoints();
+    setModified(false);
 
-    // Обновление пути для подсветки
-    if (syntaxHighlighter) {
-        syntaxHighlighter->setFilePath(path);
+    // Обновление подсветки
+    if (highlighter) {
+        highlighter->setFilePath(path);
+        highlighter->rehighlight();
     }
 
-    // Load fold state after loading file
-    CodeFoldingManager::getInstance().loadFoldState(path);
+    // Анализ сворачивания
+    analyzeFoldRegions();
 
+    // Загрузка истории правок из StoryManager
+    StoryManager& storyManager = StoryManager::getInstance();
+    storyManager.loadStory(path);
+
+    // Загрузка информации о возрасте для подсветки
+    if (highlighter) {
+        highlighter->loadAgeInfoFromStory(path);
+    }
+
+    LOG_INFO("File loaded: " + path.toStdString());
     return true;
 }
 
 bool CodeEditor::saveFile() {
     if (filePath.isEmpty()) {
-        // Save as
-        return false;
+        return saveFileAs("");
     }
-
-    CodeFoldingManager::getInstance().saveFoldState(filePath);
 
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
@@ -132,21 +420,51 @@ bool CodeEditor::saveFile() {
     }
 
     QTextStream out(&file);
+    out.setCodec("UTF-8");
     out << toPlainText();
     file.close();
 
     modified = false;
-    emit fileModified(false);
+    setModified(false);
 
+    LOG_INFO("File saved: " + filePath.toStdString());
     return true;
 }
 
+bool CodeEditor::saveFileAs(const QString& path) {
+    QString fileName = path;
+    if (fileName.isEmpty()) {
+        fileName = QFileDialog::getSaveFileName(this, "Save File", filePath,
+                                                "Proxima Files (*.prx);;All Files (*)");
+    }
+
+    if (fileName.isEmpty()) {
+        return false;
+    }
+
+    filePath = fileName;
+    return saveFile();
+}
+
+void CodeEditor::setModified(bool m) {
+    modified = m;
+    emit fileModified(m);
+}
+
+// ============================================================================
+// Позиция курсора
+// ============================================================================
+
 int CodeEditor::getCurrentLine() const {
-    return textCursor().blockNumber() + 1;
+    return textCursor().blockNumber() + 1;  // 1-based индексация
 }
 
 int CodeEditor::getCurrentColumn() const {
-    return textCursor().columnNumber();
+    return textCursor().columnNumber() + 1;  // 1-based индексация
+}
+
+int CodeEditor::getCurrentPosition() const {
+    return textCursor().position();
 }
 
 void CodeEditor::goToLine(int line) {
@@ -155,139 +473,223 @@ void CodeEditor::goToLine(int line) {
     QTextCursor cursor(document()->findBlockByNumber(line - 1));
     setTextCursor(cursor);
     setFocus();
+    centerCursor();
 }
 
+void CodeEditor::goToPosition(int position) {
+    QTextCursor cursor(document());
+    cursor.setPosition(position);
+    setTextCursor(cursor);
+    setFocus();
+    centerCursor();
+}
+
+void CodeEditor::selectLine(int line) {
+    if (line < 1 || line > blockCount()) return;
+
+    QTextCursor cursor(document()->findBlockByNumber(line - 1));
+    cursor.select(QTextCursor::BlockUnderCursor);
+    setTextCursor(cursor);
+}
+
+void CodeEditor::selectRange(int startLine, int startCol, int endLine, int endCol) {
+    QTextCursor cursor(document());
+    cursor.setPosition(document()->findBlockByNumber(startLine - 1).position() + startCol - 1);
+    cursor.setPosition(document()->findBlockByNumber(endLine - 1).position() + endCol - 1,
+                      QTextCursor::KeepAnchor);
+    setTextCursor(cursor);
+}
+
+// ============================================================================
+// Операции с кодом
+// ============================================================================
+
 QString CodeEditor::getSelectedCode() const {
-    return textCursor().selectedText();
+    return textCursor().selectedText().replace("\u2029", "\n");
 }
 
 QString CodeEditor::getCurrentLineCode() const {
     QTextCursor cursor = textCursor();
     cursor.select(QTextCursor::BlockUnderCursor);
-    return cursor.selectedText();
+    return cursor.selectedText().replace("\u2029", "\n");
+}
+
+QString CodeEditor::getCodeInRange(int startLine, int endLine) const {
+    if (startLine < 1 || endLine > blockCount() || startLine > endLine) {
+        return "";
+    }
+
+    QTextCursor startCursor(document()->findBlockByNumber(startLine - 1));
+    QTextCursor endCursor(document()->findBlockByNumber(endLine - 1));
+    endCursor.select(QTextCursor::BlockUnderCursor);
+
+    startCursor.setPosition(startCursor.position());
+    startCursor.setPosition(endCursor.selectionEnd(), QTextCursor::KeepAnchor);
+
+    return startCursor.selectedText().replace("\u2029", "\n");
 }
 
 int CodeEditor::getSelectionStart() const {
-    return textCursor().selectionStart();
+    return textCursor().selectionStart() + 1;  // 1-based
 }
 
 int CodeEditor::getSelectionEnd() const {
-    return textCursor().selectionEnd();
+    return textCursor().selectionEnd() + 1;  // 1-based
 }
 
 void CodeEditor::formatCode() {
-    // TODO: Implement code formatting
-    // Would use compiler's formatter service
-    highlighter->rehighlight();
+    // В полной реализации - форматирование кода
+    // Для примера - просто переподсветка
+    if (highlighter) {
+        highlighter->rehighlight();
+    }
+
+    emit codeFormatted();
 }
 
-bool CodeEditor::checkAndInsertSnippet() {
+void CodeEditor::indentSelection() {
     QTextCursor cursor = textCursor();
-    QTextBlock block = cursor.block();
-    QString blockText = block.text();
-
-    // Get word before cursor
-    int cursorPosInBlock = cursor.position() - block.position();
-    int wordStart = cursorPosInBlock;
-
-    while (wordStart > 0 &&
-           (blockText[wordStart - 1].isLetterOrNumber() ||
-            blockText[wordStart - 1] == '.' ||
-            blockText[wordStart - 1] == '_')) {
-        wordStart--;
-    }
-
-    QString trigger = blockText.mid(wordStart, cursorPosInBlock - wordStart);
-
-    if (trigger.isEmpty()) {
-        return false;
-    }
-
-    // Check if trigger matches a snippet
-    SnippetDefinition snippet = SnippetManager::getInstance().getSnippet(trigger);
-
-    if (snippet.trigger.isEmpty()) {
-        return false;
-    }
-
-    // Insert snippet
-    cursor.setPosition(block.position() + wordStart);
-    cursor.setPosition(block.position() + cursorPosInBlock, QTextCursor::KeepAnchor);
-    cursor.removeSelectedText();
-
-    int insertPosition = cursor.position();
-
-    SnippetManager::getInstance().startSnippetSession(
-        document(),
-        snippet.content,
-        insertPosition
-    );
-
-    LOG_INFO("Inserted snippet: " + snippet.trigger.toStdString());
-    return true;
-}
-
-void CodeEditor::insertSnippet(const QString& snippetName) {
-    SnippetDefinition snippet = SnippetManager::getInstance().getSnippet(snippetName);
-
-    if (snippet.trigger.isEmpty()) {
-        LOG_WARNING("Snippet not found: " + snippetName.toStdString());
-        return;
-    }
-
-    QTextCursor cursor = textCursor();
-    int insertPosition = cursor.position();
-
-    SnippetManager::getInstance().startSnippetSession(
-        document(),
-        snippet.content,
-        insertPosition
-    );
-}
-
-void CodeEditor::onSnippetSessionStarted(const SnippetSession& session) {
-    // Update UI to show snippet mode
-    statusBar->setMessage(QString("Snippet mode: %1 placeholders").arg(session.placeholders.size()));
-
-    // Show placeholder info
-    if (!session.placeholders.isEmpty()) {
-        QString info = QString("Placeholder %1/%2")
-            .arg(session.currentPlaceholderIndex + 1)
-            .arg(session.placeholders.size());
-
-        QToolTip::showText(QCursor::pos(), info, this);
-    }
-}
-
-void CodeEditor::onSnippetSessionEnded() {
-    // Clear snippet mode UI
-    statusBar->clearMessage();
-    QToolTip::hideText();
-}
-
-void CodeEditor::onPlaceholderNavigated(int currentIndex, int total) {
-    // Update UI with current placeholder info
-    QString info = QString("Placeholder %1/%2")
-        .arg(currentIndex + 1)
-        .arg(total);
-
-    statusBar->setMessage(info);
-
-    // Show tooltip with placeholder info
-    if (currentIndex >= 0 && currentIndex < SnippetManager::getInstance().getCurrentSession().placeholders.size()) {
-        const SnippetPlaceholder& placeholder =
-            SnippetManager::getInstance().getCurrentSession().placeholders[currentIndex];
-
-        QString tooltip = QString("Placeholder #%1\nDefault: %2")
-            .arg(placeholder.id)
-            .arg(placeholder.defaultText);
-
-        QRect rect = SnippetManager::getInstance().getPlaceholderRect(currentIndex);
-        if (rect.isValid()) {
-            QToolTip::showText(mapToGlobal(rect.center()), tooltip, this);
+    if (cursor.hasSelection()) {
+        int start = cursor.selectionStart();
+        int end = cursor.selectionEnd();
+        cursor.setPosition(start);
+        cursor.beginEditBlock();
+        while (cursor.position() < end) {
+            cursor.insertText("    ");
+            end += 4;
+            cursor.setPosition(cursor.block().next().position());
         }
+        cursor.endEditBlock();
     }
 }
+
+void CodeEditor::unindentSelection() {
+    QTextCursor cursor = textCursor();
+    if (cursor.hasSelection()) {
+        int start = cursor.selectionStart();
+        int end = cursor.selectionEnd();
+        cursor.setPosition(start);
+        cursor.beginEditBlock();
+        while (cursor.position() < end) {
+            QString blockText = cursor.block().text();
+            int spaces = 0;
+            while (spaces < blockText.length() && blockText[spaces] == ' ' && spaces < 4) {
+                spaces++;
+            }
+            if (spaces > 0) {
+                cursor.deleteChar();
+                end--;
+            }
+            cursor.setPosition(cursor.block().next().position());
+        }
+        cursor.endEditBlock();
+    }
+}
+
+void CodeEditor::commentSelection() {
+    QTextCursor cursor = textCursor();
+    if (cursor.hasSelection()) {
+        int start = cursor.selectionStart();
+        int end = cursor.selectionEnd();
+        cursor.setPosition(start);
+        cursor.beginEditBlock();
+        while (cursor.position() < end) {
+            cursor.insertText("// ");
+            end += 3;
+            cursor.setPosition(cursor.block().next().position());
+        }
+        cursor.endEditBlock();
+    }
+}
+
+void CodeEditor::uncommentSelection() {
+    QTextCursor cursor = textCursor();
+    if (cursor.hasSelection()) {
+        int start = cursor.selectionStart();
+        int end = cursor.selectionEnd();
+        cursor.setPosition(start);
+        cursor.beginEditBlock();
+        while (cursor.position() < end) {
+            QString blockText = cursor.block().text();
+            if (blockText.trimmed().startsWith("//")) {
+                int pos = cursor.block().position();
+                int commentPos = blockText.indexOf("//");
+                cursor.setPosition(pos + commentPos);
+                cursor.deleteChar();
+                cursor.deleteChar();
+                end -= 2;
+            }
+            cursor.setPosition(cursor.block().next().position());
+        }
+        cursor.endEditBlock();
+    }
+}
+
+void CodeEditor::duplicateLine() {
+    QTextCursor cursor = textCursor();
+    cursor.beginEditBlock();
+    cursor.select(QTextCursor::BlockUnderCursor);
+    QString lineText = cursor.selectedText();
+    cursor.setPosition(cursor.selectionEnd());
+    cursor.insertBlock();
+    cursor.insertText(lineText);
+    cursor.endEditBlock();
+}
+
+void CodeEditor::deleteLine() {
+    QTextCursor cursor = textCursor();
+    cursor.beginEditBlock();
+    cursor.select(QTextCursor::BlockUnderCursor);
+    cursor.removeSelectedText();
+    cursor.deletePreviousChar();
+    cursor.endEditBlock();
+}
+
+void CodeEditor::moveLineUp() {
+    // Перемещение строки вверх
+    int currentLine = getCurrentLine();
+    if (currentLine > 1) {
+        QString lineText = getCurrentLineCode();
+        deleteLine();
+        goToLine(currentLine - 1);
+        QTextCursor cursor = textCursor();
+        cursor.insertBlock();
+        cursor.insertText(lineText);
+        goToLine(currentLine - 1);
+    }
+}
+
+void CodeEditor::moveLineDown() {
+    // Перемещение строки вниз
+    int currentLine = getCurrentLine();
+    if (currentLine < blockCount()) {
+        QString lineText = getCurrentLineCode();
+        deleteLine();
+        goToLine(currentLine + 1);
+        QTextCursor cursor = textCursor();
+        cursor.insertText(lineText);
+        cursor.insertBlock();
+        goToLine(currentLine + 1);
+    }
+}
+
+void CodeEditor::insertSnippet(const QString& snippet) {
+    QTextCursor cursor = textCursor();
+    cursor.insertText(snippet);
+    emit snippetInserted(snippet);
+}
+
+void CodeEditor::surroundWith(const QString& before, const QString& after) {
+    QTextCursor cursor = textCursor();
+    if (cursor.hasSelection()) {
+        QString selectedText = getSelectedCode();
+        cursor.insertText(before + selectedText + after);
+    }
+}
+
+// ============================================================================
+// Точки останова
+// ============================================================================
 
 void CodeEditor::toggleBreakpoint(int line) {
     if (line < 1 || line > blockCount()) return;
@@ -295,10 +697,13 @@ void CodeEditor::toggleBreakpoint(int line) {
     int index = breakpoints.indexOf(line);
     if (index >= 0) {
         breakpoints.removeAt(index);
+        breakpointEnabled.remove(line);
+        breakpointConditions.remove(line);
         emit breakpointToggled(line, false);
     } else {
         breakpoints.append(line);
         std::sort(breakpoints.begin(), breakpoints.end());
+        breakpointEnabled[line] = true;
         emit breakpointToggled(line, true);
     }
 
@@ -311,96 +716,442 @@ bool CodeEditor::hasBreakpoint(int line) const {
 
 void CodeEditor::clearBreakpoints() {
     breakpoints.clear();
+    breakpointEnabled.clear();
+    breakpointConditions.clear();
     viewport()->update();
 }
 
-void CodeEditor::setDisplayMode(DisplayMode mode) {
-    displayMode = mode;
-    emit displayModeChanged(mode);
+void CodeEditor::setBreakpoints(const QVector<int>& bps) {
+    breakpoints = bps;
+    std::sort(breakpoints.begin(), breakpoints.end());
 
-    if (syntaxHighlighter) {
-        syntaxHighlighter->setDisplayMode(mode);
+    for (int bp : breakpoints) {
+        breakpointEnabled[bp] = true;
     }
-    //viewport()->update();
+
+    viewport()->update();
+}
+
+void CodeEditor::setBreakpointEnabled(int line, bool enabled) {
+    if (breakpoints.contains(line)) {
+        breakpointEnabled[line] = enabled;
+        viewport()->update();
+    }
+}
+
+bool CodeEditor::isBreakpointEnabled(int line) const {
+    return breakpointEnabled.value(line, false);
+}
+
+// ============================================================================
+// Режимы отображения
+// ============================================================================
+
+void CodeEditor::setDisplayMode(DisplayMode mode) {
+    if (displayMode != mode) {
+        displayMode = mode;
+        if (highlighter) {
+            highlighter->setDisplayMode(mode);
+            highlighter->rehighlight();
+        }
+        viewport()->update();
+    }
 }
 
 void CodeEditor::applyTypeHighlighting(const QMap<int, QString>& lineTypes) {
     typeHighlights = lineTypes;
-    if (displayMode == DisplayMode::TypeHighlight) {
+    if (displayMode == DisplayMode::TypeHighlight && highlighter) {
+        highlighter->setTypeInfo(lineTypes);
         highlighter->rehighlight();
     }
+    viewport()->update();
 }
 
 void CodeEditor::applyDimensionHighlighting(const QMap<int, QString>& lineDimensions) {
     dimensionHighlights = lineDimensions;
-    if (displayMode == DisplayMode::DimensionHighlight) {
+    if (displayMode == DisplayMode::DimensionHighlight && highlighter) {
+        highlighter->setDimensionInfo(lineDimensions);
         highlighter->rehighlight();
     }
+    viewport()->update();
 }
 
 void CodeEditor::applyTimingHighlighting(const QMap<int, double>& lineTimings) {
     timingHighlights = lineTimings;
-    if (displayMode == DisplayMode::TimingHighlight) {
+    if (displayMode == DisplayMode::TimingHighlight && highlighter) {
+        highlighter->setTimingInfo(lineTimings);
         highlighter->rehighlight();
     }
+    viewport()->update();
 }
 
 void CodeEditor::applyFrequencyHighlighting(const QMap<int, int>& lineFrequencies) {
     frequencyHighlights = lineFrequencies;
-    if (displayMode == DisplayMode::FrequencyHighlight) {
+    if (displayMode == DisplayMode::FrequencyHighlight && highlighter) {
+        highlighter->setFrequencyInfo(lineFrequencies);
         highlighter->rehighlight();
     }
+    viewport()->update();
 }
 
 void CodeEditor::applyGitDiff(const QString& diff) {
     gitDiffData = diff;
-    if (displayMode == DisplayMode::GitDiff) {
+    if (displayMode == DisplayMode::GitDiff && highlighter) {
+        highlighter->setGitDiffInfo(diff);
         highlighter->rehighlight();
     }
+    viewport()->update();
 }
 
 void CodeEditor::applyAuthorHighlighting(const QMap<int, QString>& lineAuthors) {
     authorHighlights = lineAuthors;
-    if (displayMode == DisplayMode::AuthorHighlight) {
+    if (displayMode == DisplayMode::AuthorHighlight && highlighter) {
+        highlighter->setAuthorInfo(lineAuthors);
         highlighter->rehighlight();
     }
+    viewport()->update();
 }
 
 void CodeEditor::applyAgeHighlighting(const QMap<int, QDateTime>& lineAges) {
     ageHighlights = lineAges;
-    if (displayMode == DisplayMode::AgeHighlight) {
+    if (displayMode == DisplayMode::AgeHighlight && highlighter) {
+        highlighter->setAgeInfo(lineAges);
         highlighter->rehighlight();
     }
+    viewport()->update();
 }
 
+// ============================================================================
+// Сворачивание кода
+// ============================================================================
+
 void CodeEditor::toggleFold(int line) {
-    // TODO: Implement code folding
-    // Would need to parse code structure
+    foldingManager->toggleFold(line);
+    updateFoldRegions();
+    viewport()->update();
 }
 
 bool CodeEditor::isFolded(int line) const {
-    return foldedLines.contains(line);
+    return foldedLines.value(line, false);
 }
 
 void CodeEditor::foldAll() {
-    // TODO: Implement fold all
+    foldingManager->foldAll();
+    updateFoldRegions();
+    viewport()->update();
 }
 
 void CodeEditor::unfoldAll() {
-    foldedLines.clear();
+    foldingManager->unfoldAll();
+    updateFoldRegions();
     viewport()->update();
 }
 
-void CodeEditor::setCurrentExecutionLine(int line) {
-    currentExecutionLine = line;
-    goToLine(line);
+void CodeEditor::foldLevel(int level) {
+    foldingManager->foldLevel(level);
+    updateFoldRegions();
     viewport()->update();
+}
+
+void CodeEditor::foldMethods() {
+    foldingManager->foldMethods();
+    updateFoldRegions();
+    viewport()->update();
+}
+
+void CodeEditor::foldClasses() {
+    foldingManager->foldClasses();
+    updateFoldRegions();
+    viewport()->update();
+}
+
+void CodeEditor::foldRegions() {
+    foldingManager->foldRegions();
+    updateFoldRegions();
+    viewport()->update();
+}
+
+void CodeEditor::analyzeFoldRegions() {
+    foldingManager->analyzeDocument();
+    updateFoldRegions();
+}
+
+void CodeEditor::updateFoldRegions() {
+    foldRegions = foldingManager->getFoldRegions();
+
+    foldedLines.clear();
+    for (const FoldRegion& region : foldRegions) {
+        if (region.isFolded) {
+            for (int line = region.startLine + 1; line < region.endLine; line++) {
+                foldedLines[line] = true;
+            }
+        }
+    }
+
+    // Пересчёт видимых строк
+    document()->documentLayout()->invalidate();
+}
+
+bool CodeEditor::isLineVisible(int line) const {
+    return !foldedLines.value(line, false);
+}
+
+int CodeEditor::getFirstVisibleLine() const {
+    for (int line = 1; line <= blockCount(); line++) {
+        if (isLineVisible(line)) {
+            return line;
+        }
+    }
+    return 1;
+}
+
+int CodeEditor::getLastVisibleLine() const {
+    for (int line = blockCount(); line >= 1; line--) {
+        if (isLineVisible(line)) {
+            return line;
+        }
+    }
+    return blockCount();
+}
+
+// ============================================================================
+// Выполнение и отладка
+// ============================================================================
+
+void CodeEditor::setCurrentExecutionLine(int line) {
+    if (currentExecutionLine != line) {
+        currentExecutionLine = line;
+        emit executionLineChanged(line);
+        viewport()->update();
+
+        // Переход к строке выполнения
+        if (line > 0) {
+            goToLine(line);
+        }
+    }
 }
 
 void CodeEditor::clearExecutionLine() {
     currentExecutionLine = -1;
+    emit executionLineChanged(-1);
     viewport()->update();
 }
+
+void CodeEditor::markErrorLine(int line, const QString& message) {
+    if (!errorLines.contains(line)) {
+        errorLines.append(line);
+    }
+    errorMessages[line] = message;
+    viewport()->update();
+}
+
+void CodeEditor::clearErrorLines() {
+    errorLines.clear();
+    errorMessages.clear();
+    viewport()->update();
+}
+
+void CodeEditor::markWarningLine(int line, const QString& message) {
+    if (!warningLines.contains(line)) {
+        warningLines.append(line);
+    }
+    warningMessages[line] = message;
+    viewport()->update();
+}
+
+void CodeEditor::clearWarningLines() {
+    warningLines.clear();
+    warningMessages.clear();
+    viewport()->update();
+}
+
+// ============================================================================
+// Визуализация
+// ============================================================================
+
+void CodeEditor::showArrayVisualization(const QString& varName, const RuntimeValue& value) {
+    emit visualizationRequested(varName);
+    // В полной реализации - открытие VectorPlot
+}
+
+void CodeEditor::showMatrixVisualization(const QString& varName, const RuntimeValue& value) {
+    emit visualizationRequested(varName);
+    // В полной реализации - открытие MatrixView
+}
+
+void CodeEditor::showLayerVisualization(const QString& varName, const RuntimeValue& value) {
+    emit visualizationRequested(varName);
+    // В полной реализации - открытие Layer3DView
+}
+
+void CodeEditor::showCollectionVisualization(const QString& varName, const RuntimeValue& value) {
+    emit visualizationRequested(varName);
+    // В полной реализации - открытие CollectionTable
+}
+
+void CodeEditor::showObjectVisualization(const QString& varName, const RuntimeValue& value) {
+    emit visualizationRequested(varName);
+    // В полной реализации - открытие ObjectInspector
+}
+
+// ============================================================================
+// Автодополнение
+// ============================================================================
+
+void CodeEditor::setAutoCompletionEnabled(bool enable) {
+    autoCompletionEnabled = enable;
+}
+
+void CodeEditor::triggerAutoCompletion() {
+    if (!autoCompletionEnabled) return;
+    showCompletionPopup();
+}
+
+void CodeEditor::hideCompletionPopup() {
+    if (completionPopup) {
+        completionPopup->hide();
+    }
+}
+
+void CodeEditor::setCompletionItems(const QStringList& items) {
+    completionItems = items;
+    updateCompletionPopup();
+}
+
+void CodeEditor::showCompletionPopup() {
+    if (!autoCompletionEnabled || !completionPopup) return;
+
+    QString prefix = getWordUnderCursor();
+    QStringList suggestions = getCompletionSuggestions(prefix);
+
+    if (suggestions.isEmpty()) {
+        hideCompletionPopup();
+        return;
+    }
+
+    completionPopup->clear();
+    for (const QString& item : suggestions) {
+        completionPopup->addItem(item);
+    }
+
+    updateCompletionPopup();
+    completionPopup->show();
+    completionPopup->setFocus();
+}
+
+void CodeEditor::updateCompletionPopup() {
+    if (!completionPopup || completionPopup->currentRow() < 0) return;
+
+    // Позиционирование popup у курсора
+    QTextCursor cursor = textCursor();
+    QRect cursorRect = this->cursorRect(cursor);
+    QPoint pos = mapToGlobal(cursorRect.bottomLeft());
+
+    completionPopup->move(pos);
+}
+
+QString CodeEditor::getWordUnderCursor() const {
+    QTextCursor cursor = textCursor();
+    cursor.select(QTextCursor::WordUnderCursor);
+    return cursor.selectedText();
+}
+
+QStringList CodeEditor::getCompletionSuggestions(const QString& prefix) const {
+    QStringList suggestions;
+
+    // Ключевые слова Proxima
+    QStringList keywords = {"if", "else", "elseif", "end", "for", "in", "while", "do",
+                           "return", "break", "continue", "class", "interface", "function",
+                           "vector", "matrix", "layer", "collection", "time", "string",
+                           "int", "int32", "int64", "single", "double", "bool", "char"};
+
+    for (const QString& kw : keywords) {
+        if (kw.startsWith(prefix, Qt::CaseInsensitive)) {
+            suggestions.append(kw);
+        }
+    }
+
+    // Переменные из текущего контекста
+    suggestions.append(completionItems);
+
+    suggestions.removeDuplicates();
+    suggestions.sort();
+
+    return suggestions;
+}
+
+void CodeEditor::insertCompletion(const QString& completion) {
+    QTextCursor cursor = textCursor();
+    cursor.select(QTextCursor::WordUnderCursor);
+    cursor.insertText(completion);
+    setTextCursor(cursor);
+    hideCompletionPopup();
+}
+
+// ============================================================================
+// Настройки отображения
+// ============================================================================
+
+void CodeEditor::setShowLineNumbers(bool show) {
+    showLineNumbers = show;
+    updateLineNumberAreaWidth(0);
+}
+
+bool CodeEditor::getShowLineNumbers() const {
+    return showLineNumbers;
+}
+
+void CodeEditor::setShowWhitespace(bool show) {
+    showWhitespace = show;
+    viewport()->update();
+}
+
+bool CodeEditor::getShowWhitespace() const {
+    return showWhitespace;
+}
+
+void CodeEditor::setShowIndentGuides(bool show) {
+    showIndentGuides = show;
+    viewport()->update();
+}
+
+bool CodeEditor::getShowIndentGuides() const {
+    return showIndentGuides;
+}
+
+void CodeEditor::setHighlightCurrentLine(bool highlight) {
+    highlightCurrentLine = highlight;
+    highlightCurrentLine();
+}
+
+bool CodeEditor::getHighlightCurrentLine() const {
+    return highlightCurrentLine;
+}
+
+void CodeEditor::setWordWrap(bool wrap) {
+    wordWrap = wrap;
+    setLineWrapMode(wrap ? QPlainTextEdit::WidgetWidth : QPlainTextEdit::NoWrap);
+}
+
+bool CodeEditor::getWordWrap() const {
+    return wordWrap;
+}
+
+// ============================================================================
+// Статистика
+// ============================================================================
+
+int CodeEditor::getWordCount() const {
+    if (wordCount > 0) return wordCount;
+
+    QString text = toPlainText();
+    wordCount = text.split(QRegularExpression("\\s+"), Qt::SkipEmptyParts).size();
+    return wordCount;
+}
+
+// ============================================================================
+// События
+// ============================================================================
 
 void CodeEditor::resizeEvent(QResizeEvent *event) {
     QPlainTextEdit::resizeEvent(event);
@@ -411,169 +1162,60 @@ void CodeEditor::resizeEvent(QResizeEvent *event) {
 }
 
 void CodeEditor::keyPressEvent(QKeyEvent *event) {
-    // Handle special keys
-    if (event->key() == Qt::Key_F9) {
-        // Toggle breakpoint
-        toggleBreakpoint(getCurrentLine());
-        return;
-    }
-
-    // Snippet navigation
-    if (SnippetManager::getInstance().isSessionActive()) {
-        if (event->key() == Qt::Key_Tab) {
-            if (event->modifiers() & Qt::ShiftModifier) {
-                // Shift+Tab - previous placeholder
-                SnippetManager::getInstance().previousPlaceholder();
-            } else {
-                // Tab - next placeholder
-                SnippetManager::getInstance().nextPlaceholder();
-            }
-            event->accept();
+    // Обработка popup автодополнения
+    if (completionPopup && completionPopup->isVisible()) {
+        if (event->key() == Qt::Key_Up || event->key() == Qt::Key_Down) {
+            QApplication::sendEvent(completionPopup, event);
             return;
         }
-
-        if (event->key() == Qt::Key_Escape) {
-            // Escape - end snippet session
-            SnippetManager::getInstance().endSnippetSession();
-            event->accept();
-            return;
-        }
-    }
-
-   // Check for snippet trigger on Enter/Space
-    if (event->key() == Qt::Key_Tab || event->key() == Qt::Key_Space) {
-        if (checkAndInsertSnippet()) {
-            event->accept();
-            return;
-        }
-    }
-
-    if (event->key() == Qt::Key_Tab) {
-        // Insert spaces instead of tab
-        insertPlainText("    ");
-        return;
-    }
-
-    QPlainTextEdit::keyPressEvent(event);
-}
-
-
-void CodeEditor::mousePressEvent(QMouseEvent *event) {
-    // Check for fold marker click
-    if (event->button() == Qt::LeftButton) {
-        int line = CodeFoldingManager::getInstance().getLineFromMousePos(event->pos());
-        if (line > 0 && CodeFoldingManager::getInstance().isMouseOverFoldMarker(event->pos())) {
-            CodeFoldingManager::getInstance().toggleFold(line);
-            event->accept();
-            return;
-        }
-    }
-
-    QPlainTextEdit::mousePressEvent(event);
-}
-
-void CodeEditor::mouseMoveEvent(QMouseEvent *event) {
-    // Update hover state for fold markers
-    bool wasOverMarker = mouseOverFoldMarker;
-    mouseOverFoldMarker = CodeFoldingManager::getInstance().isMouseOverFoldMarker(event->pos());
-
-    if (wasOverMarker != mouseOverFoldMarker) {
-        viewport()->update();
-
-        if (mouseOverFoldMarker) {
-            int line = CodeFoldingManager::getInstance().getLineFromMousePos(event->pos());
-            QVector<FoldRegion> regions = CodeFoldingManager::getInstance().getFoldRegionsAtLine(line);
-
-            if (!regions.isEmpty()) {
-                QString tooltip = regions[0].name;
-                if (!regions[0].preview.isEmpty()) {
-                    tooltip += "\n" + regions[0].preview;
+        if (event->key() == Qt::Key_Tab || event->key() == Qt::Key_Return) {
+            if (completionPopup->currentRow() >= 0) {
+                QListWidgetItem* item = completionPopup->currentItem();
+                if (item) {
+                    insertCompletion(item->text());
                 }
-                QToolTip::showText(event->globalPos(), tooltip, this);
             }
-        } else {
-            QToolTip::hideText();
+            return;
+        }
+        if (event->key() == Qt::Key_Escape) {
+            hideCompletionPopup();
+            return;
         }
     }
 
-    QPlainTextEdit::mouseMoveEvent(event);
-}
-
-void CodeEditor::keyPressEvent(QKeyEvent *event) {
-    // Folding shortcuts
-    if (event->modifiers() & Qt::ControlModifier) {
-        switch (event->key()) {
-            case Qt::Key_Minus:
-                CodeFoldingManager::getInstance().foldRegion(
-                    getCurrentFoldRegionId());
-                event->accept();
-                return;
-            case Qt::Key_Plus:
-                CodeFoldingManager::getInstance().unfoldRegion(
-                    getCurrentFoldRegionId());
-                event->accept();
-                return;
-            case Qt::Key_0:
-                CodeFoldingManager::getInstance().foldAll();
-                event->accept();
-                return;
-            case Qt::Key_1:
-                CodeFoldingManager::getInstance().unfoldAll();
-                event->accept();
-                return;
-            case Qt::Key_2:
-                CodeFoldingManager::getInstance().foldLevel(1);
-                event->accept();
-                return;
-            case Qt::Key_3:
-                CodeFoldingManager::getInstance().foldLevel(2);
-                event->accept();
-                return;
+    // Обработка Tab
+    if (event->key() == Qt::Key_Tab) {
+        if (!(event->modifiers() & Qt::ControlModifier)) {
+            insertPlainText("    ");
+            event->accept();
+            return;
         }
+    }
+
+    // Обработка Enter
+    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+        QTextCursor cursor = textCursor();
+        QString currentLineText = cursor.block().text();
+
+        // Автоматический отступ на новой строке
+        int indent = 0;
+        for (const QChar& ch : currentLineText) {
+            if (ch == ' ') indent++;
+            else if (ch == '\t') indent += 4;
+            else break;
+        }
+
+        QPlainTextEdit::keyPressEvent(event);
+
+        if (indent > 0) {
+            cursor = textCursor();
+            cursor.insertText(QString(indent, ' '));
+        }
+
+        return;
     }
 
     QPlainTextEdit::keyPressEvent(event);
-}
-
-void CodeEditor::onFoldStateChanged(int regionId, bool isFolded) {
-    // Update editor state
-    viewport()->update();
-
-    // Save fold state
-    if (!filePath.isEmpty()) {
-        CodeFoldingManager::getInstance().saveFoldState(filePath);
-    }
-}
-
-void CodeEditor::onVisibilityChanged(int startLine, int endLine, bool visible) {
-    // Hide/show lines in editor
-    // This would require custom block visibility implementation
-}
-
-int CodeEditor::getCurrentFoldRegionId() const {
-    int line = getCurrentLine();
-    QVector<FoldRegion> regions = CodeFoldingManager::getInstance().getFoldRegionsAtLine(line);
-
-    if (!regions.isEmpty()) {
-        return regions[0].id;
-    }
-    return -1;
-}
-
-void CodeEditor::toggleFold(int line) {
-    CodeFoldingManager::getInstance().toggleFold(line);
-}
-
-bool CodeEditor::isFolded(int line) const {
-    return CodeFoldingManager::getInstance().isLineFolded(line);
-}
-
-void CodeEditor::foldAll() {
-    CodeFoldingManager::getInstance().foldAll();
-}
-
-void CodeEditor::unfoldAll() {
-    CodeFoldingManager::getInstance().unfoldAll();
 }
 
 void CodeEditor::focusInEvent(QFocusEvent *event) {
@@ -584,52 +1226,123 @@ void CodeEditor::focusInEvent(QFocusEvent *event) {
 void CodeEditor::paintEvent(QPaintEvent *event) {
     QPlainTextEdit::paintEvent(event);
 
-    // Custom painting for execution line, etc.
+    // Дополнительная отрисовка
     QPainter painter(viewport());
-    drawFoldMarkers(painter); // Draw fold markers
-    drawExecutionLine(painter);
     drawBreakpoints(painter);
+    drawExecutionLine(painter);
     drawFoldMarkers(painter);
+    drawErrorMarkers(painter);
+    drawWarningMarkers(painter);
+
+    if (showIndentGuides) {
+        drawIndentGuides(painter);
+    }
+
+    if (showWhitespace) {
+        drawWhitespace(painter);
+    }
 }
+
+void CodeEditor::contextMenuEvent(QContextMenuEvent *event) {
+    contextMenu->exec(event->globalPos());
+}
+
+void CodeEditor::dragEnterEvent(QDragEnterEvent *event) {
+    if (event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    }
+}
+
+void CodeEditor::dropEvent(QDropEvent *event) {
+    QList<QUrl> urls = event->mimeData()->urls();
+    for (const QUrl& url : urls) {
+        QString filePath = url.toLocalFile();
+        if (filePath.endsWith(".prx")) {
+            loadFile(filePath);
+        }
+    }
+    event->acceptProposedAction();
+}
+
+void CodeEditor::wheelEvent(QWheelEvent *event) {
+    // Zoom с Ctrl+колесо
+    if (event->modifiers() & Qt::ControlModifier) {
+        QFont font = this->font();
+        int delta = event->angleDelta().y();
+        int newSize = font.pointSize() + (delta > 0 ? 1 : -1);
+
+        if (newSize >= 8 && newSize <= 72) {
+            font.setPointSize(newSize);
+            setFont(font);
+            updateLineNumberAreaWidth(0);
+        }
+        event->accept();
+    } else {
+        QPlainTextEdit::wheelEvent(event);
+    }
+}
+
+// ============================================================================
+// Слоты
+// ============================================================================
 
 void CodeEditor::updateLineNumberAreaWidth(int /* newBlockCount */) {
-    setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
-}
-
-void CodeEditor::updateLineNumberArea(const QRect &rect, int dy) {
-    if (dy)
-        lineNumberArea->scroll(0, dy);
-    else
-        lineNumberArea->update(0, rect.y(), lineNumberArea->width(), rect.height());
-
-    if (rect.contains(viewport()->rect()))
-        updateLineNumberAreaWidth(0);
+    if (showLineNumbers) {
+        setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
+    } else {
+        setViewportMargins(0, 0, 0, 0);
+    }
 }
 
 void CodeEditor::highlightCurrentLine() {
-    QList<QTextEdit::ExtraSelection> extraSelections;
-
-    if (!isReadOnly()) {
-        QTextEdit::ExtraSelection selection;
-
-        QColor lineColor = QColor(40, 40, 40);
-
-        selection.format.setBackground(lineColor);
-        selection.format.setProperty(QTextFormat::FullWidthSelection, true);
-        selection.cursor = textCursor();
-        selection.cursor.clearSelection();
-        extraSelections.append(selection);
+    if (!highlightCurrentLine) {
+        setExtraSelections(QList<QTextEdit::ExtraSelection>());
+        return;
     }
 
-    setExtraSelections(extraSelections);
+    QList<QTextEdit::ExtraSelection> extraSelections;
 
-    // Emit cursor position
-    emit cursorPositionChanged(getCurrentLine(), getCurrentColumn());
+    QTextEdit::ExtraSelection selection;
+    QColor lineColor = QColor(40, 40, 40);
+
+    selection.format.setBackground(lineColor);
+    selection.format.setProperty(QTextFormat::FullWidthSelection, true);
+    selection.cursor = textCursor();
+    selection.cursor.clearSelection();
+    extraSelections.append(selection);
+
+    setExtraSelections(extraSelections);
 }
+
+void CodeEditor::updateLineNumberArea(const QRect &rect, int dy) {
+    if (dy) {
+        lineNumberArea->scroll(0, dy);
+    } else {
+        lineNumberArea->update(0, rect.y(), lineNumberArea->width(), rect.height());
+    }
+
+    if (rect.contains(viewport()->rect())) {
+        updateLineNumberAreaWidth(0);
+    }
+}
+
+void CodeEditor::onCompletionItemActivated(const QString& item) {
+    insertCompletion(item);
+}
+
+void CodeEditor::onFoldTimerTimeout() {
+    analyzeFoldRegions();
+}
+
+// ============================================================================
+// Методы отрисовки
+// ============================================================================
 
 void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event) {
     QPainter painter(lineNumberArea);
     painter.fillRect(event->rect(), lineNumberAreaColor());
+
+    if (!showLineNumbers) return;
 
     QTextBlock block = firstVisibleBlock();
     int blockNumber = block.blockNumber();
@@ -638,12 +1351,19 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event) {
 
     while (block.isValid() && top <= event->rect().bottom()) {
         if (block.isVisible() && bottom >= event->rect().top()) {
+            // 1-based нумерация строк
             QString number = QString::number(blockNumber + 1);
 
-            // Highlight line with breakpoint
-            if (breakpoints.contains(blockNumber + 1)) {
-                painter.setPen(QColor(255, 100, 100));
-                painter.setFont(QFont("Consolas", 10, QFont::Bold));
+            // Подсветка строки с точкой останова
+            int line = blockNumber + 1;
+            if (breakpoints.contains(line)) {
+                if (isBreakpointEnabled(line)) {
+                    painter.setPen(QColor(255, 100, 100));
+                    painter.setFont(QFont("Consolas", 10, QFont::Bold));
+                } else {
+                    painter.setPen(QColor(150, 150, 150));
+                    painter.setFont(QFont("Consolas", 10));
+                }
             } else {
                 painter.setPen(QColor(120, 120, 120));
                 painter.setFont(QFont("Consolas", 10));
@@ -661,6 +1381,8 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event) {
 }
 
 int CodeEditor::lineNumberAreaWidth() {
+    if (!showLineNumbers) return 0;
+
     int digits = 1;
     int max = qMax(1, blockCount());
     while (max >= 10) {
@@ -673,16 +1395,18 @@ int CodeEditor::lineNumberAreaWidth() {
 }
 
 void CodeEditor::drawBreakpoints(QPainter& painter) {
-    // Draw breakpoint indicators in the left margin
     painter.setBrush(QColor(255, 100, 100));
     painter.setPen(Qt::NoPen);
 
     for (int line : breakpoints) {
+        if (!isLineVisible(line)) continue;
+
         QTextBlock block = document()->findBlockByNumber(line - 1);
         if (block.isValid()) {
             int y = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
             int height = qRound(blockBoundingRect(block).height());
 
+            // Рисуем кружок точки останова
             painter.drawEllipse(2, y + height/2 - 4, 8, 8);
         }
     }
@@ -692,66 +1416,146 @@ void CodeEditor::drawExecutionLine(QPainter& painter) {
     if (currentExecutionLine < 1) return;
 
     QTextBlock block = document()->findBlockByNumber(currentExecutionLine - 1);
+    if (!block.isValid()) return;
+
+    int y = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
+    int height = qRound(blockBoundingRect(block).height());
+
+    // Рисуем стрелку выполнения
+    painter.setBrush(QColor(100, 200, 100));
+    painter.setPen(Qt::NoPen);
+
+    QPolygon arrow;
+    arrow << QPoint(0, y) << QPoint(10, y + height/2) << QPoint(0, y + height);
+    painter.drawPolygon(arrow);
+
+    // Подсветка строки выполнения
+    painter.setBrush(QColor(50, 80, 50, 100));
+    painter.drawRect(10, y, viewport()->width(), height);
+}
+
+void CodeEditor::drawFoldMarkers(QPainter& painter) {
+    // Отрисовка маркеров сворачивания
+    painter.setPen(getFoldMarkerColor());
+    painter.setBrush(Qt::NoBrush);
+
+    for (const FoldRegion& region : foldRegions) {
+        if (!isLineVisible(region.foldLine)) continue;
+
+        QTextBlock block = document()->findBlockByNumber(region.foldLine - 1);
+        if (block.isValid()) {
+            int y = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
+            int height = qRound(blockBoundingRect(block).height());
+
+            // Рисуем квадратик сворачивания
+            int size = 8;
+            int x = lineNumberAreaWidth() + 5;
+            int posY = y + height/2 - size/2;
+
+            painter.drawRect(x, posY, size, size);
+
+            // Плюс или минус внутри
+            painter.drawLine(x + 2, posY + size/2, x + size - 2, posY + size/2);
+            if (!region.isFolded) {
+                painter.drawLine(x + size/2, posY + 2, x + size/2, posY + size - 2);
+            }
+        }
+    }
+}
+
+void CodeEditor::drawErrorMarkers(QPainter& painter) {
+    painter.setBrush(QColor(255, 100, 100));
+    painter.setPen(Qt::NoPen);
+
+    for (int line : errorLines) {
+        if (!isLineVisible(line)) continue;
+
+        QTextBlock block = document()->findBlockByNumber(line - 1);
+        if (block.isValid()) {
+            int y = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
+            int height = qRound(blockBoundingRect(block).height());
+
+            // Рисуем маркер ошибки справа
+            painter.drawRect(viewport()->width() - 5, y + height/2 - 2, 4, 4);
+        }
+    }
+}
+
+void CodeEditor::drawWarningMarkers(QPainter& painter) {
+    painter.setBrush(QColor(255, 200, 100));
+    painter.setPen(Qt::NoPen);
+
+    for (int line : warningLines) {
+        if (!isLineVisible(line)) continue;
+
+        QTextBlock block = document()->findBlockByNumber(line - 1);
+        if (block.isValid()) {
+            int y = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
+            int height = qRound(blockBoundingRect(block).height());
+
+            // Рисуем маркер предупреждения справа
+            painter.drawEllipse(viewport()->width() - 5, y + height/2 - 2, 4, 4);
+        }
+    }
+}
+
+void CodeEditor::drawIndentGuides(QPainter& painter) {
+    painter.setPen(QColor(60, 60, 60));
+
+    QTextBlock block = firstVisibleBlock();
+    while (block.isValid()) {
+        if (block.isVisible()) {
+            int y = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
+            int height = qRound(blockBoundingRect(block).height());
+
+            QString text = block.text();
+            int x = 0;
+            for (int i = 0; i < text.length() && text[i] == ' '; i++) {
+                if ((i + 1) % 4 == 0) {
+                    x = fontMetrics().horizontalAdvance(text.left(i + 1));
+                    painter.drawLine(x, y, x, y + height);
+                }
+            }
+        }
+        block = block.next();
+    }
+}
+
+void CodeEditor::drawWhitespace(QPainter& painter) {
+    // Отрисовка пробелов и табуляций
+    painter.setPen(QColor(80, 80, 80));
+
+    QTextBlock block = firstVisibleBlock();
+    while (block.isValid()) {
+        if (block.isVisible()) {
+            int y = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
+            QString text = block.text();
+
+            for (int i = 0; i < text.length(); i++) {
+                if (text[i] == ' ') {
+                    int x = fontMetrics().horizontalAdvance(text.left(i));
+                    painter.drawPoint(x + 3, y + fontMetrics().height()/2);
+                } else if (text[i] == '\t') {
+                    int x = fontMetrics().horizontalAdvance(text.left(i));
+                    painter.drawLine(x, y + fontMetrics().height()/2,
+                                   x + fontMetrics().horizontalAdvance("    "),
+                                   y + fontMetrics().height()/2);
+                }
+            }
+        }
+        block = block.next();
+    }
+}
+
+void CodeEditor::drawCurrentLineHighlight(QPainter& painter) {
+    if (!highlightCurrentLine) return;
+
+    QTextBlock block = textCursor().block();
     if (block.isValid()) {
         int y = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
         int height = qRound(blockBoundingRect(block).height());
 
-        // Draw arrow indicator
-        painter.setBrush(QColor(100, 200, 100));
-        painter.setPen(Qt::NoPen);
-
-        QPolygon arrow;
-        arrow << QPoint(0, y) << QPoint(10, y + height/2) << QPoint(0, y + height);
-        painter.drawPolygon(arrow);
-
-        // Highlight line background
-        painter.setBrush(QColor(50, 80, 50, 100));
-        painter.drawRect(10, y, viewport()->width(), height);
-    }
-}
-
-void CodeEditor::drawFoldMarkers(QPainter& painter) {
-    if (!CodeFoldingManager::getInstance().getConfig().enableFolding) {
-        return;
-    }
-
-    QVector<FoldRegion> regions = CodeFoldingManager::getInstance().getFoldRegions();
-
-    for (const FoldRegion& region : regions) {
-        QRect markerRect = CodeFoldingManager::getInstance().getFoldMarkerRect(region.foldLine);
-
-        if (markerRect.isValid() && markerRect.intersects(viewport()->rect())) {
-            // Draw fold marker background
-            bool isHover = CodeFoldingManager::getInstance().isMouseOverFoldMarker(
-                mapFromGlobal(QCursor::pos()));
-
-            QColor bgColor = isHover ?
-                QColor(CodeFoldingManager::getInstance().getConfig().foldMarkerHoverColor) :
-                QColor(CodeFoldingManager::getInstance().getConfig().foldMarkerColor);
-
-            painter.setBrush(bgColor);
-            painter.setPen(Qt::NoPen);
-
-            // Draw fold control (minus/plus box)
-            if (region.isFolded) {
-                // Plus sign (folded)
-                painter.drawRect(markerRect.adjusted(2, 2, -2, -2));
-                painter.setPen(QColor(255, 255, 255));
-                painter.drawLine(markerRect.center().x() - 4, markerRect.center().y(),
-                               markerRect.center().x() + 4, markerRect.center().y());
-                painter.drawLine(markerRect.center().x(), markerRect.center().y() - 4,
-                               markerRect.center().x(), markerRect.center().y() + 4);
-            } else {
-                // Minus sign (unfolded)
-                painter.drawRect(markerRect.adjusted(2, 2, -2, -2));
-                painter.setPen(QColor(255, 255, 255));
-                painter.drawLine(markerRect.center().x() - 4, markerRect.center().y(),
-                               markerRect.center().x() + 4, markerRect.center().y());
-            }
-
-            // Draw type icon (optional)
-            // QString icon = CodeFoldingManager::getInstance().getFoldIcon(region.type);
-        }
+        painter.fillRect(0, y, viewport()->width(), height, QColor(40, 40, 40));
     }
 }
 
@@ -759,125 +1563,307 @@ QString CodeEditor::lineNumberAreaColor() const {
     return QColor(30, 30, 30);
 }
 
-// Добавляем интеграцию с CompletionProvider
-
-void CodeEditor::keyPressEvent(QKeyEvent *event) {
-    // Обработка автодополнения
-    if (event->key() == Qt::Key_Tab ||
-        (event->key() == Qt::Key_Space && event->modifiers() & Qt::ControlModifier)) {
-
-        if (completionPopup && completionPopup->isVisible()) {
-            // Выбор элемента из popup
-            completionPopup->selectCurrent();
-            return;
-        } else {
-            // Показать автодополнение
-            showCompletionPopup();
-            return;
-        }
-    }
-
-    if (event->key() == Qt::Key_Dot) {
-        // После "." показываем автодополнение методов
-        QPlainTextEdit::keyPressEvent(event);
-        QTimer::singleShot(50, this, &CodeEditor::showCompletionPopup);
-        return;
-    }
-
-    if (event->key() == Qt::Key_Escape) {
-        if (completionPopup && completionPopup->isVisible()) {
-            completionPopup->hide();
-            return;
-        }
-    }
-
-    QPlainTextEdit::keyPressEvent(event);
+QColor CodeEditor::getBreakpointColor() const {
+    return QColor(255, 100, 100);
 }
 
-void CodeEditor::showCompletionPopup() {
-    if (!completionProvider) {
-        completionProvider = &CompletionProvider::getInstance();
+QColor CodeEditor::getExecutionLineColor() const {
+    return QColor(100, 200, 100);
+}
+
+QColor CodeEditor::getFoldMarkerColor() const {
+    return QColor(150, 150, 150);
+}
+
+// ============================================================================
+// Визуализация данных
+// ============================================================================
+
+RuntimeValue CodeEditor::parseArrayValue(const QString& code) const {
+    // Парсинг значения массива из кода
+    RuntimeValue value;
+    // В полной реализации - парсинг runtime value
+    return value;
+}
+
+RuntimeValue CodeEditor::parseMatrixValue(const QString& code) const {
+    // Парсинг значения матрицы из кода
+    RuntimeValue value;
+    // В полной реализации - парсинг runtime value
+    return value;
+}
+
+RuntimeValue CodeEditor::parseLayerValue(const QString& code) const {
+    // Парсинг значения слоя из кода
+    RuntimeValue value;
+    // В полной реализации - парсинг runtime value
+    return value;
+}
+
+// ============================================================================
+// Информация об авторах и правках (НОВОЕ)
+// ============================================================================
+
+bool CodeEditor::registerAuthor(const QString& name, const QString& email) {
+    if (name.isEmpty()) {
+        return false;
     }
 
-    // Анализируем контекст
-    QString text = toPlainText();
-    int cursorPos = textCursor().position();
+    // Проверка - уже зарегистрирован ли автор
+    if (authors.contains(name)) {
+        return true;  // Уже зарегистрирован
+    }
 
-    CompletionContext context = completionProvider->analyzeContext(text, cursorPos);
+    // Генерация уникального цвета для автора
+    int order = nextAuthorOrder++;
+    QColor color = generateUniqueAuthorColor(order);
 
-    // Получаем подсказки
-    QVector<CompletionItem> completions = completionProvider->getCompletions(context);
+    AuthorInfo info;
+    info.name = name;
+    info.email = email;
+    info.color = color;
+    info.registrationOrder = order;
 
-    if (completions.isEmpty()) {
-        if (completionPopup) {
-            completionPopup->hide();
+    authors[name] = info;
+
+    LOG_DEBUG("Author registered: " + name.toStdString() +
+              " with color #" + color.name().toStdString());
+
+    emit authorRegistered(name, color);
+
+    return true;
+}
+
+AuthorInfo CodeEditor::getAuthorInfo(const QString& name) const {
+    if (authors.contains(name)) {
+        return authors[name];
+    }
+    return AuthorInfo();
+}
+
+QVector<AuthorInfo> CodeEditor::getAllAuthors() const {
+    return authors.values();
+}
+
+void CodeEditor::setLineEditInfo(int line, const LineEditInfo& info) {
+    if (line < 1 || line > blockCount()) return;
+
+    lineEditInfo[line] = info;
+
+    // Обновление информации для подсветки
+    if (displayMode == DisplayMode::AuthorHighlight) {
+        QMap<int, QString> authorMap;
+        authorMap[line] = info.author;
+        applyAuthorHighlighting(authorMap);
+    }
+
+    if (displayMode == DisplayMode::AgeHighlight) {
+        QMap<int, QDateTime> ageMap;
+        ageMap[line] = info.editTime;
+        applyAgeHighlighting(ageMap);
+    }
+
+    emit lineEditInfoChanged(line, info);
+}
+
+LineEditInfo CodeEditor::getLineEditInfo(int line) const {
+    if (lineEditInfo.contains(line)) {
+        return lineEditInfo[line];
+    }
+    return LineEditInfo();
+}
+
+void CodeEditor::setAllLineEditInfo(const QMap<int, LineEditInfo>& lineInfoMap) {
+    lineEditInfo = lineInfoMap;
+
+    // Обновление подсветки для всех строк
+    if (displayMode == DisplayMode::AuthorHighlight) {
+        QMap<int, QString> authorMap;
+        for (auto it = lineInfoMap.begin(); it != lineInfoMap.end(); ++it) {
+            authorMap[it.key()] = it.value().author;
         }
-        return;
+        applyAuthorHighlighting(authorMap);
     }
 
-    // Показываем popup
-    if (!completionPopup) {
-        completionPopup = new CompletionPopup(this);
-    }
-
-    completionPopup->setCompletions(completions);
-    completionPopup->setContext(context);
-
-    // Позиционируем popup у курсора
-    QRect cursorRect = cursorRect(textCursor());
-    QPoint popupPos = mapToGlobal(QPoint(cursorRect.right(), cursorRect.bottom()));
-    completionPopup->move(popupPos);
-    completionPopup->show();
-
-    // Показываем документацию в tooltip
-    if (!completions.isEmpty()) {
-        QString docText = completions[0].description;
-        if (!docText.isEmpty()) {
-            QToolTip::showText(popupPos + QPoint(0, 30), docText, this);
+    if (displayMode == DisplayMode::AgeHighlight) {
+        QMap<int, QDateTime> ageMap;
+        for (auto it = lineInfoMap.begin(); it != lineInfoMap.end(); ++it) {
+            ageMap[it.key()] = it.value().editTime;
         }
+        applyAgeHighlighting(ageMap);
     }
 }
 
-void CodeEditor::applyCompletion(const CompletionItem& item) {
-    QTextCursor cursor = textCursor();
-    CompletionContext context = completionProvider->analyzeContext(toPlainText(), cursor.position());
+QMap<int, LineEditInfo> CodeEditor::getAllLineEditInfo() const {
+    return lineEditInfo;
+}
 
-    // Заменяем текущее слово на выбранное
-    int wordStart = cursor.position() - context.currentWord.length();
-    cursor.setPosition(wordStart, QTextCursor::MoveAnchor);
-    cursor.setPosition(cursor.position() + context.currentWord.length(), QTextCursor::KeepAnchor);
+void CodeEditor::clearLineEditInfo() {
+    lineEditInfo.clear();
 
-    if (item.type == "snippet") {
-        // Insert snippet with placeholder navigation
-        SnippetManager::getInstance().startSnippetSession(
-            editor->document(),
-            item.detail,  // Snippet content with placeholders
-            editor->textCursor().position()
-        );
+    if (displayMode == DisplayMode::AuthorHighlight ||
+        displayMode == DisplayMode::AgeHighlight) {
+        setDisplayMode(DisplayMode::Standard);
+    }
+}
+
+QColor CodeEditor::generateUniqueAuthorColor(int registrationOrder) {
+    // Генерация уникального цвета на основе порядка регистрации
+    // Используем золотое сечение для равномерного распределения цветов
+
+    const double goldenRatio = 0.618033988749895;
+    double hue = fmod(registrationOrder * goldenRatio, 1.0);
+
+    // Преобразование HSV в RGB
+    QColor color;
+    color.setHsvF(hue, 0.7, 0.9);  // Насыщенность 70%, яркость 90%
+
+    // Проверка на слишком тёмные/светлые цвета
+    int brightness = (color.red() * 299 + color.green() * 587 + color.blue() * 114) / 1000;
+
+    if (brightness < 100) {
+        // Слишком тёмный - осветляем
+        color = color.lighter(120);
+    } else if (brightness > 200) {
+        // Слишком светлый - затемняем
+        color = color.darker(120);
+    }
+
+    return color;
+}
+
+QColor CodeEditor::getAgeColor(qint64 ageMinutes) {
+    // Определение цвета на основе возраста правки в минутах
+
+    if (ageMinutes < 5) {
+        // Менее 5 минут - ярко-зелёный (очень свежая правка)
+        return QColor(100, 255, 100);
+    } else if (ageMinutes < 30) {
+        // Менее 30 минут - зелёный (свежая правка)
+        return QColor(50, 200, 50);
+    } else if (ageMinutes < 60) {
+        // Менее часа - светло-зелёный
+        return QColor(50, 180, 50);
+    } else if (ageMinutes < 120) {
+        // Менее 2 часов - жёлто-зелёный
+        return QColor(150, 200, 50);
+    } else if (ageMinutes < 240) {
+        // Менее 4 часов - жёлтый
+        return QColor(200, 200, 50);
+    } else if (ageMinutes < 480) {
+        // Менее 8 часов - оранжево-жёлтый
+        return QColor(220, 150, 50);
+    } else if (ageMinutes < 1440) {
+        // Менее дня - оранжевый
+        return QColor(255, 120, 50);
+    } else if (ageMinutes < 2880) {
+        // Менее 2 дней - оранжево-красный
+        return QColor(255, 100, 50);
+    } else if (ageMinutes < 4320) {
+        // Менее 3 дней - красный
+        return QColor(255, 80, 50);
+    } else if (ageMinutes < 10080) {
+        // Менее недели - тёмно-красный
+        return QColor(200, 50, 50);
+    } else if (ageMinutes < 43200) {
+        // Менее месяца - бордовый
+        return QColor(150, 50, 50);
     } else {
-        // Вставка метода/свойства
-        QString text = item.text;
-        if (item.type == "method") {
-            text += "()";
-            cursor.insertText(text);
-            // Перемещаем курсор внутрь скобок
-            cursor.movePosition(QTextCursor::Left, QTextCursor::MoveAnchor);
-            setTextCursor(cursor);
-        } else {
-            cursor.insertText(text);
+        // Старше месяца - тёмно-бордовый (очень старая правка)
+        return QColor(100, 40, 40);
+    }
+}
+
+QString CodeEditor::getAgeString(qint64 ageMinutes) {
+    if (ageMinutes < 1) {
+        return "Только что";
+    } else if (ageMinutes < 60) {
+        return QString("%1 мин.").arg(ageMinutes);
+    } else if (ageMinutes < 1440) {
+        int hours = ageMinutes / 60;
+        return QString("%1 ч.").arg(hours);
+    } else if (ageMinutes < 10080) {
+        int days = ageMinutes / 1440;
+        return QString("%1 дн.").arg(days);
+    } else if (ageMinutes < 43200) {
+        int weeks = ageMinutes / 10080;
+        return QString("%1 нед.").arg(weeks);
+    } else {
+        int months = ageMinutes / 43200;
+        return QString("%1 мес.").arg(months);
+    }
+}
+
+int CodeEditor::findAvailableColorSlot() const {
+    // Поиск доступного слота для цвета (для будущей реализации)
+    return authors.size();
+}
+
+bool CodeEditor::isColorUsed(const QColor& color) const {
+    // Проверка - используется ли уже такой цвет
+    for (auto it = authors.begin(); it != authors.end(); ++it) {
+        if (it.value().color == color) {
+            return true;
         }
     }
+    return false;
+}
 
-    // Показываем обучающую подсказку
-    if (!item.description.isEmpty()) {
-        QString tip = completionProvider->getExampleUsage(
-            context.className.isEmpty() ? context.objectType : context.className,
-            item.text);
-
-        if (!tip.isEmpty()) {
-            QToolTip::showText(QCursor::pos(), tip, this, QRect(), 5000);
-        }
+void CodeEditor::updateAuthorColors() {
+    // Обновление цветов авторов (при изменении темы и т.п.)
+    int order = 0;
+    for (auto it = authors.begin(); it != authors.end(); ++it) {
+        it->color = generateUniqueAuthorColor(order);
+        it->registrationOrder = order;
+        order++;
     }
+}
+
+void CodeEditor::trackTextEdit(int position, int charsRemoved, int charsAdded) {
+    QTextDocument* doc = document();
+    if (!doc) return;
+    
+    // Определение изменённых строк
+    QTextBlock startBlock = doc->findBlock(position);
+    QTextBlock endBlock = doc->findBlock(position + charsAdded);
+    
+    int startLine = startBlock.blockNumber() + 1;
+    int endLine = endBlock.blockNumber() + 1;
+    
+    // Извлечение изменённого текста
+    QTextCursor cursor(doc);
+    cursor.setPosition(position);
+    cursor.setPosition(position + charsAdded, QTextCursor::KeepAnchor);
+    QString changedText = cursor.selectedText();
+    
+    // Добавление записи в историю
+    StoryManager& storyManager = StoryManager::getInstance();
+    
+    if (charsAdded > 0) {
+        storyManager.addEditEntry(filePath, EditOperation::Add, 
+                                 changedText, startLine, endLine);
+    }
+    
+    if (charsRemoved > 0) {
+        // Для удаления нужно сохранить удалённый текст
+        // В полной реализации - отслеживание удалённого текста
+        storyManager.addEditEntry(filePath, EditOperation::Remove, 
+                                 "", startLine, endLine);
+    }
+}
+
+// Добавить метод для отмены последней правки:
+
+bool CodeEditor::undoLastEdit() {
+    StoryManager& storyManager = StoryManager::getInstance();
+    return storyManager.undoLastEdit(filePath);
+}
+
+// Добавить метод для возврата правки:
+
+bool CodeEditor::redoLastEdit() {
+    StoryManager& storyManager = StoryManager::getInstance();
+    return storyManager.redoLastEdit(filePath);
 }
 
 } // namespace proxima

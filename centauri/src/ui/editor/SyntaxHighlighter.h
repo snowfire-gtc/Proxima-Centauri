@@ -123,6 +123,9 @@ private:
     QTextCharFormat authorHighlightFormat;
     QTextCharFormat ageHighlightFormat;
     
+    void loadAgeInfoFromStory(const QString& filePath);
+    StoryManager* storyManager;
+    
     // Правила
     QVector<HighlightingRule> highlightingRules;
     

@@ -1,0 +1,80 @@
+// Пример использования dbgcontext и dbgstack
+
+namespace("debug_example");
+
+// Функция с отладкой
+function_with_debug(a: int32, b: double) : double
+    // Вывод контекста
+    dbgcontext();
+    
+    // Вывод стека
+    dbgstack();
+    
+    // Отладочные сообщения
+    dbgprint("Function called with a=" + string(a) + ", b=" + string(b), 2);
+    
+    result: double = a * b;
+    
+    dbgprint("Result: " + string(result), 3);
+    
+    return result;
+end
+
+// Рекурсивная функция для демонстрации стека
+factorial(n: int32) : int32
+    dbgprint("factorial(" + string(n) + ")", 4);
+    
+    if n <= 1
+        return 1;
+    end
+    
+    result: int32 = n * factorial(n - 1);
+    
+    dbgprint("factorial(" + string(n) + ") = " + string(result), 4);
+    
+    return result;
+end
+
+// Класс с отладкой
+class DebugClass
+public:
+    constructor(value: int32)
+        .value = value;
+        dbgcontext();
+    end
+    
+    method(x: int32) : int32
+        dbgstack();
+        return .value + x;
+    end
+    
+protected:
+    value: int32;
+end
+
+main() : int32
+    // Включение режима отладки
+    // (в полной реализации - через флаг компиляции)
+    
+    dbgprint("Starting debug example", 2);
+    
+    // Вызов функции с отладкой
+    result: double = function_with_debug(5, 3.14);
+    print("Result: %f\n", result);
+    
+    // Рекурсивный вызов
+    fact: int32 = factorial(5);
+    print("5! = %d\n", fact);
+    
+    // Класс с отладкой
+    obj: DebugClass = DebugClass(10);
+    sum: int32 = obj.method(5);
+    print("Sum: %d\n", sum);
+    
+    // Точка останова
+    dbgstop();
+    
+    return 0;
+end
+
+end

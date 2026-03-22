@@ -14,7 +14,7 @@ Project::Project(QObject *parent)
     , gitInitialized(false)
     , autoSaveEnabled(true)
     , lastModified(0) {
-    
+
     buildConfig = Config();
 }
 
@@ -24,12 +24,12 @@ Project::~Project() {
 
 bool Project::create(const QString& path, const QString& name) {
     LOG_INFO("Creating project: " + name + " at " + path);
-    
+
     projectPath = path + "/" + name;
-    
+
     // Create directory structure
     setupProjectStructure();
-    
+
     // Initialize info
     info.name = name;
     info.version = "1.0.0";
@@ -40,16 +40,16 @@ bool Project::create(const QString& path, const QString& name) {
     info.authors = QStringList();
     info.buildHash = "auto";
     info.buildTimestamp = "auto";
-    
+
     // Create manifest
     saveManifest();
-    
+
     // Create default build rules
     buildConfig.outputPath = "build/" + name;
     buildConfig.optimizationLevel = 2;
     buildConfig.debugSymbols = true;
     saveBuildRules();
-    
+
     // Create main module
     QDir(projectPath + "/src").mkdir(".");
     QFile mainFile(projectPath + "/src/main.prx");
@@ -63,116 +63,116 @@ bool Project::create(const QString& path, const QString& name) {
         out << "end\n\n";
         out << "end  // namespace\n";
         mainFile.close();
-        
+
         addModule("src/main.prx");
     }
-    
+
     lastModified = QDateTime::currentMSecsSinceEpoch();
     updateStatus(ProjectStatus::Open);
-    
+
     emit projectCreated(projectPath);
-    
+
     LOG_INFO("Project created successfully: " + projectPath);
     return true;
 }
 
 bool Project::load(const QString& path) {
     LOG_INFO("Loading project: " + path);
-    
+
     projectPath = path;
-    
+
     // Load manifest
     if (!loadManifest()) {
         LOG_ERROR("Failed to load manifest");
         return false;
     }
-    
+
     // Load build rules
     loadBuildRules();
-    
+
     // Load modules
     loadModules();
-    
+
     lastModified = QDateTime::currentMSecsSinceEpoch();
     updateStatus(ProjectStatus::Open);
-    
+
     // Check if git repository
     gitInitialized = QDir(projectPath + "/.git").exists();
-    
+
     emit projectLoaded(projectPath);
-    
+
     LOG_INFO("Project loaded successfully: " + projectPath);
     return true;
 }
 
 bool Project::save() {
     LOG_INFO("Saving project: " + info.name);
-    
+
     // Save manifest
     saveManifest();
-    
+
     // Save build rules
     saveBuildRules();
-    
+
     // Save all modules
     for (Module* module : modules) {
         if (module->isModified()) {
             module->save();
         }
     }
-    
+
     // Update build hash
     calculateBuildHash();
     buildTimestamp = generateBuildTimestamp();
-    
+
     lastModified = QDateTime::currentMSecsSinceEpoch();
-    
+
     emit projectSaved();
-    
+
     LOG_INFO("Project saved successfully");
     return true;
 }
 
 bool Project::close() {
     LOG_INFO("Closing project: " + info.name);
-    
+
     // Save if modified
     if (status == ProjectStatus::Modified) {
         save();
     }
-    
+
     // Clean up modules
     for (Module* module : modules) {
         delete module;
     }
     modules.clear();
     modulesByPath.clear();
-    
+
     projectPath.clear();
     info = ProjectInfo();
-    
+
     updateStatus(ProjectStatus::New);
-    
+
     emit projectClosed();
-    
+
     LOG_INFO("Project closed");
     return true;
 }
 
 void Project::setupProjectStructure() {
     QDir dir(projectPath);
-    
+
     // Create main directories
     dir.mkdir("src");
     dir.mkdir("rules");
     dir.mkdir("assets");
     dir.mkdir("autosave");
     dir.mkdir("build");
-    
+
     // Create rules directory structure
     QDir rulesDir(projectPath + "/rules");
     rulesDir.mkdir(".");
-    
+
     // Create assets subdirectories
     QDir assetsDir(projectPath + "/assets");
     assetsDir.mkdir("config");
@@ -180,23 +180,41 @@ void Project::setupProjectStructure() {
 }
 
 bool Project::loadManifest() {
-    QFile manifest(projectPath + "/manifest");
-    if (!manifest.open(QIODevice::ReadOnly)) {
+    CollectionParser parser;
+    CollectionParser::ParseResult result = parser.parseFile(projectPath + "/manifest");
+
+    if (!result.success) {
+        LOG_ERROR("Failed to parse manifest: " + result.error.toStdString());
         return false;
     }
-    
-    // Parse collection format
-    // Simplified parser for manifest
-    QTextStream in(&manifest);
-    QString content = in.readAll();
-    manifest.close();
-    
-    // Extract values (simplified)
-    // In production, use proper collection parser
-    info.name = "Project"; // Default
-    info.version = "1.0.0";
-    info.entryPoint = "src/main.prx";
-    
+
+    const auto& collection = result.value;
+
+    info.name = collection.get("name").asString();
+    info.version = collection.get("version").asString();
+    info.entryPoint = collection.get("entry_point").asString();
+    info.requiredIDEVersion = collection.get("required_ide_version").asString();
+    info.license = collection.get("license").asString();
+
+    // Parse capabilities array
+    CollectionParser::Value capsValue = collection.get("capabilities");
+    if (capsValue.isArray()) {
+        for (const auto& capValue : capsValue.asArray()) {
+            info.capabilities.append(capValue.asString());
+        }
+    }
+
+    // Parse authors array
+    CollectionParser::Value authorsValue = collection.get("authors");
+    if (authorsValue.isArray()) {
+        for (const auto& authorValue : authorsValue.asArray()) {
+            info.authors.append(authorValue.asString());
+        }
+    }
+
+    buildHash = collection.get("build_hash").asString();
+    buildTimestamp = collection.get("build_timestamp").asString();
+
     return true;
 }
 
@@ -205,7 +223,7 @@ bool Project::saveManifest() {
     if (!manifest.open(QIODevice::WriteOnly)) {
         return false;
     }
-    
+
     QTextStream out(&manifest);
     out << "[\n";
     out << "    \"name\", \"" << info.name << "\",\n";
@@ -218,7 +236,7 @@ bool Project::saveManifest() {
     out << "    \"build_hash\", \"" << (buildHash.isEmpty() ? "auto" : buildHash) << "\",\n";
     out << "    \"build_timestamp\", \"" << (buildTimestamp.isEmpty() ? "auto" : buildTimestamp) << "\"\n";
     out << "]\n";
-    
+
     manifest.close();
     return true;
 }
@@ -228,27 +246,27 @@ bool Project::loadModules() {
     if (!srcDir.exists()) {
         return false;
     }
-    
+
     // Find all .prx files
     QStringList filters;
     filters << "*.prx";
     srcDir.setNameFilters(filters);
     srcDir.setFilter(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
-    
+
     QFileInfoList files = srcDir.entryInfoList(filters, QDir::Files, QDir::Name);
-    
+
     for (const QFileInfo& fileInfo : files) {
         QString relativePath = fileInfo.absoluteFilePath().replace(projectPath + "/", "");
         addModule(relativePath);
     }
-    
+
     // Recursively search subdirectories
     QFileInfoList dirs = srcDir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
     for (const QFileInfo& dirInfo : dirs) {
         // Recursively load modules from subdirectories
         // Implementation would recurse into subdirectories
     }
-    
+
     return true;
 }
 
@@ -256,24 +274,24 @@ bool Project::addModule(const QString& path) {
     if (hasModule(path)) {
         return false;
     }
-    
+
     Module* module = new Module(this);
     if (!module->load(projectPath + "/" + path)) {
         delete module;
         return false;
     }
-    
+
     modules.append(module);
     modulesByPath[path] = module;
-    
+
     connect(module, &Module::modified, this, [this, module]() {
         emit moduleModified(module);
         updateStatus(ProjectStatus::Modified);
         lastModified = QDateTime::currentMSecsSinceEpoch();
     });
-    
+
     emit moduleAdded(module);
-    
+
     LOG_INFO("Module added: " + path);
     return true;
 }
@@ -282,15 +300,15 @@ bool Project::removeModule(const QString& path) {
     if (!modulesByPath.contains(path)) {
         return false;
     }
-    
+
     Module* module = modulesByPath[path];
     modules.removeOne(module);
     modulesByPath.remove(path);
-    
+
     emit moduleRemoved(path);
-    
+
     delete module;
-    
+
     LOG_INFO("Module removed: " + path);
     return true;
 }
@@ -301,13 +319,13 @@ Module* Project::getModule(const QString& path) const {
 
 QVector<Module*> Project::getSubprojectModules(const QString& subproject) const {
     QVector<Module*> result;
-    
+
     for (Module* module : modules) {
         if (module->getPath().startsWith(subproject)) {
             result.append(module);
         }
     }
-    
+
     return result;
 }
 
@@ -321,10 +339,10 @@ bool Project::loadBuildRules() {
         // Create default rules
         return saveBuildRules();
     }
-    
+
     // Parse rules file
     // Implementation would parse collection format
-    
+
     rules.close();
     return true;
 }
@@ -334,7 +352,7 @@ bool Project::saveBuildRules() {
     if (!rules.open(QIODevice::WriteOnly)) {
         return false;
     }
-    
+
     QTextStream out(&rules);
     out << "// Build rules for " << info.name << "\n\n";
     out << "[\n";
@@ -347,7 +365,7 @@ bool Project::saveBuildRules() {
     out << "    \"debug_symbols\", " << (buildConfig.debugSymbols ? "true" : "false") << ",\n";
     out << "    \"output_format\", \"" << buildConfig.outputFormat << "\"\n";
     out << "]\n";
-    
+
     rules.close();
     return true;
 }
@@ -355,13 +373,13 @@ bool Project::saveBuildRules() {
 bool Project::build() {
     updateStatus(ProjectStatus::Building);
     emit buildStarted();
-    
+
     // Save all modules first
     save();
-    
+
     // Trigger build through compiler connector
     // This would be done by MainWindow
-    
+
     LOG_INFO("Build initiated for: " + info.name);
     return true;
 }
@@ -372,7 +390,7 @@ bool Project::clean() {
     if (buildDir.exists()) {
         buildDir.removeRecursively();
     }
-    
+
     LOG_INFO("Build cleaned");
     return true;
 }
@@ -382,11 +400,11 @@ bool Project::run() {
         LOG_ERROR("Cannot run while building");
         return false;
     }
-    
+
     updateStatus(ProjectStatus::Running);
-    
+
     // Trigger run through compiler connector
-    
+
     LOG_INFO("Run initiated for: " + info.name);
     return true;
 }
@@ -394,7 +412,7 @@ bool Project::run() {
 void Project::initializeGit() {
     // Initialize git repository
     // Would use GitService
-    
+
     gitInitialized = true;
     LOG_INFO("Git repository initialized");
 }
@@ -413,18 +431,18 @@ int Project::getTotalLines() const {
 
 void Project::updateStatus(ProjectStatus newStatus) {
     if (status == newStatus) return;
-    
+
     status = newStatus;
     emit statusChanged(status);
 }
 
 void Project::calculateBuildHash() {
     QCryptographicHash hash(QCryptographicHash::MD5);
-    
+
     for (Module* module : modules) {
         hash.addData(module->getContent().toUtf8());
     }
-    
+
     buildHash = QString::fromUtf8(hash.result().toHex());
 }
 
