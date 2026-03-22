@@ -19,7 +19,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        sudo apt-get update && sudo apt-get install -y llvm qt6-base-dev qt6-5compat-dev
+        sudo apt-get update && sudo apt-get install -y llvm qt6-base-dev
 
     - name: Configure
       run: |
@@ -56,7 +56,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        sudo apt-get update && sudo apt-get install -y qt6-base-dev qt6-5compat-dev
+        sudo apt-get update && sudo apt-get install -y qt6-base-dev
 
     - name: Configure
       run: |
