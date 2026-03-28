@@ -90,6 +90,11 @@ private:
     StatementNodePtr parseWhile();
     StatementNodePtr parseReturn();
     StatementNodePtr parseBlock();
+    
+    // Парсинг LLM директив
+    StatementNodePtr parseIntentBlock();
+    StatementNodePtr parseGeneratedBlock();
+    StatementNodePtr parseFixedBlock();
 
     // Парсинг выражений
     ExpressionNodePtr parseExpression();

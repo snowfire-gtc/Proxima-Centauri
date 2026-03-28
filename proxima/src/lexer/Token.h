@@ -73,6 +73,11 @@ enum class TokenType {
     KEYWORD_TEST,       // test
     KEYWORD_ASSERT,     // assert
     
+    // LLM directives
+    KEYWORD_INTENT,     // #intent
+    KEYWORD_GENERATED,  // #generated
+    KEYWORD_FIXED,      // #fixed
+    
     // Types
     TYPE_INT4,          // int4
     TYPE_INT8,          // int8

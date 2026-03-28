@@ -337,6 +337,19 @@ std::vector<std::pair<std::string, std::string>> Parser::parseParameters() {
 StatementNodePtr Parser::parseStatement() {
     Token tok = currentToken();
     
+    // LLM директивы
+    if (match(TokenType::KEYWORD_INTENT)) {
+        return parseIntentBlock();
+    }
+    
+    if (match(TokenType::KEYWORD_GENERATED)) {
+        return parseGeneratedBlock();
+    }
+    
+    if (match(TokenType::KEYWORD_FIXED)) {
+        return parseFixedBlock();
+    }
+    
     if (match(TokenType::KEYWORD_IF)) {
         return parseIf();
     }
@@ -451,6 +464,76 @@ StatementNodePtr Parser::parseBlock() {
     }
     
     return block;
+}
+
+// ============================================================================
+// Парсинг LLM директив
+// ============================================================================
+
+StatementNodePtr Parser::parseIntentBlock() {
+    Token tok = currentToken();
+    
+    // Считываем текст интента до конца строки или до следующего ключегового слова
+    std::string intentText;
+    while (!check(TokenType::NEWLINE) && !check(TokenType::EOF_TOKEN) && 
+           !check(TokenType::KEYWORD_GENERATED) && !check(TokenType::KEYWORD_FIXED)) {
+        intentText += currentToken().value + " ";
+        advance();
+    }
+    
+    // Ожидаем #generated или тело блока
+    StatementNodePtr body = nullptr;
+    if (match(TokenType::KEYWORD_GENERATED)) {
+        body = parseGeneratedBlock();
+    } else if (match(TokenType::DELIM_LBRACE) || !check(TokenType::KEYWORD_END)) {
+        body = parseBlock();
+    }
+    
+    expect(TokenType::KEYWORD_END, "Expected 'end' for #intent block");
+    
+    return std::make_shared<IntentBlockNode>(tok, intentText, body, filename);
+}
+
+StatementNodePtr Parser::parseGeneratedBlock() {
+    Token tok = currentToken();
+    
+    // Парсим тело сгенерированного блока
+    StatementNodePtr body = nullptr;
+    if (match(TokenType::DELIM_LBRACE)) {
+        body = parseBlock();
+    } else if (!check(TokenType::KEYWORD_END) && !check(TokenType::KEYWORD_FIXED)) {
+        body = parseBlock();
+    }
+    
+    // Проверяем на вложенный #fixed блок
+    if (match(TokenType::KEYWORD_FIXED)) {
+        auto fixedBlock = parseFixedBlock();
+        // Объединяем блоки
+        auto blockStmts = std::vector<StatementNodePtr>();
+        if (body) blockStmts.push_back(body);
+        blockStmts.push_back(fixedBlock);
+        body = std::make_shared<BlockNode>(tok, blockStmts, filename);
+    }
+    
+    expect(TokenType::KEYWORD_END, "Expected 'end' for #generated block");
+    
+    return std::make_shared<GeneratedBlockNode>(tok, body, filename);
+}
+
+StatementNodePtr Parser::parseFixedBlock() {
+    Token tok = currentToken();
+    
+    // Парсим тело зафиксированного блока
+    StatementNodePtr body = nullptr;
+    if (match(TokenType::DELIM_LBRACE)) {
+        body = parseBlock();
+    } else if (!check(TokenType::KEYWORD_END)) {
+        body = parseBlock();
+    }
+    
+    expect(TokenType::KEYWORD_END, "Expected 'end' for #fixed block");
+    
+    return std::make_shared<FixedBlockNode>(tok, body, filename);
 }
 
 // ============================================================================

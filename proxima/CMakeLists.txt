@@ -38,6 +38,7 @@ set(LIB_SOURCES
     src/lexer/Lexer.cpp
     src/lexer/Token.cpp
     src/parser/Parser.cpp
+    src/parser/AST.cpp
     src/semantic/SemanticAnalyzer.cpp
     src/semantic/TypeChecker.cpp
     src/semantic/SymbolTable.cpp

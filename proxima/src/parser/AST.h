@@ -28,6 +28,11 @@ enum class NodeType {
     INTERFACE_DECL,
     NAMESPACE_DECL,
     
+    // LLM directives
+    INTENT_BLOCK,
+    GENERATED_BLOCK,
+    FIXED_BLOCK,
+    
     // Statements
     ASSIGNMENT,
     IF_STATEMENT,
@@ -213,6 +218,38 @@ public:
     
     ProgramNode(const std::string& file = "")
         : ASTNode(NodeType::BLOCK, Token(), file) {}
+    
+    std::string toString(int indent = 0) const override;
+};
+
+// LLM directive nodes
+class IntentBlockNode : public StatementNode {
+public:
+    std::string intent;  // Текст интента (описание задачи для LLM)
+    StatementNodePtr body;  // Сгенерированный блок кода
+    
+    IntentBlockNode(const Token& tok, const std::string& intentText, StatementNodePtr b, const std::string& file = "")
+        : StatementNode(NodeType::INTENT_BLOCK, tok, file), intent(intentText), body(b) {}
+    
+    std::string toString(int indent = 0) const override;
+};
+
+class GeneratedBlockNode : public StatementNode {
+public:
+    StatementNodePtr body;  // Сгенерированный код
+    
+    GeneratedBlockNode(const Token& tok, StatementNodePtr b, const std::string& file = "")
+        : StatementNode(NodeType::GENERATED_BLOCK, tok, file), body(b) {}
+    
+    std::string toString(int indent = 0) const override;
+};
+
+class FixedBlockNode : public StatementNode {
+public:
+    StatementNodePtr body;  // Зафиксированный код (не может быть изменён LLM)
+    
+    FixedBlockNode(const Token& tok, StatementNodePtr b, const std::string& file = "")
+        : StatementNode(NodeType::FIXED_BLOCK, tok, file), body(b) {}
     
     std::string toString(int indent = 0) const override;
 };

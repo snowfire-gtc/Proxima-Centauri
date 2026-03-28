@@ -78,6 +78,11 @@ void Lexer::initKeywords() {
     keywords["test"] = TokenType::KEYWORD_TEST;
     keywords["assert"] = TokenType::KEYWORD_ASSERT;
 
+    // LLM директивы
+    keywords["#intent"] = TokenType::KEYWORD_INTENT;
+    keywords["#generated"] = TokenType::KEYWORD_GENERATED;
+    keywords["#fixed"] = TokenType::KEYWORD_FIXED;
+
     // Типы данных
     keywords["int4"] = TokenType::TYPE_INT4;
     keywords["int8"] = TokenType::TYPE_INT8;

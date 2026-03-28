@@ -22,6 +22,18 @@ struct CodeSuggestion {
     bool accepted;
 };
 
+struct IntentBlock {
+    int id;
+    int startLine;
+    int endLine;
+    QString intent;  // Описание задачи для LLM
+    QString generatedCode;  // Сгенерированный код
+    QString fixedCode;  // Зафиксированный код (не изменяется)
+    bool isGenerated;  // Помечен как сгенерированный
+    bool isFixed;  // Помечен как зафиксированный
+    bool accepted;  // Принят пользователем
+};
+
 struct LLMConfig {
     QString serverURL;
     QString model;
@@ -58,6 +70,13 @@ public:
                              const QString& code);
     void requestBugFix(const QString& file, int startLine, int endLine,
                       const QString& code, const QString& errorMessage);
+    
+    // LLM intent blocks (#intent ... #end)
+    void processIntentBlock(const QString& file, int startLine, int endLine,
+                           const QString& intent, const QString& fixedCode = "");
+    void generateCodeForIntent(const QString& intent, const QString& context,
+                              const QString& fixedCode = "");
+    void applyGeneratedCode(int intentBlockId, const QString& generatedCode);
     
     // Batch operations
     void requestMultipleSuggestions(const QVector<QPair<int, int>>& ranges,
