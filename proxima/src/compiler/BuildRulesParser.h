@@ -5,7 +5,6 @@
 #include "Config.h"
 #include <string>
 #include <vector>
-#include <QString>
 
 namespace proxima {
 
@@ -13,7 +12,7 @@ class BuildRulesParser {
 public:
     BuildRulesParser();
     
-    bool parse(const QString& filename);
+    bool parse(const std::string& filename);
     bool parseString(const std::string& content);
     
     Config getConfig() const { return config; }

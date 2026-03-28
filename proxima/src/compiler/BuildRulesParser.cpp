@@ -1,5 +1,4 @@
 #include "BuildRulesParser.h"
-#include <QString>
 #include <fstream>
 #include <sstream>
 #include <algorithm>
@@ -9,7 +8,7 @@ namespace proxima {
 
 BuildRulesParser::BuildRulesParser() {}
 
-bool BuildRulesParser::parse(const QString& filename) {
+bool BuildRulesParser::parse(const std::string& filename) {
     CollectionParser parser;
     CollectionParser::ParseResult result = parser.parseFile(filename);
 
