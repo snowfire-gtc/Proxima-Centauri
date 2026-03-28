@@ -30,9 +30,8 @@ if(BUILD_IDE)
     find_package(Qt5 COMPONENTS Widgets Core Network REQUIRED)
 endif()
 
-# Исходные файлы компилятора
-set(COMPILER_SOURCES
-    src/main.cpp
+# Исходные файлы компилятора (без main.cpp)
+set(LIB_SOURCES
     src/compiler/Compiler.cpp
     src/compiler/Config.cpp
     src/compiler/BuildRulesParser.cpp
@@ -66,7 +65,7 @@ set(COMPILER_SOURCES
     src/core/AutoSave.cpp
 )
 
-set(COMPILER_HEADERS
+set(LIB_HEADERS
     src/compiler/Compiler.h
     src/compiler/Config.h
     src/compiler/BuildRulesParser.h
@@ -100,34 +99,39 @@ set(COMPILER_HEADERS
     src/core/AutoSave.h
 )
 
-# Создать исполняемый файл компилятора
-add_executable(proxima ${COMPILER_SOURCES} ${COMPILER_HEADERS})
-
-target_link_libraries(proxima ${llvm_libs})
+# Создать статическую библиотеку
+add_library(proximalib STATIC ${LIB_SOURCES} ${LIB_HEADERS})
+target_include_directories(proximalib PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(proximalib ${llvm_libs})
 if(ENABLE_CURL)
-    target_link_libraries(proxima ${CURL_LIBRARIES})
-    target_compile_definitions(proxima PRIVATE USE_CURL)
+    target_link_libraries(proximalib ${CURL_LIBRARIES})
+    target_compile_definitions(proximalib PRIVATE USE_CURL)
 endif()
 if(ENABLE_CUDA)
-    target_compile_definitions(proxima PRIVATE USE_CUDA)
+    target_compile_definitions(proximalib PRIVATE USE_CUDA)
 endif()
 
-target_include_directories(proxima PRIVATE ${CMAKE_SOURCE_DIR}/src)
+# Исходные файлы исполняемого файла (только main.cpp)
+set(COMPILER_SOURCES src/main.cpp)
+
+# Создать исполняемый файл компилятора
+add_executable(proxima ${COMPILER_SOURCES})
+target_link_libraries(proxima proximalib)
 
 # Тесты
 if(BUILD_TESTS)
     enable_testing()
 
     add_executable(lexer_test tests/unit/lexer_test.cpp)
-    target_link_libraries(lexer_test proxima)
+    target_link_libraries(lexer_test proximalib)
     add_test(NAME LexerTest COMMAND lexer_test)
 
     add_executable(parser_test tests/unit/parser_test.cpp)
-    target_link_libraries(parser_test proxima)
+    target_link_libraries(parser_test proximalib)
     add_test(NAME ParserTest COMMAND parser_test)
 
     add_executable(runtime_test tests/unit/runtime_tests.cpp)
-    target_link_libraries(runtime_test proxima)
+    target_link_libraries(runtime_test proximalib)
     add_test(NAME RuntimeTest COMMAND runtime_test)
 endif()
 
