@@ -1,1 +1,24 @@
-Nothing should be ignored in this case, as only a source code header file (`proxima/src/parser/Parser.h`) was modified and there are no build artifacts, dependencies, or temporary files in the changes.
+```
+# Compiled and build artifacts
+*.o
+*.obj
+*.out
+# Build directories
+build/
+proxima/build/
+# CMake files
+CMakeCache.txt
+CMakeFiles/
+# Dependencies
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+# Environment
+.env
+.env.local
+.env.*
+# Editors
+.vscode/
+.idea/
+```

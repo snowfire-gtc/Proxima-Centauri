@@ -10,14 +10,72 @@
 namespace proxima {
 namespace stdlib {
 
-using CollectionValue = std::variant<
-    int64_t,
-    double,
-    std::string,
-    bool,
-    std::vector<CollectionValue>,
-    std::shared_ptr<class Collection>
->;
+// Forward declaration
+class Collection;
+
+// Use a wrapper struct to allow recursive type definition
+struct CollectionValue;
+
+using CollectionValueArray = std::vector<CollectionValue>;
+
+struct CollectionValue {
+    using VariantType = std::variant<
+        int64_t,
+        double,
+        std::string,
+        bool,
+        std::shared_ptr<CollectionValueArray>,
+        std::shared_ptr<Collection>
+    >;
+    
+    VariantType value;
+    
+    CollectionValue() : value(int64_t(0)) {}
+    CollectionValue(int64_t v) : value(v) {}
+    CollectionValue(double v) : value(v) {}
+    CollectionValue(const std::string& v) : value(v) {}
+    CollectionValue(const char* v) : value(std::string(v)) {}
+    CollectionValue(bool v) : value(v) {}
+    CollectionValue(const std::shared_ptr<CollectionValueArray>& v) : value(v) {}
+    CollectionValue(const CollectionValueArray& v) : value(std::make_shared<CollectionValueArray>(v)) {}
+    CollectionValue(const std::shared_ptr<Collection>& v) : value(v) {}
+    
+    // Helper methods for type checking
+    bool isNumber() const { return std::holds_alternative<int64_t>(value) || std::holds_alternative<double>(value); }
+    bool isString() const { return std::holds_alternative<std::string>(value); }
+    bool isBoolean() const { return std::holds_alternative<bool>(value); }
+    bool isArray() const { return std::holds_alternative<std::shared_ptr<CollectionValueArray>>(value); }
+    bool isCollection() const { return std::holds_alternative<std::shared_ptr<Collection>>(value); }
+    
+    // Accessors
+    int64_t asInt() const { 
+        if (std::holds_alternative<int64_t>(value)) return std::get<int64_t>(value);
+        if (std::holds_alternative<double>(value)) return static_cast<int64_t>(std::get<double>(value));
+        return 0; 
+    }
+    double asDouble() const {
+        if (std::holds_alternative<double>(value)) return std::get<double>(value);
+        if (std::holds_alternative<int64_t>(value)) return static_cast<double>(std::get<int64_t>(value));
+        return 0.0;
+    }
+    std::string asString() const { 
+        return std::holds_alternative<std::string>(value) ? std::get<std::string>(value) : ""; 
+    }
+    bool asBool() const { 
+        return std::holds_alternative<bool>(value) ? std::get<bool>(value) : false; 
+    }
+    const CollectionValueArray& asArray() const { 
+        static const CollectionValueArray empty;
+        return std::holds_alternative<std::shared_ptr<CollectionValueArray>>(value) 
+            ? *std::get<std::shared_ptr<CollectionValueArray>>(value) 
+            : empty;
+    }
+    std::shared_ptr<Collection> asCollection() const {
+        return std::holds_alternative<std::shared_ptr<Collection>>(value) 
+            ? std::get<std::shared_ptr<Collection>>(value) 
+            : nullptr;
+    }
+};
 
 class Collection {
 public:
@@ -62,7 +120,7 @@ public:
     
 private:
     std::vector<std::string> header;
-    std::vector<std::vector<CollectionValue>> data;
+    std::vector<std::shared_ptr<CollectionValueArray>> data;
     std::unordered_map<std::string, size_t> columnIndex;
     
     size_t getColumnIndex(const std::string& name) const;
