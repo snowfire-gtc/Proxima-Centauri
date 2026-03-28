@@ -7,7 +7,6 @@
 #include "ui/menu/MainMenu.h"
 #include "ui/dialogs/BuildDialog.h"
 #include "ui/dialogs/LLMAssistantDialog.h"
-#include "ui/dialogs/CollaborationDialog.h"
 #include "ui/dialogs/SettingsDialog.h"
 #include "ui/search/SearchWidget.h"
 #include "ui/search/ProjectSearchWidget.h"

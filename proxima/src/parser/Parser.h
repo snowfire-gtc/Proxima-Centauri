@@ -1,7 +1,7 @@
 #ifndef PROXIMA_PARSER_H
 #define PROXIMA_PARSER_H
 
-#include "Token.h"
+#include "../lexer/Token.h"
 #include "AST.h"
 #include <vector>
 #include <memory>
@@ -90,6 +90,11 @@ private:
     StatementNodePtr parseWhile();
     StatementNodePtr parseReturn();
     StatementNodePtr parseBlock();
+    
+    // Парсинг LLM директив
+    StatementNodePtr parseIntentBlock();
+    StatementNodePtr parseGeneratedBlock();
+    StatementNodePtr parseFixedBlock();
 
     // Парсинг выражений
     ExpressionNodePtr parseExpression();

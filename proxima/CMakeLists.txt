@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(Proxima VERSION 1.0.0 LANGUAGES CXX)
+project(Proxima VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -30,9 +30,8 @@ if(BUILD_IDE)
     find_package(Qt5 COMPONENTS Widgets Core Network REQUIRED)
 endif()
 
-# Исходные файлы компилятора
-set(COMPILER_SOURCES
-    src/main.cpp
+# Исходные файлы компилятора (без main.cpp)
+set(LIB_SOURCES
     src/compiler/Compiler.cpp
     src/compiler/Config.cpp
     src/compiler/BuildRulesParser.cpp
@@ -43,25 +42,31 @@ set(COMPILER_SOURCES
     src/semantic/SemanticAnalyzer.cpp
     src/semantic/TypeChecker.cpp
     src/semantic/SymbolTable.cpp
+    src/semantic/ArgumentValidator.cpp
     src/codegen/LLVMCodeGen.cpp
     src/codegen/Optimizer.cpp
     src/runtime/Runtime.cpp
     src/runtime/Debugger.cpp
+    src/runtime/Interpreter.cpp
+    src/runtime/Profiler.cpp
+    src/runtime/REPL.cpp
     src/runtime/StoryManager.cpp
+    src/runtime/gem.cpp
     src/stdlib/IO.cpp
     src/stdlib/Math.cpp
     src/stdlib/Collection.cpp
+    src/stdlib/Time.cpp
+    src/stdlib/StdLib.cpp
     src/utils/Logger.cpp
     src/utils/Protocol.cpp
     src/utils/DocGenerator.cpp
     src/utils/CollectionParser.cpp
     src/services/llm/LLMClient.cpp
-    src/services/git/GitIntegration.cpp
+    src/services/GitIntegration/GitIntegration.cpp
     src/core/AutoSave.cpp
-    src/gem/gem.cpp
 )
 
-set(COMPILER_HEADERS
+set(LIB_HEADERS
     src/compiler/Compiler.h
     src/compiler/Config.h
     src/compiler/BuildRulesParser.h
@@ -72,53 +77,63 @@ set(COMPILER_HEADERS
     src/semantic/SemanticAnalyzer.h
     src/semantic/TypeChecker.h
     src/semantic/SymbolTable.h
+    src/semantic/ArgumentValidator.h
     src/codegen/LLVMCodeGen.h
     src/codegen/Optimizer.h
     src/runtime/Runtime.h
     src/runtime/Debugger.h
+    src/runtime/Interpreter.h
+    src/runtime/Profiler.h
+    src/runtime/REPL.h
     src/runtime/StoryManager.h
+    src/runtime/gem.h
     src/stdlib/IO.h
-    src/stdlib/Math.h
     src/stdlib/Collection.h
+    src/stdlib/StdLib.h
+    src/stdlib/Time.h
     src/utils/Logger.h
     src/utils/Protocol.h
     src/utils/DocGenerator.h
     src/utils/CollectionParser.h
     src/services/llm/LLMClient.h
-    src/services/git/GitIntegration.h
+    src/services/GitIntegration/GitIntegration.h
     src/core/AutoSave.h
-    src/gem/gem.h
 )
 
-# Создать исполняемый файл компилятора
-add_executable(proxima ${COMPILER_SOURCES} ${COMPILER_HEADERS})
-
-target_link_libraries(proxima ${llvm_libs})
+# Создать статическую библиотеку
+add_library(proximalib STATIC ${LIB_SOURCES} ${LIB_HEADERS})
+target_include_directories(proximalib PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(proximalib ${llvm_libs})
 if(ENABLE_CURL)
-    target_link_libraries(proxima ${CURL_LIBRARIES})
-    target_compile_definitions(proxima PRIVATE USE_CURL)
+    target_link_libraries(proximalib ${CURL_LIBRARIES})
+    target_compile_definitions(proximalib PRIVATE USE_CURL)
 endif()
 if(ENABLE_CUDA)
-    target_compile_definitions(proxima PRIVATE USE_CUDA)
+    target_compile_definitions(proximalib PRIVATE USE_CUDA)
 endif()
 
-target_include_directories(proxima PRIVATE ${CMAKE_SOURCE_DIR}/src)
+# Исходные файлы исполняемого файла (только main.cpp)
+set(COMPILER_SOURCES src/main.cpp)
+
+# Создать исполняемый файл компилятора
+add_executable(proxima ${COMPILER_SOURCES})
+target_link_libraries(proxima proximalib)
 
 # Тесты
 if(BUILD_TESTS)
     enable_testing()
 
     add_executable(lexer_test tests/unit/lexer_test.cpp)
-    target_link_libraries(lexer_test proxima)
+    target_link_libraries(lexer_test proximalib)
     add_test(NAME LexerTest COMMAND lexer_test)
 
     add_executable(parser_test tests/unit/parser_test.cpp)
-    target_link_libraries(parser_test proxima)
+    target_link_libraries(parser_test proximalib)
     add_test(NAME ParserTest COMMAND parser_test)
 
-    add_executable(typechecker_test tests/unit/typechecker_test.cpp)
-    target_link_libraries(typechecker_test proxima)
-    add_test(NAME TypeCheckerTest COMMAND typechecker_test)
+    add_executable(runtime_test tests/unit/runtime_tests.cpp)
+    target_link_libraries(runtime_test proximalib)
+    add_test(NAME RuntimeTest COMMAND runtime_test)
 endif()
 
 # IDE Centauri
@@ -136,5 +151,4 @@ set(CPACK_PACKAGE_NAME "Proxima")
 set(CPACK_PACKAGE_VERSION "1.0.0")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Proxima Programming Language")
 set(CPACK_PACKAGE_VENDOR "Proxima Development Team")
-set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
 include(CPack)

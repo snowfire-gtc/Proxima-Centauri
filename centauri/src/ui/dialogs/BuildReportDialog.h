@@ -1,75 +1,93 @@
-#ifndef CENTAURI_BUILDREPORTDIALOG_H
-#define CENTAURI_BUILDREPORTDIALOG_H
+#pragma once
 
 #include <QDialog>
 #include <QTextEdit>
-#include <QTableWidget>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
 #include <QPushButton>
-#include "core/Project.h"
+#include <QVBoxLayout>
+#include <QLabel>
+#include <QProgressBar>
+#include <QTimer>
+#include <QStringList>
 
-namespace proxima {
+namespace centauri::ui {
 
-struct BuildReport {
-    QString projectName;
-    QString version;
-    QString buildHash;
-    QString buildTimestamp;
-    QString compilerVersion;
-    QString ideVersion;
-    qint64 buildDuration;
-    int moduleCount;
-    int totalLines;
-    qint64 outputSize;
-    QVector<QString> warnings;
-    QVector<QString> errors;
-    QMap<QString, QString> participants;
-    QMap<QString, bool> capabilities;
-};
-
+/**
+ * @brief Диалог отображения отчёта о сборке проекта
+ * 
+ * Отображает вывод компилятора, линковщика и других инструментов сборки
+ * с подсветкой ошибок, предупреждений и информационных сообщений.
+ * Предоставляет возможность остановки сборки и сохранения отчёта.
+ */
 class BuildReportDialog : public QDialog {
     Q_OBJECT
-    
+
 public:
-    explicit BuildReportDialog(Project* project, QWidget *parent = nullptr);
-    ~BuildReport();
-    
-    void generateReport();
-    void exportToMarkdown(const QString& path);
-    void exportToPDF(const QString& path);
-    void exportToHTML(const QString& path);
-    
+    explicit BuildReportDialog(QWidget* parent = nullptr);
+    ~BuildReportDialog() override;
+
+    /**
+     * @brief Добавить сообщение в отчёт
+     * @param message Текст сообщения
+     * @param type Тип сообщения (error, warning, info)
+     */
+    void appendMessage(const QString& message, const QString& type = "info");
+
+    /**
+     * @brief Начать новую сборку
+     * @param projectPath Путь к проекту
+     */
+    void startBuild(const QString& projectPath);
+
+    /**
+     * @brief Завершить сборку
+     * @param success Успешно ли завершена сборка
+     * @param duration Длительность сборки в мс
+     */
+    void finishBuild(bool success, int duration);
+
+    /**
+     * @brief Остановить текущую сборку
+     */
+    void stopBuild();
+
+    /**
+     * @brief Очистить отчёт
+     */
+    void clear();
+
+    /**
+     * @brief Проверить, идёт ли сборка
+     */
+    bool isBuilding() const { return m_isBuilding; }
+
+signals:
+    void buildStarted();
+    void buildFinished(bool success);
+    void buildStopped();
+    void saveRequested();
+
 private slots:
-    void onExportMD();
-    void onExportPDF();
-    void onExportHTML();
-    void onCopy();
-    void onClose();
-    void onRefresh();
-    
+    void onStopClicked();
+    void onSaveClicked();
+    void onClearClicked();
+    void updateProgress();
+
 private:
     void setupUI();
-    void populateReport();
-    QString formatReport() const;
-    QString generateMD5Hash() const;
-    QString formatTimestamp(const QDateTime& dt) const;
+    void highlightMessage(QTextDocument* doc, const QString& message, const QString& type);
+
+    QTextEdit* m_outputText;
+    QProgressBar* m_progressBar;
+    QLabel* m_statusLabel;
+    QLabel* m_timeLabel;
+    QPushButton* m_stopButton;
+    QPushButton* m_saveButton;
+    QPushButton* m_clearButton;
     
-    Project* project;
-    BuildReport report;
-    
-    QTextEdit* reportText;
-    QTableWidget* participantsTable;
-    QTableWidget* capabilitiesTable;
-    
-    QPushButton* exportMDButton;
-    QPushButton* exportPDFButton;
-    QPushButton* exportHTMLButton;
-    QPushButton* copyButton;
-    QPushButton* refreshButton;
-    QPushButton* closeButton;
+    QTimer* m_progressTimer;
+    int m_elapsedTime;
+    bool m_isBuilding;
+    QStringList m_messages;
 };
 
-} // namespace proxima
-
-#endif // CENTAURI_BUILDREPORTDIALOG_H
+} // namespace centauri::ui

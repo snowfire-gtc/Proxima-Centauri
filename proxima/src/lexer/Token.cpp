@@ -130,6 +130,8 @@ static const std::unordered_map<TokenType, std::string> typeToStringMap = {
     {TokenType::OP_DOT_GT, "OP_DOT_GT"},
     {TokenType::OP_DOT_LTE, "OP_DOT_LTE"},
     {TokenType::OP_DOT_GTE, "OP_DOT_GTE"},
+    {TokenType::OP_DOT_AND, "OP_DOT_AND"},
+    {TokenType::OP_DOT_OR, "OP_DOT_OR"},
     {TokenType::OP_TRANSPOSE, "OP_TRANSPOSE"},
     {TokenType::OP_TERNARY, "OP_TERNARY"},
     {TokenType::OP_AMPERSAND, "OP_AMPERSAND"},

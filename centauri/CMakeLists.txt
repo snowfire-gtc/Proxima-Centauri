@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.16)
 project(CentauriIDE VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -7,8 +7,8 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-# Найти Qt 5.15.2
-find_package(Qt5 5.15.2 REQUIRED COMPONENTS Widgets Core Network Gui)
+# Найти Qt 6
+find_package(Qt6 REQUIRED COMPONENTS Widgets Core Network Gui)
 
 # Найти Proxima Compiler (опционально)
 find_package(ProximaCompiler QUIET)
@@ -23,17 +23,31 @@ set(IDE_SOURCES
     src/ui/editor/SyntaxHighlighter.cpp
     src/ui/editor/EditorToolbar.cpp
     src/ui/editor/StatusBar.cpp
+    src/ui/editor/CodeFoldingManager.cpp
+    src/ui/editor/CompletionProvider.cpp
+    src/ui/editor/SnippetManager.cpp
+    src/ui/editor/RemoteCursorOverlay.cpp
+    src/ui/editor/CollaborativeTextManager.cpp
     src/ui/console/ConsoleWidget.cpp
     src/ui/console/ConsoleTab.cpp
-    src/ui/project/ProjectTree.cpp
-    src/ui/project/FileExplorer.cpp
-    src/ui/debugger/BreakpointManager.cpp
-    src/ui/debugger/VariableInspector.cpp
+    src/ui/console/REPLConsoleTab.cpp
+    src/ui/console/REPLSyntaxHighlighter.cpp
+    src/ui/dialogs/SearchWidget.cpp
+    src/ui/dialogs/AdvancedSearchWidget.cpp
+    src/ui/dialogs/BuildDialog.cpp
+    src/ui/dialogs/LLMAssistantDialog.cpp
+    src/ui/dialogs/SettingsDialog.cpp
+    src/ui/dialogs/BuildReportDialog.cpp
+    src/ui/dialogs/CollaborationDialog.cpp
+    src/ui/dialogs/CompatibilityReportDialog.cpp
+    src/ui/dialogs/FoldingSettingsDialog.cpp
+    src/ui/dialogs/SnippetManagerDialog.cpp
+    src/ui/menu/MainMenu.cpp
     src/ui/debugger/visualizers/VectorPlot.cpp
     src/ui/debugger/visualizers/MatrixView.cpp
     src/ui/debugger/visualizers/Layer3DView.cpp
     src/ui/debugger/visualizers/CollectionTable.cpp
-    src/ui/menu/MainMenu.cpp
+    src/ui/debugger/visualizers/ObjectInspector.cpp
     src/core/Project.cpp
     src/core/Module.cpp
     src/core/AutoSaveManager.cpp
@@ -41,30 +55,45 @@ set(IDE_SOURCES
     src/services/git/GitService.cpp
     src/services/llm/LLMService.cpp
     src/services/collaboration/CollaborationService.cpp
-    src/utils/Logger.cpp
-    src/utils/Config.cpp
-    src/utils/Helpers.cpp
+    src/services/network/NetworkAuthService.cpp
+    src/services/plugins/PluginManager.cpp
+    src/docs/DocGenerator.cpp
+    src/testing/TestFramework.cpp
 )
 
 set(IDE_HEADERS
-    src/app/Application.h
     src/app/MainWindow.h
     src/app/Settings.h
     src/ui/editor/CodeEditor.h
     src/ui/editor/SyntaxHighlighter.h
     src/ui/editor/EditorToolbar.h
     src/ui/editor/StatusBar.h
+    src/ui/editor/CodeFoldingManager.h
+    src/ui/editor/CompletionProvider.h
+    src/ui/editor/SnippetManager.h
+    src/ui/editor/RemoteCursorOverlay.h
+    src/ui/editor/CollaborativeTextManager.h
     src/ui/console/ConsoleWidget.h
     src/ui/console/ConsoleTab.h
-    src/ui/project/ProjectTree.h
-    src/ui/project/FileExplorer.h
+    src/ui/console/REPLConsoleTab.h
+    src/ui/console/REPLSyntaxHighlighter.h
+    src/ui/dialogs/SearchWidget.h
+    src/ui/dialogs/AdvancedSearchWidget.h
+    src/ui/dialogs/BuildDialog.h
+    src/ui/dialogs/LLMAssistantDialog.h
+    src/ui/dialogs/SettingsDialog.h
+    src/ui/dialogs/BuildReportDialog.h
+    src/ui/dialogs/CollaborationDialog.h
+    src/ui/dialogs/CompatibilityReportDialog.h
+    src/ui/dialogs/FoldingSettingsDialog.h
+    src/ui/dialogs/SnippetManagerDialog.h
+    src/ui/menu/MainMenu.h
     src/ui/debugger/BreakpointManager.h
     src/ui/debugger/VariableInspector.h
     src/ui/debugger/visualizers/VectorPlot.h
     src/ui/debugger/visualizers/MatrixView.h
     src/ui/debugger/visualizers/Layer3DView.h
     src/ui/debugger/visualizers/CollectionTable.h
-    src/ui/menu/MainMenu.h
     src/core/Project.h
     src/core/Module.h
     src/core/AutoSaveManager.h
@@ -72,27 +101,20 @@ set(IDE_HEADERS
     src/services/git/GitService.h
     src/services/llm/LLMService.h
     src/services/collaboration/CollaborationService.h
+    src/services/network/NetworkAuthService.h
     src/services/plugins/PluginManager.h
-    src/utils/Logger.h
-    src/utils/Config.h
-    src/utils/Helpers.h
-    docs/DocGenerator.h
-)
-
-set(IDE_RESOURCES
-    resources/icons.qrc
-    resources/themes.qrc
-    resources/translations.qrc
+    src/docs/DocGenerator.h
+    src/testing/TestFramework.h
 )
 
 # Создать исполняемый файл IDE
-add_executable(centauri WIN32 ${IDE_SOURCES} ${IDE_HEADERS} ${IDE_RESOURCES})
+add_executable(centauri ${IDE_SOURCES} ${IDE_HEADERS})
 
 target_link_libraries(centauri
-    Qt5::Widgets
-    Qt5::Core
-    Qt5::Network
-    Qt5::Gui
+    Qt6::Widgets
+    Qt6::Core
+    Qt6::Network
+    Qt6::Gui
 )
 
 if(ProximaCompiler_FOUND)
@@ -107,7 +129,6 @@ target_include_directories(centauri PRIVATE
 
 # Установка
 install(TARGETS centauri DESTINATION bin)
-install(DIRECTORY resources/ DESTINATION share/centauri/resources)
 
 # Создание ярлыков (Windows)
 if(WIN32)
@@ -131,6 +152,4 @@ set(CPACK_PACKAGE_NAME "Centauri IDE")
 set(CPACK_PACKAGE_VERSION "1.0.0")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "IDE for Proxima Programming Language")
 set(CPACK_PACKAGE_VENDOR "Proxima Development Team")
-set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
-set(CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}/resources/icons/centauri.ico")
 include(CPack)

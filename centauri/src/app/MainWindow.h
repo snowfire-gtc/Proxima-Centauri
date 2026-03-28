@@ -52,9 +52,6 @@ class ObjectInspector;
 class SettingsDialog;
 class BuildDialog;
 class LLMAssistantDialog;
-class CollaborationDialog;
-class BuildReportDialog;
-class CompatibilityReportDialog;
 class SearchWidget;           // Поиск в файле
 class ProjectSearchWidget;    // Поиск по проекту
 class AdvancedSearchWidget;   // Расширенный поиск значений

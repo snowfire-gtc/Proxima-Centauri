@@ -73,6 +73,11 @@ enum class TokenType {
     KEYWORD_TEST,       // test
     KEYWORD_ASSERT,     // assert
     
+    // LLM directives
+    KEYWORD_INTENT,     // #intent
+    KEYWORD_GENERATED,  // #generated
+    KEYWORD_FIXED,      // #fixed
+    
     // Types
     TYPE_INT4,          // int4
     TYPE_INT8,          // int8
@@ -137,6 +142,8 @@ enum class TokenType {
     OP_DOT_GT,          // .>
     OP_DOT_LTE,         // .<=
     OP_DOT_GTE,         // .>=
+    OP_DOT_AND,         // .& (поэлементное "и")
+    OP_DOT_OR,          // .| (поэлементное "или")
     OP_TRANSPOSE,       // ' (апостроф)
     OP_TERNARY,         // ?:
     OP_AMPERSAND,       // @
