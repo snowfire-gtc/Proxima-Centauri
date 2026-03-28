@@ -39,26 +39,31 @@ set(COMPILER_SOURCES
     src/lexer/Lexer.cpp
     src/lexer/Token.cpp
     src/parser/Parser.cpp
-    src/parser/AST.cpp
     src/semantic/SemanticAnalyzer.cpp
     src/semantic/TypeChecker.cpp
     src/semantic/SymbolTable.cpp
+    src/semantic/ArgumentValidator.cpp
     src/codegen/LLVMCodeGen.cpp
     src/codegen/Optimizer.cpp
     src/runtime/Runtime.cpp
     src/runtime/Debugger.cpp
+    src/runtime/Interpreter.cpp
+    src/runtime/Profiler.cpp
+    src/runtime/REPL.cpp
     src/runtime/StoryManager.cpp
+    src/runtime/gem.cpp
     src/stdlib/IO.cpp
     src/stdlib/Math.cpp
     src/stdlib/Collection.cpp
+    src/stdlib/Time.cpp
+    src/stdlib/StdLib.cpp
     src/utils/Logger.cpp
     src/utils/Protocol.cpp
     src/utils/DocGenerator.cpp
     src/utils/CollectionParser.cpp
     src/services/llm/LLMClient.cpp
-    src/services/git/GitIntegration.cpp
+    src/services/GitIntegration/GitIntegration.cpp
     src/core/AutoSave.cpp
-    src/gem/gem.cpp
 )
 
 set(COMPILER_HEADERS
@@ -72,22 +77,27 @@ set(COMPILER_HEADERS
     src/semantic/SemanticAnalyzer.h
     src/semantic/TypeChecker.h
     src/semantic/SymbolTable.h
+    src/semantic/ArgumentValidator.h
     src/codegen/LLVMCodeGen.h
     src/codegen/Optimizer.h
     src/runtime/Runtime.h
     src/runtime/Debugger.h
+    src/runtime/Interpreter.h
+    src/runtime/Profiler.h
+    src/runtime/REPL.h
     src/runtime/StoryManager.h
+    src/runtime/gem.h
     src/stdlib/IO.h
-    src/stdlib/Math.h
     src/stdlib/Collection.h
+    src/stdlib/StdLib.h
+    src/stdlib/Time.h
     src/utils/Logger.h
     src/utils/Protocol.h
     src/utils/DocGenerator.h
     src/utils/CollectionParser.h
     src/services/llm/LLMClient.h
-    src/services/git/GitIntegration.h
+    src/services/GitIntegration/GitIntegration.h
     src/core/AutoSave.h
-    src/gem/gem.h
 )
 
 # Создать исполняемый файл компилятора
@@ -116,9 +126,9 @@ if(BUILD_TESTS)
     target_link_libraries(parser_test proxima)
     add_test(NAME ParserTest COMMAND parser_test)
 
-    add_executable(typechecker_test tests/unit/typechecker_test.cpp)
-    target_link_libraries(typechecker_test proxima)
-    add_test(NAME TypeCheckerTest COMMAND typechecker_test)
+    add_executable(runtime_test tests/unit/runtime_tests.cpp)
+    target_link_libraries(runtime_test proxima)
+    add_test(NAME RuntimeTest COMMAND runtime_test)
 endif()
 
 # IDE Centauri
@@ -136,5 +146,4 @@ set(CPACK_PACKAGE_NAME "Proxima")
 set(CPACK_PACKAGE_VERSION "1.0.0")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Proxima Programming Language")
 set(CPACK_PACKAGE_VENDOR "Proxima Development Team")
-set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
 include(CPack)

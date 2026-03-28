@@ -17,9 +17,26 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install dependencies
+    - name: Free up disk space
       run: |
-        sudo apt-get update && sudo apt-get install -y llvm qt6-base-dev
+        sudo apt-get clean
+        sudo rm -rf /var/lib/apt/lists/*
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf "/usr/local/share/boost"
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        df -h
+
+    - name: Install minimal LLVM dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          llvm-dev \
+          libllvm14 \
+          cmake \
+          build-essential
+        sudo apt-get clean
+        df -h
 
     - name: Configure
       run: |
@@ -54,9 +71,27 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Install dependencies
+    - name: Free up disk space
       run: |
-        sudo apt-get update && sudo apt-get install -y qt6-base-dev
+        sudo apt-get clean
+        sudo rm -rf /var/lib/apt/lists/*
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf "/usr/local/share/boost"
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        df -h
+
+    - name: Install minimal Qt6 dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          qt6-base-dev \
+          libqt6widgets6 \
+          libqt6network6 \
+          cmake \
+          build-essential
+        sudo apt-get clean
+        df -h
 
     - name: Configure
       run: |

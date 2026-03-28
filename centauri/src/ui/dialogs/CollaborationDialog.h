@@ -1,117 +1,120 @@
-#ifndef CENTAURI_COLLABORATIONDIALOG_H
-#define CENTAURI_COLLABORATIONDIALOG_H
+#pragma once
 
 #include <QDialog>
 #include <QListWidget>
-#include <QTableWidget>
 #include <QTextEdit>
 #include <QPushButton>
-#include <QLineEdit>
+#include <QVBoxLayout>
 #include <QLabel>
-#include <QCheckBox>
-#include "services/collaboration/CollaborationService.h"
+#include <QTimer>
+#include <QStringList>
+#include <QMap>
 
-namespace proxima {
+namespace centauri::ui {
 
+/**
+ * @brief Диалог для совместной работы над кодом в реальном времени
+ * 
+ * Позволяет нескольким разработчикам работать над одним проектом одновременно,
+ * видеть изменения друг друга, обмениваться сообщениями и управлять сессиями.
+ */
 class CollaborationDialog : public QDialog {
     Q_OBJECT
-    
+
 public:
-    explicit CollaborationDialog(QWidget *parent = nullptr);
-    ~CollaborationDialog();
-    
-    // Session management
-    bool hostSession(const QString& projectName, int port);
-    bool joinSession(const QString& hostAddress, int port, const QString& password);
-    bool leaveSession();
-    bool isInSession() const { return inSession; }
-    
-    // User management
-    void setCurrentUser(const QString& username, const QString& color);
-    QString getCurrentUsername() const { return currentUsername; }
-    
-    // File operations
-    void openFile(const QString& file);
-    void closeFile(const QString& file);
-    void lockFile(const QString& file);
-    void unlockFile(const QString& file);
-    
-    // Cursor tracking
-    void updateCursor(const QString& file, int line, int column);
-    void updateSelection(const QString& file, int startLine, int startCol, int endLine, int endCol);
-    
+    explicit CollaborationDialog(QWidget* parent = nullptr);
+    ~CollaborationDialog() override;
+
+    /**
+     * @brief Начать новую сессию совместной работы
+     * @param projectName Название проекта
+     * @return ID сессии
+     */
+    QString startSession(const QString& projectName);
+
+    /**
+     * @brief Присоединиться к существующей сессии
+     * @param sessionId ID сессии
+     * @param username Имя пользователя
+     * @return true если успешно
+     */
+    bool joinSession(const QString& sessionId, const QString& username);
+
+    /**
+     * @brief Покинуть текущую сессию
+     */
+    void leaveSession();
+
+    /**
+     * @brief Отправить сообщение в чат
+     * @param message Текст сообщения
+     */
+    void sendChatMessage(const QString& message);
+
+    /**
+     * @brief Синхронизировать изменения файла
+     * @param filePath Путь к файлу
+     * @param content Новое содержимое
+     * @param author Автор изменений
+     */
+    void syncFileChange(const QString& filePath, const QString& content, const QString& author);
+
+    /**
+     * @brief Получить текущий статус подключения
+     */
+    bool isConnected() const { return m_connected; }
+
+    /**
+     * @brief Получить ID текущей сессии
+     */
+    QString getSessionId() const { return m_sessionId; }
+
 signals:
     void sessionStarted(const QString& sessionId);
     void sessionJoined(const QString& sessionId);
-    void sessionEnded();
-    void changeReceived(const DocumentChange& change);
-    void cursorUpdated(const QString& userId, const QString& file, int line, int column);
-    void selectionUpdated(const QString& userId, const QString& file, int startLine, int startCol, int endLine, int endCol);
-    
+    void sessionLeft();
+    void messageReceived(const QString& author, const QString& message);
+    void fileChanged(const QString& filePath, const QString& content, const QString& author);
+    void userJoined(const QString& username);
+    void userLeft(const QString& username);
+    void connectionLost();
+
 private slots:
-    void onHostSession();
-    void onJoinSession();
-    void onLeaveSession();
-    void onRefresh();
-    void onSendChange();
-    void onRollbackSelected();
-    void onRollbackAll();
-    void onParticipantSelected(int row);
-    void onConnectionStatusChanged(bool connected);
-    void onParticipantJoined(const UserInfo& user);
-    void onParticipantLeft(const UserInfo& user);
-    void onChangeReceived(const DocumentChange& change);
-    void onVersionUpdated(int version);
-    
+    void onStartClicked();
+    void onJoinClicked();
+    void onLeaveClicked();
+    void onSendClicked();
+    void onRefreshClicked();
+    void updateStatus();
+    void onSessionDoubleClicked(QListWidgetItem* item);
+
 private:
     void setupUI();
-    void setupSessionGroup();
-    void setupParticipantsGroup();
-    void setupHistoryGroup();
-    void setupButtonGroup();
     void updateParticipantList();
-    void updateHistoryList();
-    void updateStatus();
+    void addSystemMessage(const QString& message);
+    void setConnected(bool connected);
+
+    // UI элементы
+    QListWidget* m_sessionList;
+    QListWidget* m_participantList;
+    QTextEdit* m_chatText;
+    QTextEdit* m_messageInput;
+    QPushButton* m_startButton;
+    QPushButton* m_joinButton;
+    QPushButton* m_leaveButton;
+    QPushButton* m_sendButton;
+    QPushButton* m_refreshButton;
+    QLabel* m_statusLabel;
+    QLabel* m_sessionInfoLabel;
     
-    // Session group
-    QGroupBox* sessionGroup;
-    QLineEdit* hostEdit;
-    QSpinBox* portSpin;
-    QLineEdit* passwordEdit;
-    QLineEdit* usernameEdit;
-    QCheckBox* enableEncryptionCheck;
-    QPushButton* hostButton;
-    QPushButton* joinButton;
-    QPushButton* leaveButton;
-    QLabel* statusLabel;
-    QLabel* sessionIdLabel;
+    // Состояние
+    bool m_connected;
+    QString m_sessionId;
+    QString m_username;
+    QStringList m_participants;
+    QMap<QString, QString> m_sessions; // sessionId -> projectName
     
-    // Participants group
-    QGroupBox* participantsGroup;
-    QTableWidget* participantsTable;
-    QPushButton* refreshButton;
-    
-    // History group
-    QGroupBox* historyGroup;
-    QListWidget* historyList;
-    QPushButton* rollbackButton;
-    QPushButton* rollbackAllButton;
-    
-    // Buttons
-    QPushButton* closeButton;
-    
-    // Service
-    CollaborationService* collaborationService;
-    
-    // State
-    bool inSession;
-    bool isHosting;
-    QString currentUsername;
-    QString currentUserColor;
-    QString sessionId;
-    int currentVersion;
+    QTimer* m_statusTimer;
 };
 
-} // namespace proxima
-
-#endif // CENTAURI_COLLABORATIONDIALOG_H
+} // namespace centauri::ui

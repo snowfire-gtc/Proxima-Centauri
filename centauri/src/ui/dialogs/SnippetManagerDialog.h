@@ -1,71 +1,123 @@
-#ifndef CENTAURI_SNIPPETMANAGERDIALOG_H
-#define CENTAURI_SNIPPETMANAGERDIALOG_H
+#pragma once
 
 #include <QDialog>
 #include <QListWidget>
 #include <QTextEdit>
-#include <QLineEdit>
 #include <QPushButton>
-#include <QCheckBox>
-#include "editor/SnippetManager.h"
+#include <QVBoxLayout>
+#include <QLabel>
+#include <QLineEdit>
+#include <QGroupBox>
+#include <QStringList>
 
-namespace proxima {
+namespace centauri::ui {
 
+/**
+ * @brief Диалог управления сниппетами кода
+ * 
+ * Позволяет создавать, редактировать, удалять и организовывать
+ * сниппеты кода для быстрой вставки в редакторе.
+ */
 class SnippetManagerDialog : public QDialog {
     Q_OBJECT
-    
+
 public:
-    explicit SnippetManagerDialog(QWidget *parent = nullptr);
-    ~SnippetManagerDialog();
-    
-    void loadSnippets();
-    void saveSnippets();
-    
+    explicit SnippetManagerDialog(QWidget* parent = nullptr);
+    ~SnippetManagerDialog() override;
+
+    /**
+     * @brief Загрузить сниппеты из файла
+     * @param filePath Путь к файлу со сниппетами
+     * @return true если успешно
+     */
+    bool loadSnippets(const QString& filePath = QString());
+
+    /**
+     * @brief Сохранить сниппеты в файл
+     * @param filePath Путь к файлу
+     * @return true если успешно
+     */
+    bool saveSnippets(const QString& filePath = QString());
+
+    /**
+     * @brief Добавить новый сниппет
+     * @param name Название сниппета
+     * @param content Содержимое сниппета
+     * @param category Категория
+     * @param shortcut Горячие клавиши
+     */
+    void addSnippet(const QString& name, const QString& content,
+                    const QString& category = "General",
+                    const QString& shortcut = "");
+
+    /**
+     * @brief Получить выбранный сниппет
+     * @return Содержимое выбранного сниппета
+     */
+    QString getSelectedSnippet() const;
+
+    /**
+     * @brief Получить количество сниппетов
+     */
+    int getSnippetCount() const { return m_snippetList->count(); }
+
+signals:
+    void snippetSelected(const QString& name, const QString& content);
+    void snippetInserted(const QString& content);
+    void snippetsLoaded();
+    void snippetsSaved();
+
 private slots:
-    void onSnippetSelected(int index);
-    void onAddSnippet();
-    void onDeleteSnippet();
-    void onSave();
-    void onImport();
-    void onExport();
-    void onPreview();
-    void onTriggerChanged(const QString& text);
-    void onContentChanged();
-    
+    void onNewClicked();
+    void onEditClicked();
+    void onDeleteClicked();
+    void onImportClicked();
+    void onExportClicked();
+    void onInsertClicked();
+    void onSelectionChanged();
+    void onSearchTextChanged(const QString& text);
+    void onCategoryChanged(const QString& category);
+    void updateSnippetList();
+
 private:
     void setupUI();
-    void updatePreview();
-    void updateSnippetFromUI();
-    void loadSnippetToUI(const SnippetDefinition& snippet);
-    void clearUI();
+    void populateCategories();
+    void clearInputs();
+    bool validateInputs();
+    int findSnippetByName(const QString& name);
+
+    // Список сниппетов
+    QListWidget* m_snippetList;
     
-    // Snippet list
-    QListWidget* snippetList;
+    // Поиск и фильтрация
+    QLineEdit* m_searchEdit;
+    QComboBox* m_categoryCombo;
     
-    // Snippet editor
-    QLineEdit* triggerEdit;
-    QLineEdit* nameEdit;
-    QTextEdit* contentEdit;
-    QTextEdit* descriptionEdit;
-    QTextEdit* previewEdit;
+    // Редактирование
+    QLineEdit* m_nameEdit;
+    QTextEdit* m_contentEdit;
+    QComboBox* m_categoryEdit;
+    QLineEdit* m_shortcutEdit;
     
-    // Options
-    QCheckBox* enabledCheck;
+    // Кнопки
+    QPushButton* m_newButton;
+    QPushButton* m_editButton;
+    QPushButton* m_deleteButton;
+    QPushButton* m_importButton;
+    QPushButton* m_exportButton;
+    QPushButton* m_insertButton;
+    QPushButton* m_closeButton;
     
-    // Buttons
-    QPushButton* addButton;
-    QPushButton* deleteButton;
-    QPushButton* saveButton;
-    QPushButton* importButton;
-    QPushButton* exportButton;
-    QPushButton* previewButton;
-    QPushButton* closeButton;
+    // Данные
+    struct Snippet {
+        QString name;
+        QString content;
+        QString category;
+        QString shortcut;
+    };
     
-    QVector<SnippetDefinition> snippets;
-    int currentIndex;
-    bool isModified;
+    QList<Snippet> m_snippets;
+    QString m_currentFile;
 };
 
-} // namespace proxima
-
-#endif // CENTAURI_SNIPPETMANAGERDIALOG_H
+} // namespace centauri::ui
