@@ -26,6 +26,8 @@ set(IDE_SOURCES
     src/ui/editor/CodeFoldingManager.cpp
     src/ui/editor/CompletionProvider.cpp
     src/ui/editor/SnippetManager.cpp
+    src/ui/editor/RemoteCursorOverlay.cpp
+    src/ui/editor/CollaborativeTextManager.cpp
     src/ui/console/ConsoleWidget.cpp
     src/ui/console/ConsoleTab.cpp
     src/ui/console/REPLConsoleTab.cpp
@@ -69,6 +71,8 @@ set(IDE_HEADERS
     src/ui/editor/CodeFoldingManager.h
     src/ui/editor/CompletionProvider.h
     src/ui/editor/SnippetManager.h
+    src/ui/editor/RemoteCursorOverlay.h
+    src/ui/editor/CollaborativeTextManager.h
     src/ui/console/ConsoleWidget.h
     src/ui/console/ConsoleTab.h
     src/ui/console/REPLConsoleTab.h
