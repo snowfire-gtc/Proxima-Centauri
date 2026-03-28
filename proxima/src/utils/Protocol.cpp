@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <random>
 #include <algorithm>
+#include <cmath>
 
 namespace proxima {
 
@@ -161,14 +162,14 @@ Collection Collection::get(const std::string& key) const {
     } else if (m_type == CollectionType::Object) {
         auto it = m_objectValue.find(key);
         if (it != m_objectValue.end()) {
-            return it.value();
+            return it->second;
         }
     }
     return Collection();
 }
 
 Collection Collection::get(int index) const {
-    if (m_type == CollectionType::Array && index >= 0 && index < m_arrayValue.size()) {
+    if (m_type == CollectionType::Array && index >= 0 && static_cast<size_t>(index) < m_arrayValue.size()) {
         return m_arrayValue[index];
     }
     return Collection();
@@ -190,11 +191,11 @@ bool Collection::has(const std::string& key) const {
 int Collection::size() const {
     switch (m_type) {
         case CollectionType::Array:
-            return m_arrayValue.size();
+            return static_cast<int>(m_arrayValue.size());
         case CollectionType::Object:
-            return m_objectValue.size();
+            return static_cast<int>(m_objectValue.size());
         case CollectionType::Collection:
-            return m_collectionPairs.size();
+            return static_cast<int>(m_collectionPairs.size());
         default:
             return 0;
     }
@@ -240,7 +241,7 @@ Collection Collection::deserialize(const std::string& input) {
         return collectionValueToCollection(result.value);
     }
     
-    LOG_ERROR("Collection deserialize error: " + result.error.toStdString());
+    LOG_ERROR("Collection deserialize error: " + result.error);
     return Collection();
 }
 
@@ -435,25 +436,25 @@ CollectionParser::Value Collection::collectionToCollectionValue(const Collection
             break;
             
         case CollectionType::Array: {
-            QVector<CollectionParser::Value> array;
+            std::vector<CollectionParser::Value> array;
             for (const auto& item : collection.m_arrayValue) {
-                array.append(collectionToCollectionValue(item));
+                array.push_back(collectionToCollectionValue(item));
             }
             value = CollectionParser::Value::fromArray(array);
             break;
         }
             
         case CollectionType::Object: {
-            QMap<QString, CollectionParser::Value> object;
-            for (auto it = collection.m_objectValue.begin(); it != collection.m_objectValue.end(); ++it) {
-                object[it.key()] = collectionToCollectionValue(it.value());
+            std::map<std::string, CollectionParser::Value> object;
+            for (const auto& kv : collection.m_objectValue) {
+                object[kv.first] = collectionToCollectionValue(kv.second);
             }
             value = CollectionParser::Value::fromObject(object);
             break;
         }
             
         case CollectionType::Collection: {
-            QMap<QString, CollectionParser::Value> collectionMap;
+            std::map<std::string, CollectionParser::Value> collectionMap;
             for (const auto& pair : collection.m_collectionPairs) {
                 collectionMap[pair.first] = collectionToCollectionValue(pair.second);
             }
@@ -476,7 +477,7 @@ bool Collection::operator==(const Collection& other) const {
         case CollectionType::String:
             return m_stringValue == other.m_stringValue;
         case CollectionType::Number:
-            return qAbs(m_numberValue - other.m_numberValue) < 1e-10;
+            return std::abs(m_numberValue - other.m_numberValue) < 1e-10;
         case CollectionType::Boolean:
             return m_boolValue == other.m_boolValue;
         case CollectionType::Null:
@@ -496,47 +497,87 @@ bool Collection::operator==(const Collection& other) const {
 // Message Implementation
 // ============================================================================
 
+namespace {
+
+std::string getCurrentTimestamp() {
+    auto now = std::chrono::system_clock::now();
+    auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    std::tm tm_now;
+#ifdef _WIN32
+    localtime_s(&tm_now, &time_t_now);
+#else
+    localtime_r(&time_t_now, &tm_now);
+#endif
+    char buffer[30];
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%S", &tm_now);
+    return std::string(buffer);
+}
+
+std::string generateUuid() {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dis(0, 15);
+    std::uniform_int_distribution<> dis2(8, 11);
+    
+    std::stringstream ss;
+    ss << std::hex;
+    for (int i = 0; i < 8; i++) ss << dis(gen);
+    ss << "-";
+    for (int i = 0; i < 4; i++) ss << dis(gen);
+    ss << "-4";
+    for (int i = 0; i < 3; i++) ss << dis(gen);
+    ss << "-";
+    ss << dis2(gen);
+    for (int i = 0; i < 3; i++) ss << dis(gen);
+    ss << "-";
+    for (int i = 0; i < 12; i++) ss << dis(gen);
+    
+    return ss.str();
+}
+
+} // anonymous namespace
+
 Message::Message()
     : type(MessageType::ERROR_RESPONSE)
     , requestId("")
-    , timestamp(QDateTime::currentDateTime().toString(Qt::ISODate)) {
+    , timestamp(getCurrentTimestamp()) {
 }
 
 Message::Message(MessageType t)
     : type(t)
-    , requestId(QUuid::createUuid().toString())
-    , timestamp(QDateTime::currentDateTime().toString(Qt::ISODate)) {
+    , requestId(generateUuid())
+    , timestamp(getCurrentTimestamp()) {
 }
 
 Message::~Message() {
 }
 
-QString Message::serialize() const {
+std::string Message::serialize() const {
     CollectionParser parser;
     
     // Создаём collection для сообщения
-    QVector<QPair<QString, Collection>> pairs;
+    CollectionPairs pairs;
     
     // Тип сообщения
-    pairs.append(qMakePair(QString("type"), 
+    pairs.push_back(std::make_pair("type", 
                           Collection::fromNumber(static_cast<double>(type))));
     
     // ID запроса
-    pairs.append(qMakePair(QString("requestId"), 
+    pairs.push_back(std::make_pair("requestId", 
                           Collection::fromString(requestId)));
     
     // Временная метка
-    pairs.append(qMakePair(QString("timestamp"), 
+    pairs.push_back(std::make_pair("timestamp", 
                           Collection::fromString(timestamp)));
     
     // Данные
-    pairs.append(qMakePair(QString("data"), data));
+    pairs.push_back(std::make_pair("data", data));
     
     Collection messageCollection = Collection::fromCollection(pairs);
     return parser.serialize(messageCollection, 4);
 }
 
-Message Message::deserialize(const QString& data) {
+Message Message::deserialize(const std::string& data) {
     Message msg;
     
     CollectionParser parser;
@@ -566,7 +607,7 @@ Message Message::deserialize(const QString& data) {
         // Извлекаем данные
         msg.data = collection.get("data");
     } else {
-        LOG_ERROR("Message deserialize error: " + result.error.toStdString());
+        LOG_ERROR("Message deserialize error: " + result.error);
         msg.type = MessageType::ERROR_RESPONSE;
         msg.data = Collection::fromString(result.error);
     }
@@ -578,6 +619,7 @@ bool Message::isValid() const {
     return type != MessageType::ERROR_RESPONSE || !data.isEmpty();
 }
 
+
 // ============================================================================
 // AnalysisRequest Implementation
 // ============================================================================
@@ -588,20 +630,20 @@ AnalysisRequest::AnalysisRequest()
     , branch("main") {
 }
 
-QString AnalysisRequest::serialize() const {
+std::string AnalysisRequest::serialize() const {
     CollectionParser parser;
     
-    QVector<QPair<QString, Collection>> pairs;
-    pairs.append(qMakePair("file", Collection::fromString(file)));
-    pairs.append(qMakePair("infer_types", Collection::fromBoolean(inferTypes)));
-    pairs.append(qMakePair("highlight_timing", Collection::fromBoolean(highlightTiming)));
-    pairs.append(qMakePair("branch", Collection::fromString(branch)));
+    CollectionPairs pairs;
+    pairs.push_back(std::make_pair("file", Collection::fromString(file)));
+    pairs.push_back(std::make_pair("infer_types", Collection::fromBoolean(inferTypes)));
+    pairs.push_back(std::make_pair("highlight_timing", Collection::fromBoolean(highlightTiming)));
+    pairs.push_back(std::make_pair("branch", Collection::fromString(branch)));
     
     Collection collection = Collection::fromCollection(pairs);
     return parser.serialize(collection, 4);
 }
 
-AnalysisRequest AnalysisRequest::deserialize(const QString& data) {
+AnalysisRequest AnalysisRequest::deserialize(const std::string& data) {
     AnalysisRequest request;
     
     CollectionParser parser;
@@ -642,50 +684,51 @@ AnalysisResponse::AnalysisResponse()
     : status("error") {
 }
 
-QString AnalysisResponse::serialize() const {
+std::string AnalysisResponse::serialize() const {
     CollectionParser parser;
     
-    QVector<QPair<QString, Collection>> pairs;
-    pairs.append(qMakePair("status", Collection::fromString(status)));
+    CollectionPairs pairs;
+    pairs.push_back(std::make_pair("status", Collection::fromString(status)));
     
     // Сериализация symbols
-    QVector<Collection> symbolsArray;
+    CollectionArray symbolsArray;
     for (const SymbolInfo& symbol : symbols) {
-        QVector<QPair<QString, Collection>> symbolPairs;
-        symbolPairs.append(qMakePair("name", Collection::fromString(symbol.name)));
-        symbolPairs.append(qMakePair("type", Collection::fromString(symbol.type)));
-        symbolPairs.append(qMakePair("line", Collection::fromNumber(symbol.line)));
-        if (!symbol.returnType.isEmpty()) {
-            symbolPairs.append(qMakePair("return_type", Collection::fromString(symbol.returnType)));
+        CollectionPairs symbolPairs;
+        symbolPairs.push_back(std::make_pair("name", Collection::fromString(symbol.name)));
+        symbolPairs.push_back(std::make_pair("type", Collection::fromString(symbol.type)));
+        symbolPairs.push_back(std::make_pair("line", Collection::fromNumber(symbol.line)));
+        if (!symbol.returnType.empty()) {
+            symbolPairs.push_back(std::make_pair("return_type", Collection::fromString(symbol.returnType)));
         }
-        symbolsArray.append(Collection::fromCollection(symbolPairs));
+        symbolsArray.push_back(Collection::fromCollection(symbolPairs));
     }
-    pairs.append(qMakePair("symbols", Collection::fromArray(symbolsArray)));
+    pairs.push_back(std::make_pair("symbols", Collection::fromArray(symbolsArray)));
     
     // Сериализация warnings
-    QVector<Collection> warningsArray;
-    for (const QString& warning : warnings) {
-        warningsArray.append(Collection::fromString(warning));
+    CollectionArray warningsArray;
+    for (const std::string& warning : warnings) {
+        warningsArray.push_back(Collection::fromString(warning));
     }
-    pairs.append(qMakePair("warnings", Collection::fromArray(warningsArray)));
+    pairs.push_back(std::make_pair("warnings", Collection::fromArray(warningsArray)));
     
     // Сериализация timingHints
     Collection timingHintsObj;
-    QMap<QString, Collection> timingMap;
-    if (timingHints.contains("hotspot_lines")) {
-        QVector<Collection> linesArray;
-        for (int line : timingHints["hotspot_lines"]) {
-            linesArray.append(Collection::fromNumber(line));
+    std::map<std::string, Collection> timingMap;
+    auto it = timingHints.find("hotspot_lines");
+    if (it != timingHints.end()) {
+        CollectionArray linesArray;
+        for (int line : it->second) {
+            linesArray.push_back(Collection::fromNumber(line));
         }
         timingMap["hotspot_lines"] = Collection::fromArray(linesArray);
     }
-    pairs.append(qMakePair("timing_hints", Collection::fromObject(timingMap)));
+    pairs.push_back(std::make_pair("timing_hints", Collection::fromObject(timingMap)));
     
     Collection collection = Collection::fromCollection(pairs);
     return parser.serialize(collection, 4);
 }
 
-AnalysisResponse AnalysisResponse::deserialize(const QString& data) {
+AnalysisResponse AnalysisResponse::deserialize(const std::string& data) {
     AnalysisResponse response;
     
     CollectionParser parser;
@@ -716,7 +759,7 @@ AnalysisResponse AnalysisResponse::deserialize(const QString& data) {
         Collection warningsValue = collection.get("warnings");
         if (warningsValue.type() == CollectionType::Array) {
             for (const auto& warningItem : warningsValue.toArray()) {
-                response.warnings.append(warningItem.toString());
+                response.warnings.push_back(warningItem.toString());
             }
         }
         
@@ -725,9 +768,9 @@ AnalysisResponse AnalysisResponse::deserialize(const QString& data) {
         if (timingHintsValue.type() == CollectionType::Object) {
             Collection hotspotsValue = timingHintsValue.get("hotspot_lines");
             if (hotspotsValue.type() == CollectionType::Array) {
-                QVector<int> hotspots;
+                std::vector<int> hotspots;
                 for (const auto& lineItem : hotspotsValue.toArray()) {
-                    hotspots.append(static_cast<int>(lineItem.toNumber()));
+                    hotspots.push_back(static_cast<int>(lineItem.toNumber()));
                 }
                 response.timingHints["hotspot_lines"] = hotspots;
             }
@@ -747,10 +790,7 @@ Protocol& Protocol::getInstance() {
 }
 
 Protocol::Protocol()
-    : server(nullptr)
-    , socket(nullptr)
-    , connected(false)
-    , hostMode(false)
+    : connected(false)
     , port(9090) {
 }
 
@@ -758,346 +798,105 @@ Protocol::~Protocol() {
     disconnect();
 }
 
-bool Protocol::connectToCompiler(const QString& host, int port) {
-    if (connected) {
-        disconnect();
-    }
-    
-    socket = new QTcpSocket(this);
-    
-    connect(socket, &QTcpSocket::connected, this, &Protocol::onConnected);
-    connect(socket, &QTcpSocket::disconnected, this, &Protocol::onDisconnected);
-    connect(socket, &QTcpSocket::readyRead, this, &Protocol::onReadyRead);
-    connect(socket, QOverload<QAbstractSocket::SocketError>::of(&QAbstractSocket::errorOccurred),
-            this, &Protocol::onError);
-    
-    socket->connectToHost(host, port);
-    
-    if (socket->waitForConnected(5000)) {
-        connected = true;
-        hostMode = false;
-        this->port = port;
-        LOG_INFO("Connected to compiler at " + host.toStdString() + ":" + QString::number(port).toStdString());
-        return true;
-    }
-    
-    LOG_ERROR("Failed to connect to compiler");
-    delete socket;
-    socket = nullptr;
-    return false;
-}
-
-bool Protocol::startServer(int port) {
-    if (connected) {
-        disconnect();
-    }
-    
-    server = new QTcpServer(this);
-    
-    if (server->listen(QHostAddress::Any, port)) {
-        connected = true;
-        hostMode = true;
-        this->port = port;
-        
-        connect(server, &QTcpServer::newConnection, this, &Protocol::onNewConnection);
-        
-        LOG_INFO("Protocol server started on port " + QString::number(port).toStdString());
-        return true;
-    }
-    
-    LOG_ERROR("Failed to start protocol server: " + server->errorString().toStdString());
-    delete server;
-    server = nullptr;
-    return false;
-}
-
-void Protocol::disconnect() {
-    if (socket) {
-        socket->disconnectFromHost();
-        if (socket->state() != QAbstractSocket::UnconnectedState) {
-            socket->waitForDisconnected(1000);
-        }
-        delete socket;
-        socket = nullptr;
-    }
-    
-    if (server) {
-        server->close();
-        delete server;
-        server = nullptr;
-    }
-    
-    connected = false;
-    hostMode = false;
-    
-    LOG_INFO("Protocol disconnected");
-}
-
-void Protocol::sendMessage(const Message& message) {
-    if (!connected || !socket) {
-        LOG_ERROR("Cannot send message - not connected");
-        return;
-    }
-    
-    QString serialized = message.serialize();
-    QByteArray data = serialized.toUtf8();
-    
-    // Отправляем длину сообщения (4 байта) + данные
-    quint32 length = static_cast<quint32>(data.size());
-    QByteArray header;
-    header.append(static_cast<char>((length >> 24) & 0xFF));
-    header.append(static_cast<char>((length >> 16) & 0xFF));
-    header.append(static_cast<char>((length >> 8) & 0xFF));
-    header.append(static_cast<char>(length & 0xFF));
-    
-    socket->write(header);
-    socket->write(data);
-    socket->flush();
-    
-    LOG_DEBUG("Message sent: " + message.requestId.toStdString());
+void Protocol::sendMessage(const Message& msg) {
+    LOG_ERROR("Protocol::sendMessage not implemented - requires network library");
 }
 
 Message Protocol::receiveMessage() {
-    if (!connected || !socket) {
-        return Message();
-    }
-    
-    // Читаем длину сообщения (4 байта)
-    if (socket->bytesAvailable() < 4) {
-        return Message();
-    }
-    
-    QByteArray header = socket->read(4);
-    quint32 length = 0;
-    length |= (static_cast<quint8>(header[0]) << 24);
-    length |= (static_cast<quint8>(header[1]) << 16);
-    length |= (static_cast<quint8>(header[2]) << 8);
-    length |= static_cast<quint8>(header[3]);
-    
-    // Ждём данные
-    while (socket->bytesAvailable() < static_cast<qint64>(length)) {
-        socket->waitForReadyRead(1000);
-    }
-    
-    QByteArray data = socket->read(length);
-    QString serialized = QString::fromUtf8(data);
-    
-    Message message = Message::deserialize(serialized);
-    
-    LOG_DEBUG("Message received: " + message.requestId.toStdString());
-    
-    return message;
-}
-
-void Protocol::sendRequest(const Message& request) {
-    sendMessage(request);
-}
-
-Message Protocol::receiveResponse(int timeout) {
-    QElapsedTimer timer;
-    timer.start();
-    
-    while (timer.elapsed() < timeout) {
-        if (socket && socket->bytesAvailable() >= 4) {
-            Message response = receiveMessage();
-            if (response.isValid()) {
-                return response;
-            }
-        }
-        QCoreApplication::processEvents();
-        QThread::msleep(10);
-    }
-    
+    LOG_ERROR("Protocol::receiveMessage not implemented - requires network library");
     return Message();
 }
 
-bool Protocol::isConnected() const {
-    return connected;
+Message Protocol::createAnalysisRequest(const AnalysisRequest& req) {
+    Message msg(MessageType::ANALYZE_FILE);
+    msg.data = Collection::fromString(req.file);
+    return msg;
 }
 
-bool Protocol::isHost() const {
-    return hostMode;
+Message Protocol::createAnalysisResponse(const AnalysisResponse& resp) {
+    Message msg(MessageType::ANALYSIS_RESULT);
+    msg.data = Collection::fromString(resp.status);
+    return msg;
 }
 
-int Protocol::getPort() const {
-    return port;
+Message Protocol::createError(const std::string& error, const std::string& requestId) {
+    Message msg(MessageType::ERROR_RESPONSE);
+    msg.data = Collection::fromString(error);
+    msg.requestId = requestId;
+    return msg;
 }
 
-void Protocol::onConnected() {
-    LOG_INFO("Protocol connection established");
-    emit connectionStatusChanged(true);
+void Protocol::setConnection(const std::string& host_, int port_) {
+    host = host_;
+    port = port_;
 }
 
-void Protocol::onDisconnected() {
-    LOG_INFO("Protocol connection lost");
+void Protocol::disconnect() {
     connected = false;
-    emit connectionStatusChanged(false);
+    LOG_INFO("Protocol disconnected");
 }
 
-void Protocol::onReadyRead() {
-    while (socket && socket->bytesAvailable() >= 4) {
-        Message message = receiveMessage();
-        if (message.isValid()) {
-            emit messageReceived(message);
-        }
-    }
+std::string Protocol::readFromSocket() {
+    return "";
 }
 
-void Protocol::onError(QAbstractSocket::SocketError socketError) {
-    QString errorStr;
-    switch (socketError) {
-        case QAbstractSocket::ConnectionRefusedError:
-            errorStr = "Connection refused";
-            break;
-        case QAbstractSocket::RemoteHostClosedError:
-            errorStr = "Remote host closed";
-            break;
-        case QAbstractSocket::HostNotFoundError:
-            errorStr = "Host not found";
-            break;
-        case QAbstractSocket::SocketAccessError:
-            errorStr = "Socket access error";
-            break;
-        case QAbstractSocket::SocketResourceError:
-            errorStr = "Socket resource error";
-            break;
-        case QAbstractSocket::SocketTimeoutError:
-            errorStr = "Socket timeout";
-            break;
-        case QAbstractSocket::DatagramTooLargeError:
-            errorStr = "Datagram too large";
-            break;
-        case QAbstractSocket::NetworkError:
-            errorStr = "Network error";
-            break;
-        case QAbstractSocket::AddressInUseError:
-            errorStr = "Address in use";
-            break;
-        case QAbstractSocket::SocketAddressNotAvailableError:
-            errorStr = "Socket address not available";
-            break;
-        case QAbstractSocket::UnsupportedSocketOperationError:
-            errorStr = "Unsupported socket operation";
-            break;
-        case QAbstractSocket::UnfinishedSocketOperationError:
-            errorStr = "Unfinished socket operation";
-            break;
-        case QAbstractSocket::ProxyAuthenticationRequiredError:
-            errorStr = "Proxy authentication required";
-            break;
-        case QAbstractSocket::SslHandshakeFailedError:
-            errorStr = "SSL handshake failed";
-            break;
-        case QAbstractSocket::ProxyConnectionRefusedError:
-            errorStr = "Proxy connection refused";
-            break;
-        case QAbstractSocket::ProxyConnectionClosedError:
-            errorStr = "Proxy connection closed";
-            break;
-        case QAbstractSocket::ProxyConnectionTimeoutError:
-            errorStr = "Proxy connection timeout";
-            break;
-        case QAbstractSocket::ProxyConnectionHostNotFoundError:
-            errorStr = "Proxy host not found";
-            break;
-        case QAbstractSocket::ProxyConnectionSocketError:
-            errorStr = "Proxy socket error";
-            break;
-        case QAbstractSocket::ProxyConnectionServiceNotFoundError:
-            errorStr = "Proxy service not found";
-            break;
-        case QAbstractSocket::ProxyConnectionAuthenticationRequiredError:
-            errorStr = "Proxy authentication required";
-            break;
-        default:
-            errorStr = "Unknown error";
-            break;
-    }
-    
-    LOG_ERROR("Protocol error: " + errorStr.toStdString());
-    emit errorOccurred(errorStr);
-}
-
-void Protocol::onNewConnection() {
-    if (!server) return;
-    
-    QTcpSocket* clientSocket = server->nextPendingConnection();
-    
-    connect(clientSocket, &QTcpSocket::disconnected, clientSocket, &QTcpSocket::deleteLater);
-    connect(clientSocket, &QTcpSocket::readyRead, this, [this, clientSocket]() {
-        while (clientSocket && clientSocket->bytesAvailable() >= 4) {
-            // Чтение сообщения от клиента
-            QByteArray header = clientSocket->read(4);
-            if (header.size() < 4) return;
-            
-            quint32 length = 0;
-            length |= (static_cast<quint8>(header[0]) << 24);
-            length |= (static_cast<quint8>(header[1]) << 16);
-            length |= (static_cast<quint8>(header[2]) << 8);
-            length |= static_cast<quint8>(header[3]);
-            
-            while (clientSocket->bytesAvailable() < static_cast<qint64>(length)) {
-                clientSocket->waitForReadyRead(1000);
-            }
-            
-            QByteArray data = clientSocket->read(length);
-            QString serialized = QString::fromUtf8(data);
-            
-            Message message = Message::deserialize(serialized);
-            if (message.isValid()) {
-                emit messageReceived(message);
-            }
-        }
-    });
-    
-    LOG_INFO("New client connection");
+void Protocol::writeToSocket(const std::string& data) {
+    (void)data;
 }
 
 // ============================================================================
 // Utility Functions
 // ============================================================================
 
-Collection createMessage(MessageType type, const QVector<QPair<QString, Collection>>& data) {
+Collection createMessage(MessageType type, const CollectionPairs& data) {
     Message msg(type);
     msg.data = Collection::fromCollection(data);
     return msg.data;
 }
 
-Collection createAnalysisRequest(const QString& file, bool inferTypes, 
-                                 bool highlightTiming, const QString& branch) {
-    QVector<QPair<QString, Collection>> pairs;
-    pairs.append(qMakePair("file", Collection::fromString(file)));
-    pairs.append(qMakePair("infer_types", Collection::fromBoolean(inferTypes)));
-    pairs.append(qMakePair("highlight_timing", Collection::fromBoolean(highlightTiming)));
-    pairs.append(qMakePair("branch", Collection::fromString(branch)));
+Collection createAnalysisRequest(const std::string& file, bool inferTypes, 
+                                 bool highlightTiming, const std::string& branch) {
+    CollectionPairs pairs;
+    pairs.push_back(std::make_pair("file", Collection::fromString(file)));
+    pairs.push_back(std::make_pair("infer_types", Collection::fromBoolean(inferTypes)));
+    pairs.push_back(std::make_pair("highlight_timing", Collection::fromBoolean(highlightTiming)));
+    pairs.push_back(std::make_pair("branch", Collection::fromString(branch)));
     
     return Collection::fromCollection(pairs);
 }
 
-Collection createCompileRequest(const QString& projectPath, const CompilerConfig& config) {
-    QVector<QPair<QString, Collection>> pairs;
-    pairs.append(qMakePair("project_path", Collection::fromString(projectPath)));
-    pairs.append(qMakePair("mode", Collection::fromNumber(static_cast<double>(config.mode))));
-    pairs.append(qMakePair("verbose_level", Collection::fromNumber(config.verboseLevel)));
-    pairs.append(qMakePair("max_memory", Collection::fromNumber(static_cast<double>(config.maxMemory))));
-    pairs.append(qMakePair("enable_cuda", Collection::fromBoolean(config.enableCUDA)));
-    pairs.append(qMakePair("enable_avx2", Collection::fromBoolean(config.enableAVX2)));
-    pairs.append(qMakePair("enable_sse4", Collection::fromBoolean(config.enableSSE4)));
-    pairs.append(qMakePair("debug_symbols", Collection::fromBoolean(config.debugSymbols)));
-    pairs.append(qMakePair("optimization_level", Collection::fromNumber(config.optimizationLevel)));
+Collection createCompileRequest(const std::string& projectPath, const CompilerConfig& config) {
+    CollectionPairs pairs;
+    pairs.push_back(std::make_pair("project_path", Collection::fromString(projectPath)));
+    pairs.push_back(std::make_pair("mode", Collection::fromNumber(static_cast<double>(config.mode))));
+    pairs.push_back(std::make_pair("verbose_level", Collection::fromNumber(config.verboseLevel)));
+    pairs.push_back(std::make_pair("max_memory", Collection::fromNumber(static_cast<double>(config.maxMemory))));
+    pairs.push_back(std::make_pair("enable_cuda", Collection::fromBoolean(config.enableCUDA)));
+    pairs.push_back(std::make_pair("enable_avx2", Collection::fromBoolean(config.enableAVX2))));
+    pairs.push_back(std::make_pair("enable_sse4", Collection::fromBoolean(config.enableSSE4)));
+    pairs.push_back(std::make_pair("debug_symbols", Collection::fromBoolean(config.debugSymbols)));
+    pairs.push_back(std::make_pair("optimization_level", Collection::fromNumber(config.optimizationLevel)));
     
-    if (!config.outputPath.isEmpty()) {
-        pairs.append(qMakePair("output_path", Collection::fromString(config.outputPath)));
+    if (!config.outputPath.empty()) {
+        pairs.push_back(std::make_pair("output_path", Collection::fromString(config.outputPath)));
     }
     
     return Collection::fromCollection(pairs);
 }
 
-Collection createDebugRequest(const QString& action, const QString& file, int line) {
-    QVector<QPair<QString, Collection>> pairs;
-    pairs.append(qMakePair("action", Collection::fromString(action)));
+Collection createDebugRequest(const std::string& action, const std::string& file, int line) {
+    CollectionPairs pairs;
+    pairs.push_back(std::make_pair("action", Collection::fromString(action)));
     
-    if (!file.isEmpty()) {
+    if (!file.empty()) {
+        pairs.push_back(std::make_pair("file", Collection::fromString(file)));
+        pairs.push_back(std::make_pair("line", Collection::fromNumber(line)));
+    }
+    
+    return Collection::fromCollection(pairs);
+}
+
+} // namespace proxima
         pairs.append(qMakePair("file", Collection::fromString(file)));
     }
     

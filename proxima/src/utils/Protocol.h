@@ -6,7 +6,6 @@
 #include <vector>
 #include <map>
 #include <memory>
-#include <variant>
 
 namespace proxima {
 
@@ -119,6 +118,7 @@ struct Message {
     
     std::string serialize() const;
     static Message deserialize(const std::string& data);
+    bool isValid() const;
 };
 
 struct AnalysisRequest {
@@ -127,16 +127,25 @@ struct AnalysisRequest {
     bool highlightTiming;
     std::string branch;
     
+    AnalysisRequest();
     std::string serialize() const;
     static AnalysisRequest deserialize(const std::string& data);
 };
 
+struct SymbolInfo {
+    std::string name;
+    std::string type;
+    int line;
+    std::string returnType;
+};
+
 struct AnalysisResponse {
     std::string status;
-    std::vector<std::map<std::string, std::string>> symbols;
+    std::vector<SymbolInfo> symbols;
     std::vector<std::string> warnings;
     std::map<std::string, std::vector<int>> timingHints;
     
+    AnalysisResponse();
     std::string serialize() const;
     static AnalysisResponse deserialize(const std::string& data);
 };
@@ -165,11 +174,17 @@ private:
     std::string host;
     int port;
     bool connected;
-    std::string buffer;
     
     std::string readFromSocket();
     void writeToSocket(const std::string& data);
 };
+
+// Utility functions
+Collection createMessage(MessageType type, const CollectionPairs& data);
+Collection createAnalysisRequest(const std::string& file, bool inferTypes, 
+                                 bool highlightTiming, const std::string& branch);
+Collection createCompileRequest(const std::string& projectPath, const struct CompilerConfig& config);
+Collection createDebugRequest(const std::string& action, const std::string& file, int line);
 
 } // namespace proxima
 
