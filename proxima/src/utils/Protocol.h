@@ -4,9 +4,81 @@
 #include "../stdlib/Collection.h"
 #include <string>
 #include <vector>
+#include <map>
 #include <memory>
+#include <variant>
 
 namespace proxima {
+
+// Forward declaration
+class CollectionValue;
+
+using CollectionArray = std::vector<Collection>;
+using CollectionObject = std::map<std::string, Collection>;
+using CollectionPairs = std::vector<std::pair<std::string, Collection>>;
+
+enum class CollectionType {
+    Null,
+    String,
+    Number,
+    Boolean,
+    Array,
+    Object,
+    Collection
+};
+
+class Collection {
+public:
+    Collection();
+    Collection(const Collection& other);
+    Collection& operator=(const Collection& other);
+    ~Collection();
+    
+    static Collection fromString(const std::string& value);
+    static Collection fromNumber(double value);
+    static Collection fromBoolean(bool value);
+    static Collection fromArray(const CollectionArray& array);
+    static Collection fromObject(const CollectionObject& object);
+    static Collection fromCollection(const CollectionPairs& pairs);
+    static Collection fromCollection(std::initializer_list<std::pair<std::string, Collection>> pairs);
+    
+    CollectionType type() const;
+    std::string toString() const;
+    double toNumber() const;
+    bool toBoolean() const;
+    CollectionArray toArray() const;
+    CollectionObject toObject() const;
+    CollectionPairs toCollectionPairs() const;
+    
+    Collection get(const std::string& key) const;
+    Collection get(int index) const;
+    bool has(const std::string& key) const;
+    int size() const;
+    bool isEmpty() const;
+    
+    void set(const std::string& key, const Collection& value);
+    void append(const Collection& value);
+    void append(const std::string& key, const Collection& value);
+    
+    std::string serialize(int indent = 0) const;
+    static Collection deserialize(const std::string& input);
+    static bool isValid(const std::string& input);
+    
+    bool operator==(const Collection& other) const;
+    
+private:
+    void clear();
+    std::string toCollectionString(int indent) const;
+    std::string escapeString(const std::string& str) const;
+    
+    CollectionType m_type;
+    std::string m_stringValue;
+    double m_numberValue;
+    bool m_boolValue;
+    CollectionArray m_arrayValue;
+    CollectionObject m_objectValue;
+    CollectionPairs m_collectionPairs;
+};
 
 enum class MessageType {
     // IDE -> Compiler
@@ -38,7 +110,7 @@ enum class MessageType {
 
 struct Message {
     MessageType type;
-    stdlib::Collection data;
+    Collection data;
     std::string requestId;
     std::string timestamp;
     

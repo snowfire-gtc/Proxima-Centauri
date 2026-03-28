@@ -1,19 +1,12 @@
 #include "Protocol.h"
 #include "utils/CollectionParser.h"
 #include "utils/Logger.h"
-#include <QDateTime>
-#include <QFile>
-#include <QTextStream>
-#include <QRegularExpression>
-#include <QStack>
-#include <QMap>
-#include <QVector>
-#include <QPair>
-#include <QVariant>
-#include <QIODevice>
-#include <QTcpSocket>
-#include <QTcpServer>
-#include <QHostAddress>
+#include <chrono>
+#include <ctime>
+#include <sstream>
+#include <iomanip>
+#include <random>
+#include <algorithm>
 
 namespace proxima {
 
@@ -61,7 +54,7 @@ void Collection::clear() {
     m_collectionPairs.clear();
 }
 
-Collection Collection::fromString(const QString& value) {
+Collection Collection::fromString(const std::string& value) {
     Collection c;
     c.m_type = CollectionType::String;
     c.m_stringValue = value;
@@ -82,32 +75,32 @@ Collection Collection::fromBoolean(bool value) {
     return c;
 }
 
-Collection Collection::fromArray(const QVector<Collection>& array) {
+Collection Collection::fromArray(const CollectionArray& array) {
     Collection c;
     c.m_type = CollectionType::Array;
     c.m_arrayValue = array;
     return c;
 }
 
-Collection Collection::fromObject(const QMap<QString, Collection>& object) {
+Collection Collection::fromObject(const CollectionObject& object) {
     Collection c;
     c.m_type = CollectionType::Object;
     c.m_objectValue = object;
     return c;
 }
 
-Collection Collection::fromCollection(const QVector<QPair<QString, Collection>>& pairs) {
+Collection Collection::fromCollection(const CollectionPairs& pairs) {
     Collection c;
     c.m_type = CollectionType::Collection;
     c.m_collectionPairs = pairs;
     return c;
 }
 
-Collection Collection::fromCollection(const std::initializer_list<QPair<QString, Collection>>& pairs) {
+Collection Collection::fromCollection(std::initializer_list<std::pair<std::string, Collection>> pairs) {
     Collection c;
     c.m_type = CollectionType::Collection;
     for (const auto& pair : pairs) {
-        c.m_collectionPairs.append(pair);
+        c.m_collectionPairs.push_back(pair);
     }
     return c;
 }
@@ -116,11 +109,11 @@ CollectionType Collection::type() const {
     return m_type;
 }
 
-QString Collection::toString() const {
+std::string Collection::toString() const {
     if (m_type == CollectionType::String) {
         return m_stringValue;
     }
-    return QString();
+    return std::string();
 }
 
 double Collection::toNumber() const {
@@ -137,28 +130,28 @@ bool Collection::toBoolean() const {
     return false;
 }
 
-QVector<Collection> Collection::toArray() const {
+CollectionArray Collection::toArray() const {
     if (m_type == CollectionType::Array) {
         return m_arrayValue;
     }
-    return QVector<Collection>();
+    return CollectionArray();
 }
 
-QMap<QString, Collection> Collection::toObject() const {
+CollectionObject Collection::toObject() const {
     if (m_type == CollectionType::Object) {
         return m_objectValue;
     }
-    return QMap<QString, Collection>();
+    return CollectionObject();
 }
 
-QVector<QPair<QString, Collection>> Collection::toCollectionPairs() const {
+CollectionPairs Collection::toCollectionPairs() const {
     if (m_type == CollectionType::Collection) {
         return m_collectionPairs;
     }
-    return QVector<QPair<QString, Collection>>();
+    return CollectionPairs();
 }
 
-Collection Collection::get(const QString& key) const {
+Collection Collection::get(const std::string& key) const {
     if (m_type == CollectionType::Collection) {
         for (const auto& pair : m_collectionPairs) {
             if (pair.first == key) {
@@ -181,7 +174,7 @@ Collection Collection::get(int index) const {
     return Collection();
 }
 
-bool Collection::has(const QString& key) const {
+bool Collection::has(const std::string& key) const {
     if (m_type == CollectionType::Collection) {
         for (const auto& pair : m_collectionPairs) {
             if (pair.first == key) {
@@ -189,7 +182,7 @@ bool Collection::has(const QString& key) const {
             }
         }
     } else if (m_type == CollectionType::Object) {
-        return m_objectValue.contains(key);
+        return m_objectValue.find(key) != m_objectValue.end();
     }
     return false;
 }
@@ -211,35 +204,35 @@ bool Collection::isEmpty() const {
     return size() == 0;
 }
 
-void Collection::set(const QString& key, const Collection& value) {
+void Collection::set(const std::string& key, const Collection& value) {
     if (m_type == CollectionType::Collection) {
-        for (int i = 0; i < m_collectionPairs.size(); i++) {
+        for (size_t i = 0; i < m_collectionPairs.size(); i++) {
             if (m_collectionPairs[i].first == key) {
                 m_collectionPairs[i].second = value;
                 return;
             }
         }
-        m_collectionPairs.append(qMakePair(key, value));
+        m_collectionPairs.push_back(std::make_pair(key, value));
     }
 }
 
 void Collection::append(const Collection& value) {
     if (m_type == CollectionType::Array) {
-        m_arrayValue.append(value);
+        m_arrayValue.push_back(value);
     }
 }
 
-void Collection::append(const QString& key, const Collection& value) {
+void Collection::append(const std::string& key, const Collection& value) {
     if (m_type == CollectionType::Collection) {
-        m_collectionPairs.append(qMakePair(key, value));
+        m_collectionPairs.push_back(std::make_pair(key, value));
     }
 }
 
-QString Collection::serialize(int indent) const {
+std::string Collection::serialize(int indent) const {
     return toCollectionString(indent);
 }
 
-Collection Collection::deserialize(const QString& input) {
+Collection Collection::deserialize(const std::string& input) {
     CollectionParser parser;
     CollectionParser::ParseResult result = parser.parse(input);
     
@@ -251,14 +244,14 @@ Collection Collection::deserialize(const QString& input) {
     return Collection();
 }
 
-bool Collection::isValid(const QString& input) {
+bool Collection::isValid(const std::string& input) {
     return CollectionParser::isValid(input);
 }
 
-QString Collection::toCollectionString(int indent) const {
-    QString result;
-    QString indentStr(indent * 4, ' ');
-    QString nextIndentStr((indent + 1) * 4, ' ');
+std::string Collection::toCollectionString(int indent) const {
+    std::string result;
+    std::string indentStr(indent * 4, ' ');
+    std::string nextIndentStr((indent + 1) * 4, ' ');
     
     switch (m_type) {
         case CollectionType::String:
@@ -268,9 +261,12 @@ QString Collection::toCollectionString(int indent) const {
         case CollectionType::Number: {
             // Проверка на целое число
             if (m_numberValue == static_cast<int64_t>(m_numberValue)) {
-                result = QString::number(static_cast<int64_t>(m_numberValue));
+                result = std::to_string(static_cast<int64_t>(m_numberValue));
             } else {
-                result = QString::number(m_numberValue, 'g', 15);
+                std::ostringstream oss;
+                oss.precision(15);
+                oss << m_numberValue;
+                result = oss.str();
             }
             break;
         }
@@ -285,7 +281,7 @@ QString Collection::toCollectionString(int indent) const {
             
         case CollectionType::Array: {
             result += "[";
-            for (int i = 0; i < m_arrayValue.size(); i++) {
+            for (size_t i = 0; i < m_arrayValue.size(); i++) {
                 if (i > 0) {
                     result += ", ";
                 }
@@ -298,12 +294,12 @@ QString Collection::toCollectionString(int indent) const {
         case CollectionType::Object: {
             result += "{\n";
             int count = 0;
-            for (auto it = m_objectValue.begin(); it != m_objectValue.end(); ++it) {
+            for (const auto& kv : m_objectValue) {
                 if (count > 0) {
                     result += ",\n";
                 }
-                result += nextIndentStr + "\"" + escapeString(it.key()) + "\": " + 
-                         it.value().toCollectionString(indent + 1);
+                result += nextIndentStr + "\"" + escapeString(kv.first) + "\": " + 
+                         kv.second.toCollectionString(indent + 1);
                 count++;
             }
             if (count > 0) {
@@ -339,11 +335,10 @@ QString Collection::toCollectionString(int indent) const {
     return result;
 }
 
-QString Collection::escapeString(const QString& str) const {
-    QString result;
-    for (int i = 0; i < str.size(); i++) {
-        QChar c = str[i];
-        switch (c.unicode()) {
+std::string Collection::escapeString(const std::string& str) const {
+    std::string result;
+    for (char c : str) {
+        switch (c) {
             case '"': result += "\\\""; break;
             case '\\': result += "\\\\"; break;
             case '\b': result += "\\b"; break;
@@ -352,8 +347,10 @@ QString Collection::escapeString(const QString& str) const {
             case '\r': result += "\\r"; break;
             case '\t': result += "\\t"; break;
             default:
-                if (c.unicode() < 32) {
-                    result += QString("\\u%1").arg(c.unicode(), 4, 16, QChar('0'));
+                if (static_cast<unsigned char>(c) < 32) {
+                    char buf[8];
+                    snprintf(buf, sizeof(buf), "\\u%04x", static_cast<unsigned char>(c));
+                    result += buf;
                 } else {
                     result += c;
                 }
@@ -384,27 +381,27 @@ Collection Collection::collectionValueToCollection(const CollectionParser::Value
             break;
             
         case CollectionParser::ValueType::Array: {
-            QVector<Collection> array;
+            CollectionArray array;
             for (const auto& item : value.arrayValue) {
-                array.append(collectionValueToCollection(item));
+                array.push_back(collectionValueToCollection(item));
             }
             c = Collection::fromArray(array);
             break;
         }
             
         case CollectionParser::ValueType::Object: {
-            QMap<QString, Collection> object;
-            for (auto it = value.objectValue.begin(); it != value.objectValue.end(); ++it) {
-                object[it.key()] = collectionValueToCollection(it.value());
+            CollectionObject object;
+            for (const auto& kv : value.objectValue) {
+                object[kv.first] = collectionValueToCollection(kv.second);
             }
             c = Collection::fromObject(object);
             break;
         }
             
         case CollectionParser::ValueType::Collection: {
-            QVector<QPair<QString, Collection>> pairs;
-            for (auto it = value.objectValue.begin(); it != value.objectValue.end(); ++it) {
-                pairs.append(qMakePair(it.key(), collectionValueToCollection(it.value())));
+            CollectionPairs pairs;
+            for (const auto& kv : value.objectValue) {
+                pairs.push_back(std::make_pair(kv.first, collectionValueToCollection(kv.second)));
             }
             c = Collection::fromCollection(pairs);
             break;

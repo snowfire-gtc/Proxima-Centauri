@@ -47,7 +47,7 @@ public:
                                FunctionDeclNodePtr functionNode);
     
     // Проверка соответствия аргументов при вызове
-    void validateFunctionCall(const QVector<ValidationRule>& rules,
+    void validateFunctionCall(const std::vector<ValidationRule>& rules,
                              const std::vector<ExpressionNodePtr>& args,
                              const Token& token);
     
