@@ -1,7 +1,7 @@
 #ifndef PROXIMA_PARSER_H
 #define PROXIMA_PARSER_H
 
-#include "Token.h"
+#include "../lexer/Token.h"
 #include "AST.h"
 #include <vector>
 #include <memory>
