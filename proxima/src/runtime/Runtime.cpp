@@ -11,88 +11,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <stdexcept>
-#include <QStandardPaths>
-#include <QDir>
-#include <QFile>
-#include <QTextStream>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonArray>
-#include <QCryptographicHash>
-#include <QDateTime>
-#include <QPrinter>
-#include <QTextDocument>
-#include <QPrintDialog>
-#include <QBuffer>
-#include <QXmlStreamWriter>
-#include <QXmlStreamReader>
-#include <QRegularExpression>
-#include <QRegularExpressionMatch>
-#include <QThread>
-#include <QMutex>
-#include <QWaitCondition>
-#include <QSemaphore>
-#include <QReadWriteLock>
-#include <QAtomicInt>
-#include <QScopedPointer>
-#include <QSharedPointer>
-#include <QWeakPointer>
-#include <QDataStream>
-#include <QDebug>
-#include <QElapsedTimer>
-#include <QSet>
-#include <QHash>
-#include <QMultiHash>
-#include <QMultiMap>
-#include <QPair>
-#include <QMetaType>
-#include <QMetaObject>
-#include <QMetaProperty>
-#include <QMetaEnum>
-#include <QMetaMethod>
-#include <QMetaClassInfo>
-#include <QScriptEngine>
-#include <QScriptValue>
-#include <QScriptValueIterator>
-#include <QScriptable>
-#include <QScriptContext>
-#include <QScriptContextInfo>
-#include <QSyntaxHighlighter>
-#include <QTextCharFormat>
-#include <QTextBlockFormat>
-#include <QTextListFormat>
-#include <QTextTableFormat>
-#include <QTextFrameFormat>
-#include <QTextImageFormat>
-#include <QTextObject>
-#include <QTextObjectInterface>
-#include <QAbstractTextDocumentLayout>
-#include <QTextDocumentFragment>
-#include <QTextDocumentWriter>
-#include <QPdfWriter>
-#include <QPrinter>
-#include <QPrintDialog>
-#include <QPrintPreviewDialog>
-#include <QPrintPreviewWidget>
-#include <QPageSetupDialog>
-#include <QFontInfo>
-#include <QFontMetrics>
-#include <QFontDatabase>
-#include <QStyle>
-#include <QStyleFactory>
-#include <QStylePainter>
-#include <QStyleOption>
-#include <QVariantAnimation>
-#include <QPropertyAnimation>
-#include <QSequentialAnimationGroup>
-#include <QParallelAnimationGroup>
-#include <QPauseAnimation>
-#include <QEasingCurve>
-#include <QGraphicsEffect>
-#include <QGraphicsBlurEffect>
-#include <QGraphicsDropShadowEffect>
-#include <QGraphicsOpacityEffect>
-#include <QGraphicsColorizeEffect>
+#include <ctime>
 #include "utils/Logger.h"
 #include "stdlib/IO.h"
 #include "stdlib/Math.h"
@@ -1099,12 +1018,12 @@ int Runtime::getMatrixCols(const std::vector<std::vector<RuntimeValue>>& matrix)
 // Runtime GEM Methods
 // ============================================================================
 
-GEM* Runtime::createGEMObject(const QString& type, const QString& name) {
+GEM* Runtime::createGEMObject(const std::string& type, const std::string& name) {
     GEM* object = new GEM(name);
     object->set_type(type);
 
-    LOG_INFO("GEM object created: " + type.toStdString() +
-             " (" + name.toStdString() + ")");
+    LOG_INFO("GEM object created: " + type +
+             " (" + name + ")");
 
     return object;
 }
@@ -1118,9 +1037,9 @@ bool Runtime::initGEMObject(GEM* object) {
     bool success = object->init();
 
     if (success) {
-        LOG_INFO("GEM object initialized: " + object->get_name().toStdString());
+        LOG_INFO("GEM object initialized: " + object->get_name());
     } else {
-        LOG_ERROR("GEM object initialization failed: " + object->get_name().toStdString());
+        LOG_ERROR("GEM object initialization failed: " + object->get_name());
     }
 
     return success;
@@ -1134,7 +1053,7 @@ Collection Runtime::updateGEMObject(GEM* object, const Time& currentTime) {
 
     Collection result = object->update(currentTime);
 
-    LOG_DEBUG("GEM object updated: " + object->get_name().toStdString());
+    LOG_DEBUG("GEM object updated: " + object->get_name());
 
     return result;
 }
@@ -1148,9 +1067,9 @@ bool Runtime::resetGEMObject(GEM* object) {
     bool success = object->reset();
 
     if (success) {
-        LOG_INFO("GEM object reset: " + object->get_name().toStdString());
+        LOG_INFO("GEM object reset: " + object->get_name());
     } else {
-        LOG_ERROR("GEM object reset failed: " + object->get_name().toStdString());
+        LOG_ERROR("GEM object reset failed: " + object->get_name());
     }
 
     return success;
@@ -1182,7 +1101,7 @@ void Runtime::setGEMParams(GEM* object, const Collection& params) {
 
     object->set_params(params);
 
-    LOG_DEBUG("GEM parameters set: " + object->get_name().toStdString());
+    LOG_DEBUG("GEM parameters set: " + object->get_name());
 }
 
 Collection Runtime::getGEMParams(GEM* object) {
@@ -1202,7 +1121,7 @@ void Runtime::publishGEMObject(GEM* object, const Collection& doc) {
 
     object->publish(doc);
 
-    LOG_INFO("GEM object published: " + object->get_name().toStdString());
+    LOG_INFO("GEM object published: " + object->get_name());
 }
 
 Collection Runtime::storeGEMObject(GEM* object) {
@@ -1213,7 +1132,7 @@ Collection Runtime::storeGEMObject(GEM* object) {
 
     Collection state = object->store();
 
-    LOG_INFO("GEM object state stored: " + object->get_name().toStdString());
+    LOG_INFO("GEM object state stored: " + object->get_name());
 
     return state;
 }
@@ -1226,7 +1145,7 @@ void Runtime::restoreGEMObject(GEM* object, const Collection& state) {
 
     object->restore(state);
 
-    LOG_INFO("GEM object state restored: " + object->get_name().toStdString());
+    LOG_INFO("GEM object state restored: " + object->get_name());
 }
 
 void Runtime::showGEMObject(GEM* object) {
@@ -1237,7 +1156,7 @@ void Runtime::showGEMObject(GEM* object) {
 
     object->show();
 
-    LOG_DEBUG("GEM object shown: " + object->get_name().toStdString());
+    LOG_DEBUG("GEM object shown: " + object->get_name());
 }
 
 void Runtime::destroyGEMObject(GEM* object) {
@@ -1246,7 +1165,7 @@ void Runtime::destroyGEMObject(GEM* object) {
         return;
     }
 
-    LOG_INFO("GEM object destroyed: " + object->get_name().toStdString());
+    LOG_INFO("GEM object destroyed: " + object->get_name());
 
     delete object;
 }

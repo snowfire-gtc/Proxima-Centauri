@@ -2,10 +2,11 @@
 # Compiled and build artifacts
 *.o
 *.obj
-*.exe
-*.dll
-*.so
 *.a
+*.lib
+*.so
+*.dll
+*.exe
 *.out
 build/
 dist/
@@ -15,26 +16,27 @@ node_modules/
 venv/
 .venv/
 __pycache__/
-.mypy_cache/
+*.egg-info/
 .pytest_cache/
-target/
-.gradle/
+.mypy_cache/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
 
 # Logs and temp files
 *.log
 *.tmp
-*.swp
+*.temp
+
+# System files
+.DS_Store
+Thumbs.db
 
 # Environment
 .env
 .env.local
 *.env.*
-
-# Editors
-.vscode/
-.idea/
-
-# System files
-.DS_Store
-Thumbs.db
 ```

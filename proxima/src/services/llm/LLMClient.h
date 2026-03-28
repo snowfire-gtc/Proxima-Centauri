@@ -1,14 +1,13 @@
 #ifndef PROXIMA_LLM_CLIENT_H
 #define PROXIMA_LLM_CLIENT_H
 
-#include <QObject>
-#include <QString>
-#include <QVector>
-#include <QMap>
-#include <QDateTime>
-#include <QNetworkReply>
+#include <string>
+#include <vector>
+#include <map>
 #include <functional>
 #include <chrono>
+#include <mutex>
+#include <queue>
 
 namespace proxima {
 
@@ -17,9 +16,9 @@ struct CodeSuggestion {
     int blockId;
     int startLine;
     int endLine;
-    QString originalCode;
-    QString suggestedCode;
-    QString explanation;
+    std::string originalCode;
+    std::string suggestedCode;
+    std::string explanation;
     double confidence;
     bool accepted;
     
@@ -28,48 +27,46 @@ struct CodeSuggestion {
 };
 
 struct LLMRequest {
-    QString type;  // "code_modification", "explanation", "completion", etc.
-    QString file;
+    std::string type;  // "code_modification", "explanation", "completion", etc.
+    std::string file;
     int startLine;
     int endLine;
-    QString prompt;
-    QString codeContext;
-    QMap<QString, QString> options;
+    std::string prompt;
+    std::string codeContext;
+    std::map<std::string, std::string> options;
 };
 
 struct LLMResponse {
     bool success;
-    QString errorMessage;
-    QVector<CodeSuggestion> suggestions;
-    QString explanation;
-    QString completion;
+    std::string errorMessage;
+    std::vector<CodeSuggestion> suggestions;
+    std::string explanation;
+    std::string completion;
     double processingTime;
     
     LLMResponse() : success(false), processingTime(0.0) {}
 };
 
 struct ConversationMessage {
-    QString role;  // "user", "assistant", "system"
-    QString content;
-    QDateTime timestamp;
+    std::string role;  // "user", "assistant", "system"
+    std::string content;
+    std::chrono::system_clock::time_point timestamp;
 };
 
 struct CacheEntry {
     LLMResponse response;
-    QDateTime timestamp;
+    std::chrono::system_clock::time_point timestamp;
 };
 
-class LLMClient : public QObject {
-    Q_OBJECT
-    
+class LLMClient {
 public:
-    explicit LLMClient(QObject *parent = nullptr);
+    explicit LLMClient();
     ~LLMClient();
     
     // Configuration
-    void setServerURL(const QString& url);
-    void setModel(const QString& model);
-    void setAPIKey(const QString& key);
+    void setServerURL(const std::string& url);
+    void setModel(const std::string& model);
+    void setAPIKey(const std::string& key);
     void setMaxTokens(int tokens);
     void setTemperature(double temp);
     void setTimeout(int ms);
@@ -82,70 +79,70 @@ public:
     LLMResponse sendRequest(const LLMRequest& request);
     
     // Code assistance methods
-    QVector<CodeSuggestion> suggestModifications(
-        const QString& file,
+    std::vector<CodeSuggestion> suggestModifications(
+        const std::string& file,
         int startLine,
         int endLine,
-        const QString& code,
-        const QString& prompt = "");
+        const std::string& code,
+        const std::string& prompt = "");
     
-    QString explainCode(
-        const QString& file,
+    std::string explainCode(
+        const std::string& file,
         int startLine,
         int endLine,
-        const QString& code);
+        const std::string& code);
     
-    QString completeCode(
-        const QString& file,
+    std::string completeCode(
+        const std::string& file,
         int line,
         int column,
-        const QString& prefix,
-        const QString& suffix = "");
+        const std::string& prefix,
+        const std::string& suffix = "");
     
     LLMResponse refactorCode(
-        const QString& file,
+        const std::string& file,
         int startLine,
         int endLine,
-        const QString& code,
-        const QString& goal);
+        const std::string& code,
+        const std::string& goal);
     
     LLMResponse generateDocumentation(
-        const QString& file,
+        const std::string& file,
         int startLine,
         int endLine,
-        const QString& code);
+        const std::string& code);
     
     LLMResponse fixBugs(
-        const QString& file,
+        const std::string& file,
         int startLine,
         int endLine,
-        const QString& code,
-        const QString& errorMessage);
+        const std::string& code,
+        const std::string& errorMessage);
     
     LLMResponse generateTests(
-        const QString& file,
+        const std::string& file,
         int startLine,
         int endLine,
-        const QString& code);
+        const std::string& code);
     
     LLMResponse optimizeCode(
-        const QString& file,
+        const std::string& file,
         int startLine,
         int endLine,
-        const QString& code,
-        const QString& optimizationGoal);
+        const std::string& code,
+        const std::string& optimizationGoal);
     
     // Apply suggestions
     void applySuggestion(int suggestionId);
     void applyAllSuggestions();
     void rejectSuggestion(int suggestionId);
     void rejectAllSuggestions();
-    QVector<CodeSuggestion> getAcceptedSuggestions() const;
+    std::vector<CodeSuggestion> getAcceptedSuggestions() const;
     
     // Conversation history
-    void addToConversationHistory(const QString& role, const QString& content);
+    void addToConversationHistory(const std::string& role, const std::string& content);
     void clearConversationHistory();
-    QVector<ConversationMessage> getConversationHistory() const;
+    std::vector<ConversationMessage> getConversationHistory() const;
     
     // Settings persistence
     void saveSettings();
@@ -157,67 +154,52 @@ public:
     
     // Batch operations
     LLMResponse requestMultipleSuggestions(
-        const QVector<QPair<int, int>>& ranges,
-        const QString& file,
-        const QString& code,
-        const QString& prompt);
+        const std::vector<std::pair<int, int>>& ranges,
+        const std::string& file,
+        const std::string& code,
+        const std::string& prompt);
     
     // Cache
     void clearCache();
     
     // Status
     int getPendingRequests() const;
-    QString getLastError() const;
+    std::string getLastError() const;
     void clearError();
-    QVector<CodeSuggestion> getLastSuggestions() const;
-    QString getLastExplanation() const;
-    QString getLastCompletion() const;
-    
-signals:
-    void suggestionsReady(const QVector<CodeSuggestion>& suggestions);
-    void explanationReady(const QString& explanation);
-    void completionReady(const QString& completion);
-    void errorOccurred(const QString& error);
-    void processingStarted();
-    void processingFinished();
-    void connectionStatusChanged(bool connected);
-    
-private slots:
-    void onNetworkReplyFinished(QNetworkReply* reply);
-    void onNetworkError(QNetworkReply::NetworkError error);
-    void onTimeout();
+    std::vector<CodeSuggestion> getLastSuggestions() const;
+    std::string getLastExplanation() const;
+    std::string getLastCompletion() const;
     
 private:
-    QString buildRequestBody(const LLMRequest& request);
-    LLMResponse parseResponse(const QString& responseData);
-    QString getCacheKey(const LLMRequest& request) const;
-    bool getCachedResponse(const QString& cacheKey, LLMResponse& response);
-    void cacheResponse(const QString& cacheKey, const LLMResponse& response);
-    QString escapeString(const QString& str) const;
-    QString unescapeString(const QString& str) const;
+    std::string buildRequestBody(const LLMRequest& request);
+    LLMResponse parseResponse(const std::string& responseData);
+    std::string getCacheKey(const LLMRequest& request) const;
+    bool getCachedResponse(const std::string& cacheKey, LLMResponse& response);
+    void cacheResponse(const std::string& cacheKey, const LLMResponse& response);
+    std::string escapeString(const std::string& str) const;
+    std::string unescapeString(const std::string& str) const;
     void log(int level, const std::string& message);
     
-    QNetworkAccessManager* networkManager;
-    QString serverURL;
-    QString model;
-    QString apiKey;
+    std::string serverURL;
+    std::string model;
+    std::string apiKey;
     int maxTokens;
     double temperature;
     int timeout;
     bool connected;
     bool processing;
     int pendingRequests;
-    QString lastError;
+    std::string lastError;
     
-    QVector<CodeSuggestion> lastSuggestions;
-    QString lastExplanation;
-    QString lastCompletion;
+    std::vector<CodeSuggestion> lastSuggestions;
+    std::string lastExplanation;
+    std::string lastCompletion;
     
-    QVector<ConversationMessage> conversationHistory;
-    QMap<QString, CacheEntry> responseCache;
+    std::vector<ConversationMessage> conversationHistory;
+    std::map<std::string, CacheEntry> responseCache;
     
-    QList<QNetworkReply*> pendingReplies;
     ResponseCallback responseCallback;
+    mutable std::mutex mutex_;
 };
 
 } // namespace proxima
