@@ -1,4 +1,5 @@
 #include "BuildRulesParser.h"
+#include <QString>
 #include <fstream>
 #include <sstream>
 #include <algorithm>

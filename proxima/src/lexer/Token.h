@@ -142,6 +142,8 @@ enum class TokenType {
     OP_DOT_GT,          // .>
     OP_DOT_LTE,         // .<=
     OP_DOT_GTE,         // .>=
+    OP_DOT_AND,         // .& (поэлементное "и")
+    OP_DOT_OR,          // .| (поэлементное "или")
     OP_TRANSPOSE,       // ' (апостроф)
     OP_TERNARY,         // ?:
     OP_AMPERSAND,       // @

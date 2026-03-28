@@ -51,7 +51,7 @@ struct Config {
           enableAVX2(false),
           enableSSE4(false),
           enableOpenMP(false),
-          maxMemory(4 * 1024 * 1024 * 1024),
+          maxMemory(4ULL * 1024 * 1024 * 1024),
           verboseLevel(2),
           targetArch("x86_64"),
           targetOS("linux"),
