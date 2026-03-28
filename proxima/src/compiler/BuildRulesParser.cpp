@@ -25,10 +25,10 @@ BuildRulesParser::BuildRulesParser() {}
 
 bool BuildRulesParser::parse(const std::string& filename) {
     CollectionParser parser;
-    CollectionParser::ParseResult result = parser.parseFile(QString::fromStdString(filename));
+    CollectionParser::ParseResult result = parser.parseFile(filename);
 
     if (!result.success) {
-        lastError = result.error.toStdString();
+        lastError = result.error;
         return false;
     }
 
@@ -37,18 +37,18 @@ bool BuildRulesParser::parse(const std::string& filename) {
 
     // Extract values
     config.optimizationLevel = static_cast<int>(collection.get("optimization_level").asNumber());
-    config.targetArch = collection.get("target_arch").asString().toStdString();
+    config.targetArch = collection.get("target_arch").asString();
     config.enableCUDA = collection.get("enable_cuda").asBoolean();
     config.enableAVX2 = collection.get("enable_avx2").asBoolean();
-    config.maxMemory = parseMemorySize(collection.get("max_memory").asString().toStdString());
+    config.maxMemory = parseMemorySize(collection.get("max_memory").asString());
     config.debugSymbols = collection.get("debug_symbols").asBoolean();
-    config.outputFormat = collection.get("output_format").asString().toStdString();
+    config.outputFormat = collection.get("output_format").asString();
 
     // Parse modules array
     CollectionParser::Value modulesValue = collection.get("modules");
     if (modulesValue.isArray()) {
         for (const auto& moduleValue : modulesValue.asArray()) {
-            modules.push_back(moduleValue.asString().toStdString());
+            modules.push_back(moduleValue.asString());
         }
     }
 
@@ -56,7 +56,7 @@ bool BuildRulesParser::parse(const std::string& filename) {
     CollectionParser::Value definesValue = collection.get("defines");
     if (definesValue.isArray()) {
         for (const auto& defineValue : definesValue.asArray()) {
-            config.defines.push_back(defineValue.asString().toStdString());
+            config.defines.push_back(defineValue.asString());
         }
     }
 
@@ -64,7 +64,7 @@ bool BuildRulesParser::parse(const std::string& filename) {
     CollectionParser::Value pathsValue = collection.get("include_paths");
     if (pathsValue.isArray()) {
         for (const auto& pathValue : pathsValue.asArray()) {
-            config.includePaths.push_back(pathValue.asString().toStdString());
+            config.includePaths.push_back(pathValue.asString());
         }
     }
 

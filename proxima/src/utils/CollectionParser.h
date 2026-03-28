@@ -1,16 +1,14 @@
 #ifndef PROXIMA_COLLECTION_PARSER_H
 #define PROXIMA_COLLECTION_PARSER_H
 
-#include <QString>
-#include <QVariant>
-#include <QVector>
-#include <QMap>
-#include <QPair>
-#include <QRegularExpression>
-#include <QStack>
-#include <QFile>
-#include <QTextStream>
-#include <QDateTime>
+#include <string>
+#include <vector>
+#include <map>
+#include <utility>
+#include <memory>
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
 #include "utils/Logger.h"
 
 namespace proxima {
@@ -52,28 +50,29 @@ public:
      */
     struct Value {
         ValueType type;
-        QString stringValue;
+        std::string stringValue;
         double numberValue;
         bool boolValue;
-        QVector<Value> arrayValue;
-        QMap<QString, Value> objectValue;
+        std::vector<Value> arrayValue;
+        std::map<std::string, Value> objectValue;
 
         Value() : type(ValueType::Null), numberValue(0.0), boolValue(false) {}
 
         //Индексация массивов начинается с 1.
-        static Value evaluateArrayAccess(const Value& array, const QVector<Value>& indices);
+        static Value evaluateArrayAccess(const Value& array, const std::vector<Value>& indices);
 
         // Конвертеры
-        static Value fromString(const QString& str);
+        static Value fromString(const std::string& str);
         static Value fromNumber(double num);
         static Value fromBoolean(bool b);
-        static Value fromArray(const QVector<Value>& arr);
-        static Value fromObject(const QMap<QString, Value>& obj);
-        static Value fromCollection(const QString& collectionStr);
+        static Value fromArray(const std::vector<Value>& arr);
+        static Value fromObject(const std::map<std::string, Value>& obj);
+        static Value fromCollection(const std::string& collectionStr);
+        static Value fromNull();
 
         // Сериализация
-        QString toString() const;
-        QString toCollectionString(int indent = 0) const;
+        std::string toString() const;
+        std::string toCollectionString(int indent = 0) const;
 
         // Проверки типов
         bool isString() const { return type == ValueType::String; }
@@ -85,17 +84,17 @@ public:
         bool isCollection() const { return type == ValueType::Collection; }
 
         // Доступ к значениям
-        QString asString() const { return stringValue; }
+        std::string asString() const { return stringValue; }
         double asNumber() const { return numberValue; }
         bool asBoolean() const { return boolValue; }
-        const QVector<Value>& asArray() const { return arrayValue; }
-        const QMap<QString, Value>& asObject() const { return objectValue; }
+        const std::vector<Value>& asArray() const { return arrayValue; }
+        const std::map<std::string, Value>& asObject() const { return objectValue; }
 
         // Удобные методы доступа
-        Value get(const QString& key) const;
-        Value get(int index) const;
-        bool has(const QString& key) const;
-        int size() const;
+        Value get(const std::string& key) const;
+        Value get(size_t index) const;
+        bool has(const std::string& key) const;
+        size_t size() const;
 
         // Операторы
         bool operator==(const Value& other) const;
@@ -108,7 +107,7 @@ public:
     struct ParseResult {
         bool success;
         Value value;
-        QString error;
+        std::string error;
         int errorLine;
         int errorColumn;
 
@@ -134,21 +133,21 @@ public:
      * @param input Входная строка
      * @return Результат парсинга
      */
-    ParseResult parse(const QString& input);
+    ParseResult parse(const std::string& input);
 
     /**
      * @brief Парсинг файла в формате collection
      * @param filePath Путь к файлу
      * @return Результат парсинга
      */
-    ParseResult parseFile(const QString& filePath);
+    ParseResult parseFile(const std::string& filePath);
 
     /**
      * @brief Парсинг потока в формате collection
      * @param stream Входной поток
      * @return Результат парсинга
      */
-    ParseResult parseStream(QTextStream& stream);
+    ParseResult parseStream(std::istream& stream);
 
     // ========================================================================
     // Сериализация
@@ -160,7 +159,7 @@ public:
      * @param indent Уровень отступа
      * @return Строка в формате collection
      */
-    QString serialize(const Value& value, int indent = 0);
+    std::string serialize(const Value& value, int indent = 0);
 
     /**
      * @brief Сериализация Value в файл
@@ -168,7 +167,7 @@ public:
      * @param filePath Путь к файлу
      * @return true если успешно
      */
-    bool serializeToFile(const Value& value, const QString& filePath);
+    bool serializeToFile(const Value& value, const std::string& filePath);
 
     // ========================================================================
     // Утилиты
@@ -180,35 +179,35 @@ public:
      * @param value Значение
      * @return Value в формате collection
      */
-    static Value createPair(const QString& key, const Value& value);
+    static Value createPair(const std::string& key, const Value& value);
 
     /**
      * @brief Создание collection из списка пар
      * @param pairs Список пар ключ-значение
      * @return Value в формате collection
      */
-    static Value createCollection(const QVector<QPair<QString, Value>>& pairs);
+    static Value createCollection(const std::vector<std::pair<std::string, Value>>& pairs);
 
     /**
      * @brief Создание массива из списка значений
      * @param values Список значений
      * @return Value в формате array
      */
-    static Value createArray(const QVector<Value>& values);
+    static Value createArray(const std::vector<Value>& values);
 
     /**
      * @brief Проверка валидности формата collection
      * @param input Входная строка
      * @return true если валидно
      */
-    static bool isValid(const QString& input);
+    static bool isValid(const std::string& input);
 
     /**
      * @brief Минификация collection строки
      * @param input Входная строка
      * @return Минифицированная строка
      */
-    static QString minify(const QString& input);
+    static std::string minify(const std::string& input);
 
     /**
      * @brief Красивое форматирование collection строки
@@ -216,21 +215,21 @@ public:
      * @param indent Размер отступа
      * @return Отформатированная строка
      */
-    static QString prettify(const QString& input, int indent = 4);
+    static std::string prettify(const std::string& input, int indent = 4);
 
     /**
      * @brief Конвертация из JSON в collection (для миграции)
      * @param jsonInput JSON строка
      * @return Collection строка
      */
-    static QString jsonToCollection(const QString& jsonInput);
+    static std::string jsonToCollection(const std::string& jsonInput);
 
     /**
      * @brief Конвертация из collection в JSON (для совместимости)
      * @param collectionInput Collection строка
      * @return JSON строка
      */
-    static QString collectionToJson(const QString& collectionInput);
+    static std::string collectionToJson(const std::string& collectionInput);
 
     // ========================================================================
     // Статистика
@@ -255,34 +254,34 @@ public:
 
 private:
     // Внутренние методы парсинга
-    Value parseValue(const QString& input, int& pos, int& line, int& column);
-    Value parseString(const QString& input, int& pos, int& line, int& column);
-    Value parseNumber(const QString& input, int& pos, int& line, int& column);
-    Value parseBoolean(const QString& input, int& pos);
-    Value parseNull(const QString& input, int& pos);
-    Value parseArray(const QString& input, int& pos, int& line, int& column);
-    Value parseObject(const QString& input, int& pos, int& line, int& column);
-    Value parseCollection(const QString& input, int& pos, int& line, int& column);
+    Value parseValue(const std::string& input, size_t& pos, int& line, int& column);
+    Value parseString(const std::string& input, size_t& pos, int& line, int& column);
+    Value parseNumber(const std::string& input, size_t& pos, int& line, int& column);
+    Value parseBoolean(const std::string& input, size_t& pos);
+    Value parseNull(const std::string& input, size_t& pos);
+    Value parseArray(const std::string& input, size_t& pos, int& line, int& column);
+    Value parseObject(const std::string& input, size_t& pos, int& line, int& column);
+    Value parseCollection(const std::string& input, size_t& pos, int& line, int& column);
 
     // Утилиты
-    void skipWhitespace(const QString& input, int& pos, int& line, int& column);
-    void skipComment(const QString& input, int& pos, int& line, int& column);
-    char peek(const QString& input, int pos);
-    char advance(const QString& input, int& pos, int& line, int& column);
-    bool isAtEnd(const QString& input, int pos);
-    QString extractString(const QString& input, int& pos, int& line, int& column);
-    QString extractNumber(const QString& input, int& pos);
-    QString extractIdentifier(const QString& input, int& pos);
+    void skipWhitespace(const std::string& input, size_t& pos, int& line, int& column);
+    void skipComment(const std::string& input, size_t& pos, int& line, int& column);
+    char peek(const std::string& input, size_t pos);
+    char advance(const std::string& input, size_t& pos, int& line, int& column);
+    bool isAtEnd(const std::string& input, size_t pos);
+    std::string extractString(const std::string& input, size_t& pos, int& line, int& column);
+    std::string extractNumber(const std::string& input, size_t& pos);
+    std::string extractIdentifier(const std::string& input, size_t& pos);
 
     // Ошибки
-    void error(const QString& message, int line, int column);
+    void error(const std::string& message, int line, int column);
 
     // Статистика
     int errorCount;
     int successCount;
 
     // Текущее состояние парсинга
-    QString currentError;
+    std::string currentError;
     int currentErrorLine;
     int currentErrorColumn;
 };
