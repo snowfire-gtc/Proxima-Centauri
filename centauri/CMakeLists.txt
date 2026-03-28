@@ -53,6 +53,7 @@ set(IDE_SOURCES
     src/services/git/GitService.cpp
     src/services/llm/LLMService.cpp
     src/services/collaboration/CollaborationService.cpp
+    src/services/network/NetworkAuthService.cpp
     src/services/plugins/PluginManager.cpp
     src/docs/DocGenerator.cpp
     src/testing/TestFramework.cpp
@@ -96,6 +97,7 @@ set(IDE_HEADERS
     src/services/git/GitService.h
     src/services/llm/LLMService.h
     src/services/collaboration/CollaborationService.h
+    src/services/network/NetworkAuthService.h
     src/services/plugins/PluginManager.h
     src/docs/DocGenerator.h
     src/testing/TestFramework.h
