@@ -1,12 +1,12 @@
 #ifndef PROXIMA_TEST_FRAMEWORK_H
 #define PROXIMA_TEST_FRAMEWORK_H
 
-#include <QObject>
-#include <QString>
-#include <QVector>
-#include <QMap>
-#include <QDateTime>
+#include <string>
+#include <vector>
+#include <map>
 #include <functional>
+#include <chrono>
+#include <memory>
 
 namespace proxima {
 
@@ -19,25 +19,25 @@ enum class TestResult {
 
 struct TestAssertion {
     bool passed;
-    QString message;
-    QString file;
+    std::string message;
+    std::string file;
     int line;
-    QString expression;
+    std::string expression;
 };
 
 struct TestCase {
-    QString name;
-    QString suite;
+    std::string name;
+    std::string suite;
     TestResult result;
-    QString message;
-    QVector<TestAssertion> assertions;
+    std::string message;
+    std::vector<TestAssertion> assertions;
     qint64 duration; // milliseconds
     QDateTime timestamp;
 };
 
 struct TestSuite {
-    QString name;
-    QVector<TestCase> testCases;
+    std::string name;
+    std::vector<TestCase> testCases;
     int passed;
     int failed;
     int skipped;
@@ -46,114 +46,103 @@ struct TestSuite {
 };
 
 struct TestReport {
-    QString projectName;
+    std::string projectName;
     QDateTime timestamp;
-    QVector<TestSuite> suites;
+    std::vector<TestSuite> suites;
     int totalTests;
     int totalPassed;
     int totalFailed;
     int totalSkipped;
     int totalErrors;
     qint64 totalDuration;
-    QString compilerVersion;
-    QString ideVersion;
+    std::string compilerVersion;
+    std::string ideVersion;
 };
 
-class TestFramework : public QObject {
-    Q_OBJECT
+class TestFramework {
     
 public:
-    explicit TestFramework(QObject *parent = nullptr);
+    static TestFramework& getInstance();
     ~TestFramework();
     
     // Test registration
-    void registerSuite(const QString& name);
-    void registerTest(const QString& suite, const QString& name, 
+    void registerSuite(const std::string& name);
+    void registerTest(const std::string& suite, const std::string& name, 
                      std::function<void()> testFunc);
     
     // Test execution
     void runAllTests();
-    void runSuite(const QString& suiteName);
-    void runTest(const QString& suiteName, const QString& testName);
+    void runSuite(const std::string& suiteName);
+    void runTest(const std::string& suiteName, const std::string& testName);
     void stop();
     bool isRunning() const { return running; }
     
     // Assertions
-    void assertTrue(bool condition, const QString& message = "",
-                   const QString& file = "", int line = 0);
-    void assertFalse(bool condition, const QString& message = "",
-                    const QString& file = "", int line = 0);
-    void assertEquals(const QString& expected, const QString& actual,
-                     const QString& message = "", const QString& file = "", int line = 0);
+    void assertTrue(bool condition, const std::string& message = "",
+                   const std::string& file = "", int line = 0);
+    void assertFalse(bool condition, const std::string& message = "",
+                    const std::string& file = "", int line = 0);
+    void assertEquals(const std::string& expected, const std::string& actual,
+                     const std::string& message = "", const std::string& file = "", int line = 0);
     void assertEquals(int expected, int actual,
-                     const QString& message = "", const QString& file = "", int line = 0);
+                     const std::string& message = "", const std::string& file = "", int line = 0);
     void assertEquals(double expected, double actual, double tolerance = 1e-10,
-                     const QString& message = "", const QString& file = "", int line = 0);
-    void assertNull(void* pointer, const QString& message = "",
-                   const QString& file = "", int line = 0);
-    void assertNotNull(void* pointer, const QString& message = "",
-                      const QString& file = "", int line = 0);
-    void fail(const QString& message = "", const QString& file = "", int line = 0);
-    void skip(const QString& message = "");
+                     const std::string& message = "", const std::string& file = "", int line = 0);
+    void assertNull(void* pointer, const std::string& message = "",
+                   const std::string& file = "", int line = 0);
+    void assertNotNull(void* pointer, const std::string& message = "",
+                      const std::string& file = "", int line = 0);
+    void fail(const std::string& message = "", const std::string& file = "", int line = 0);
+    void skip(const std::string& message = "");
     
     // Results
     TestReport getReport() const { return report; }
-    QString getReportHTML() const;
-    QString getReportXML() const;
-    QString getReportText() const;
-    void saveReport(const QString& path, const QString& format = "html");
+    std::string getReportHTML() const;
+    std::string getReportXML() const;
+    std::string getReportText() const;
+    void saveReport(const std::string& path, const std::string& format = "html");
     
     // Configuration
     void setVerbose(bool verbose) { isVerbose = verbose; }
     void setStopOnFailure(bool stop) { stopOnFailure = stop; }
     void setRepeat(int count) { repeatCount = count; }
-    void setFilter(const QString& filter) { testFilter = filter; }
+    void setFilter(const std::string& filter) { testFilter = filter; }
     
     // Statistics
     int getTotalTests() const { return report.totalTests; }
     int getPassedTests() const { return report.totalPassed; }
     int getFailedTests() const { return report.totalFailed; }
     
-signals:
-    void testStarted(const QString& suite, const QString& test);
-    void testFinished(const QString& suite, const QString& test, TestResult result);
-    void suiteStarted(const QString& suite);
-    void suiteFinished(const QString& suite);
-    void allTestsFinished();
-    void assertionFailed(const TestAssertion& assertion);
-    void progressChanged(int current, int total);
-    
 private:
     void executeTest(TestCase& testCase);
     void recordAssertion(const TestAssertion& assertion);
-    void recordResult(TestCase& testCase, TestResult result, const QString& message);
+    void recordResult(TestCase& testCase, TestResult result, const std::string& message);
     void calculateStatistics();
-    QString escapeHTML(const QString& text) const;
-    QString escapeXML(const QString& text) const;
+    std::string escapeHTML(const std::string& text) const;
+    std::string escapeXML(const std::string& text) const;
     
-    QMap<QString, TestSuite> suites;
-    QMap<QString, std::function<void()>> testFunctions;
+    std::map<std::string, TestSuite> suites;
+    std::map<std::string, std::function<void()>> testFunctions;
     
     TestReport report;
     
-    QString currentSuite;
-    QString currentTest;
+    std::string currentSuite;
+    std::string currentTest;
     TestCase* currentTestCase;
     
     bool running;
     bool isVerbose;
     bool stopOnFailure;
     int repeatCount;
-    QString testFilter;
+    std::string testFilter;
     
     bool shouldSkip;
-    QString skipMessage;
+    std::string skipMessage;
 };
 
 // Macros for test definition
 #define TEST_SUITE(name) \
-    class name : public QObject { \
-        Q_OBJECT \
+    class name { \
     public: \
         name() { TestFramework::getInstance().registerSuite(#name); }
 #define TEST(name) \
