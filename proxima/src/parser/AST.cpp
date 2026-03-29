@@ -4,51 +4,7 @@
 
 namespace proxima {
 
-std::string ASTNode::toString(int indent) const {
-    std::ostringstream oss;
-    oss << std::string(indent * 2, ' ') << "ASTNode[" << nodeType << "]";
-    return oss.str();
-}
-
-std::string ExpressionNode::toString(int indent) const {
-    return ASTNode::toString(indent);
-}
-
-std::string StatementNode::toString(int indent) const {
-    return ASTNode::toString(indent);
-}
-
-std::string DeclarationNode::toString(int indent) const {
-    std::ostringstream oss;
-    oss << std::string(indent * 2, ' ') << "DeclarationNode[" << name << ": " << typeName << "]";
-    return oss.str();
-}
-
 // LiteralNode
-LiteralNode::LiteralNode(const Token& tok, const std::string& file)
-    : ExpressionNode(NodeType::LITERAL, tok, file) {
-    switch (tok.type) {
-        case TokenType::INTEGER:
-            value = std::stoll(tok.value);
-            break;
-        case TokenType::FLOAT:
-            value = std::stod(tok.value);
-            break;
-        case TokenType::STRING:
-            value = tok.value;
-            break;
-        case TokenType::CHAR:
-            value = tok.value.empty() ? '\0' : tok.value[0];
-            break;
-        case TokenType::KEYWORD_TRUE:
-        case TokenType::KEYWORD_FALSE:
-            value = (tok.type == TokenType::KEYWORD_TRUE);
-            break;
-        default:
-            value = tok.value;
-    }
-}
-
 std::string LiteralNode::toString(int indent) const {
     std::ostringstream oss;
     oss << std::string(indent * 2, ' ') << "Literal[";
@@ -68,9 +24,6 @@ std::string LiteralNode::toString(int indent) const {
 }
 
 // IdentifierNode
-IdentifierNode::IdentifierNode(const Token& tok, const std::string& file)
-    : ExpressionNode(NodeType::IDENTIFIER, tok, file), name(tok.value) {}
-
 std::string IdentifierNode::toString(int indent) const {
     std::ostringstream oss;
     oss << std::string(indent * 2, ' ') << "Identifier[" << name << "]";
@@ -78,9 +31,6 @@ std::string IdentifierNode::toString(int indent) const {
 }
 
 // BinaryOpNode
-BinaryOpNode::BinaryOpNode(const Token& op, ExpressionNodePtr l, ExpressionNodePtr r, const std::string& file)
-    : ExpressionNode(NodeType::BINARY_OP, op, file), left(l), right(r), opType(op.type) {}
-
 std::string BinaryOpNode::toString(int indent) const {
     std::ostringstream oss;
     oss << std::string(indent * 2, ' ') << "BinaryOp[" << Token::typeToString(opType) << "]\n";
@@ -90,9 +40,6 @@ std::string BinaryOpNode::toString(int indent) const {
 }
 
 // CallNode
-CallNode::CallNode(ExpressionNodePtr c, const std::vector<ExpressionNodePtr>& args, const std::string& file)
-    : ExpressionNode(NodeType::CALL_EXPR, c->token, file), callee(c), arguments(args) {}
-
 std::string CallNode::toString(int indent) const {
     std::ostringstream oss;
     oss << std::string(indent * 2, ' ') << "Call\n";
@@ -105,31 +52,28 @@ std::string CallNode::toString(int indent) const {
 }
 
 // IfNode
-IfNode::IfNode(const Token& tok, ExpressionNodePtr cond, StatementNodePtr thenBranch, 
-               const std::vector<std::pair<ExpressionNodePtr, StatementNodePtr>>& elifs,
-               StatementNodePtr elseBranch, const std::string& file)
-    : StatementNode(NodeType::IF_STATEMENT, tok, file), condition(cond), thenBlock(thenBranch),
-      elseifBlocks(elifs), elseBlock(elseBranch) {}
-
 std::string IfNode::toString(int indent) const {
     std::ostringstream oss;
-    oss << std::string(indent * 2, ' ') << "If\n";
-    if (condition) oss << condition->toString(indent + 1) << "\n";
-    if (thenBlock) oss << thenBlock->toString(indent + 1) << "\n";
-    for (const auto& elif : elseifBlocks) {
+    if (isElseIf) {
         oss << std::string(indent * 2, ' ') << "ElseIf\n";
-        if (elif.first) oss << elif.first->toString(indent + 1) << "\n";
-        if (elif.second) oss << elif.second->toString(indent + 1) << "\n";
+    } else {
+        oss << std::string(indent * 2, ' ') << "If\n";
     }
-    if (elseBlock) oss << std::string(indent * 2, ' ') << "Else\n" << elseBlock->toString(indent + 1);
+    if (condition) oss << condition->toString(indent + 1) << "\n";
+    if (thenBranch) oss << thenBranch->toString(indent + 1) << "\n";
+    if (elseBranch) {
+        // Check if elseBranch is an ElseIf node
+        auto elseifNode = std::dynamic_pointer_cast<IfNode>(elseBranch);
+        if (elseifNode && elseifNode->isElseIf) {
+            oss << elseifNode->toString(indent);  // Same indent for elseif chain
+        } else {
+            oss << std::string(indent * 2, ' ') << "Else\n" << elseBranch->toString(indent + 1);
+        }
+    }
     return oss.str();
 }
 
 // ForNode
-ForNode::ForNode(const Token& tok, const std::string& var, ExpressionNodePtr iter, 
-                 StatementNodePtr body, const std::string& file)
-    : StatementNode(NodeType::FOR_LOOP, tok, file), variable(var), iterable(iter), body(body) {}
-
 std::string ForNode::toString(int indent) const {
     std::ostringstream oss;
     oss << std::string(indent * 2, ' ') << "For[" << variable << "]\n";
@@ -139,9 +83,6 @@ std::string ForNode::toString(int indent) const {
 }
 
 // ReturnNode
-ReturnNode::ReturnNode(const Token& tok, ExpressionNodePtr val, const std::string& file)
-    : StatementNode(NodeType::RETURN_STATEMENT, tok, file), value(val) {}
-
 std::string ReturnNode::toString(int indent) const {
     std::ostringstream oss;
     oss << std::string(indent * 2, ' ') << "Return";
@@ -150,9 +91,6 @@ std::string ReturnNode::toString(int indent) const {
 }
 
 // BlockNode
-BlockNode::BlockNode(const Token& tok, const std::vector<StatementNodePtr>& stmts, const std::string& file)
-    : StatementNode(NodeType::BLOCK, tok, file), statements(stmts) {}
-
 std::string BlockNode::toString(int indent) const {
     std::ostringstream oss;
     oss << std::string(indent * 2, ' ') << "Block\n";
@@ -163,10 +101,6 @@ std::string BlockNode::toString(int indent) const {
 }
 
 // VariableDeclNode
-VariableDeclNode::VariableDeclNode(const Token& tok, const std::string& n, const std::string& t, 
-                                   ExpressionNodePtr init, const std::string& file)
-    : DeclarationNode(NodeType::VARIABLE_DECL, tok, n, t, file), initializer(init) {}
-
 std::string VariableDeclNode::toString(int indent) const {
     std::ostringstream oss;
     oss << std::string(indent * 2, ' ') << "VarDecl[" << name << ": " << typeName << "]";
@@ -175,11 +109,6 @@ std::string VariableDeclNode::toString(int indent) const {
 }
 
 // FunctionDeclNode
-FunctionDeclNode::FunctionDeclNode(const Token& tok, const std::string& n, const std::string& t, 
-                                   const std::vector<std::pair<std::string, std::string>>& params,
-                                   StatementNodePtr b, const std::string& file)
-    : DeclarationNode(NodeType::FUNCTION_DECL, tok, n, t, file), parameters(params), returnType(t), body(b) {}
-
 std::string FunctionDeclNode::toString(int indent) const {
     std::ostringstream oss;
     oss << std::string(indent * 2, ' ') << "FunctionDecl[" << name << " -> " << returnType << "]\n";
@@ -205,9 +134,6 @@ std::string ProgramNode::toString(int indent) const {
 }
 
 // IntentBlockNode
-IntentBlockNode::IntentBlockNode(const Token& tok, const std::string& intentText, StatementNodePtr b, const std::string& file)
-    : StatementNode(NodeType::INTENT_BLOCK, tok, file), intent(intentText), body(b) {}
-
 std::string IntentBlockNode::toString(int indent) const {
     std::ostringstream oss;
     oss << std::string(indent * 2, ' ') << "IntentBlock[\"" << intent << "\"]\n";
@@ -216,9 +142,6 @@ std::string IntentBlockNode::toString(int indent) const {
 }
 
 // GeneratedBlockNode
-GeneratedBlockNode::GeneratedBlockNode(const Token& tok, StatementNodePtr b, const std::string& file)
-    : StatementNode(NodeType::GENERATED_BLOCK, tok, file), body(b) {}
-
 std::string GeneratedBlockNode::toString(int indent) const {
     std::ostringstream oss;
     oss << std::string(indent * 2, ' ') << "GeneratedBlock\n";
@@ -227,13 +150,101 @@ std::string GeneratedBlockNode::toString(int indent) const {
 }
 
 // FixedBlockNode
-FixedBlockNode::FixedBlockNode(const Token& tok, StatementNodePtr b, const std::string& file)
-    : StatementNode(NodeType::FIXED_BLOCK, tok, file), body(b) {}
-
 std::string FixedBlockNode::toString(int indent) const {
     std::ostringstream oss;
     oss << std::string(indent * 2, ' ') << "FixedBlock\n";
     if (body) oss << body->toString(indent + 1);
+    return oss.str();
+}
+
+// ClassDeclNode
+std::string ClassDeclNode::toString(int indent) const {
+    std::ostringstream oss;
+    oss << std::string(indent * 2, ' ') << "ClassDecl[" << name << "]\n";
+    oss << std::string(indent * 2 + 2, ' ') << "Parents:\n";
+    for (const auto& parent : parentClasses) {
+        oss << std::string(indent * 2 + 4, ' ') << parent << "\n";
+    }
+    oss << std::string(indent * 2 + 2, ' ') << "Members:\n";
+    for (const auto& member : members) {
+        oss << std::string(indent * 2 + 4, ' ') << member.first << ": " << member.second << "\n";
+    }
+    return oss.str();
+}
+
+// InterfaceDeclNode
+std::string InterfaceDeclNode::toString(int indent) const {
+    std::ostringstream oss;
+    oss << std::string(indent * 2, ' ') << "InterfaceDecl[" << name << "]\n";
+    oss << std::string(indent * 2 + 2, ' ') << "Parents:\n";
+    for (const auto& parent : parentInterfaces) {
+        oss << std::string(indent * 2 + 4, ' ') << parent << "\n";
+    }
+    oss << std::string(indent * 2 + 2, ' ') << "Methods:\n";
+    for (const auto& method : methods) {
+        oss << std::string(indent * 2 + 4, ' ') << method.first << ": " << method.second << "\n";
+    }
+    return oss.str();
+}
+
+// ExpressionStatementNode
+std::string ExpressionStatementNode::toString(int indent) const {
+    std::ostringstream oss;
+    oss << std::string(indent * 2, ' ') << "ExpressionStatement\n";
+    if (expression) oss << expression->toString(indent + 1);
+    return oss.str();
+}
+
+// WhileNode
+std::string WhileNode::toString(int indent) const {
+    std::ostringstream oss;
+    oss << std::string(indent * 2, ' ') << "While\n";
+    if (condition) oss << condition->toString(indent + 1) << "\n";
+    if (body) oss << body->toString(indent + 1);
+    return oss.str();
+}
+
+// TernaryNode
+std::string TernaryNode::toString(int indent) const {
+    std::ostringstream oss;
+    oss << std::string(indent * 2, ' ') << "Ternary\n";
+    if (condition) oss << condition->toString(indent + 1) << "\n";
+    if (trueExpr) oss << trueExpr->toString(indent + 1) << "\n";
+    if (falseExpr) oss << falseExpr->toString(indent + 1);
+    return oss.str();
+}
+
+// UnaryOpNode
+std::string UnaryOpNode::toString(int indent) const {
+    std::ostringstream oss;
+    oss << std::string(indent * 2, ' ') << "UnaryOp[" << op << "]\n";
+    if (operand) oss << operand->toString(indent + 1);
+    return oss.str();
+}
+
+// IndexNode
+std::string IndexNode::toString(int indent) const {
+    std::ostringstream oss;
+    oss << std::string(indent * 2, ' ') << "Index\n";
+    if (object) oss << object->toString(indent + 1) << "\n";
+    oss << std::string(indent * 2 + 2, ' ') << "Indices:\n";
+    for (size_t i = 0; i < indices.size(); ++i) {
+        if (indices[i]) {
+            bool isSlice = (i < isSliceIndex.size() && isSliceIndex[i]);
+            oss << std::string(indent * 2 + 4, ' ');
+            if (isSlice) oss << "[SLICE]";
+            else oss << indices[i]->toString(0);
+            oss << "\n";
+        }
+    }
+    return oss.str();
+}
+
+// MemberAccessNode
+std::string MemberAccessNode::toString(int indent) const {
+    std::ostringstream oss;
+    oss << std::string(indent * 2, ' ') << "MemberAccess[" << member << "]\n";
+    if (object) oss << object->toString(indent + 1);
     return oss.str();
 }
 
