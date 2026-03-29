@@ -1,1 +1,47 @@
-Nothing should be ignored since the changes only include source code files (.cpp, .h) and no build artifacts, dependencies, or temporary files.
+```
+# Build artifacts
+CMakeLists.txt.user
+cmake-build-*/
+build/
+dist/
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.exe
+
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.egg-info/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# CMake specific
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+```
