@@ -1,0 +1,182 @@
+[
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/compiler/Compiler.cpp.o -c /workspace/proxima/src/compiler/Compiler.cpp",
+  "file": "/workspace/proxima/src/compiler/Compiler.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/compiler/Config.cpp.o -c /workspace/proxima/src/compiler/Config.cpp",
+  "file": "/workspace/proxima/src/compiler/Config.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/compiler/BuildRulesParser.cpp.o -c /workspace/proxima/src/compiler/BuildRulesParser.cpp",
+  "file": "/workspace/proxima/src/compiler/BuildRulesParser.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/lexer/Lexer.cpp.o -c /workspace/proxima/src/lexer/Lexer.cpp",
+  "file": "/workspace/proxima/src/lexer/Lexer.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/lexer/Token.cpp.o -c /workspace/proxima/src/lexer/Token.cpp",
+  "file": "/workspace/proxima/src/lexer/Token.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/parser/Parser.cpp.o -c /workspace/proxima/src/parser/Parser.cpp",
+  "file": "/workspace/proxima/src/parser/Parser.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/parser/AST.cpp.o -c /workspace/proxima/src/parser/AST.cpp",
+  "file": "/workspace/proxima/src/parser/AST.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/semantic/SemanticAnalyzer.cpp.o -c /workspace/proxima/src/semantic/SemanticAnalyzer.cpp",
+  "file": "/workspace/proxima/src/semantic/SemanticAnalyzer.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/semantic/TypeChecker.cpp.o -c /workspace/proxima/src/semantic/TypeChecker.cpp",
+  "file": "/workspace/proxima/src/semantic/TypeChecker.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/semantic/SymbolTable.cpp.o -c /workspace/proxima/src/semantic/SymbolTable.cpp",
+  "file": "/workspace/proxima/src/semantic/SymbolTable.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/semantic/ArgumentValidator.cpp.o -c /workspace/proxima/src/semantic/ArgumentValidator.cpp",
+  "file": "/workspace/proxima/src/semantic/ArgumentValidator.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/codegen/LLVMCodeGen.cpp.o -c /workspace/proxima/src/codegen/LLVMCodeGen.cpp",
+  "file": "/workspace/proxima/src/codegen/LLVMCodeGen.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/codegen/Optimizer.cpp.o -c /workspace/proxima/src/codegen/Optimizer.cpp",
+  "file": "/workspace/proxima/src/codegen/Optimizer.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/runtime/Runtime.cpp.o -c /workspace/proxima/src/runtime/Runtime.cpp",
+  "file": "/workspace/proxima/src/runtime/Runtime.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/runtime/Debugger.cpp.o -c /workspace/proxima/src/runtime/Debugger.cpp",
+  "file": "/workspace/proxima/src/runtime/Debugger.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/runtime/Interpreter.cpp.o -c /workspace/proxima/src/runtime/Interpreter.cpp",
+  "file": "/workspace/proxima/src/runtime/Interpreter.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/runtime/Profiler.cpp.o -c /workspace/proxima/src/runtime/Profiler.cpp",
+  "file": "/workspace/proxima/src/runtime/Profiler.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/runtime/REPL.cpp.o -c /workspace/proxima/src/runtime/REPL.cpp",
+  "file": "/workspace/proxima/src/runtime/REPL.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/runtime/StoryManager.cpp.o -c /workspace/proxima/src/runtime/StoryManager.cpp",
+  "file": "/workspace/proxima/src/runtime/StoryManager.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/runtime/gem.cpp.o -c /workspace/proxima/src/runtime/gem.cpp",
+  "file": "/workspace/proxima/src/runtime/gem.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/stdlib/IO.cpp.o -c /workspace/proxima/src/stdlib/IO.cpp",
+  "file": "/workspace/proxima/src/stdlib/IO.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/stdlib/Math.cpp.o -c /workspace/proxima/src/stdlib/Math.cpp",
+  "file": "/workspace/proxima/src/stdlib/Math.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/stdlib/Collection.cpp.o -c /workspace/proxima/src/stdlib/Collection.cpp",
+  "file": "/workspace/proxima/src/stdlib/Collection.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/stdlib/Time.cpp.o -c /workspace/proxima/src/stdlib/Time.cpp",
+  "file": "/workspace/proxima/src/stdlib/Time.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/stdlib/StdLib.cpp.o -c /workspace/proxima/src/stdlib/StdLib.cpp",
+  "file": "/workspace/proxima/src/stdlib/StdLib.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/utils/Logger.cpp.o -c /workspace/proxima/src/utils/Logger.cpp",
+  "file": "/workspace/proxima/src/utils/Logger.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/utils/Protocol.cpp.o -c /workspace/proxima/src/utils/Protocol.cpp",
+  "file": "/workspace/proxima/src/utils/Protocol.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/utils/DocGenerator.cpp.o -c /workspace/proxima/src/utils/DocGenerator.cpp",
+  "file": "/workspace/proxima/src/utils/DocGenerator.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/utils/CollectionParser.cpp.o -c /workspace/proxima/src/utils/CollectionParser.cpp",
+  "file": "/workspace/proxima/src/utils/CollectionParser.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/services/llm/LLMClient.cpp.o -c /workspace/proxima/src/services/llm/LLMClient.cpp",
+  "file": "/workspace/proxima/src/services/llm/LLMClient.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/services/GitIntegration/GitIntegration.cpp.o -c /workspace/proxima/src/services/GitIntegration/GitIntegration.cpp",
+  "file": "/workspace/proxima/src/services/GitIntegration/GitIntegration.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proximalib.dir/src/core/AutoSave.cpp.o -c /workspace/proxima/src/core/AutoSave.cpp",
+  "file": "/workspace/proxima/src/core/AutoSave.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/proxima.dir/src/main.cpp.o -c /workspace/proxima/src/main.cpp",
+  "file": "/workspace/proxima/src/main.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/lexer_test.dir/tests/unit/lexer_test.cpp.o -c /workspace/proxima/tests/unit/lexer_test.cpp",
+  "file": "/workspace/proxima/tests/unit/lexer_test.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/parser_test.dir/tests/unit/parser_test.cpp.o -c /workspace/proxima/tests/unit/parser_test.cpp",
+  "file": "/workspace/proxima/tests/unit/parser_test.cpp"
+},
+{
+  "directory": "/workspace/build_test/proxima",
+  "command": "/usr/bin/c++  -I/usr/lib/llvm-14/include -I/workspace/src -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17 -o CMakeFiles/runtime_test.dir/tests/unit/runtime_tests.cpp.o -c /workspace/proxima/tests/unit/runtime_tests.cpp",
+  "file": "/workspace/proxima/tests/unit/runtime_tests.cpp"
+}
+]

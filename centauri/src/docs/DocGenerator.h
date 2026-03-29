@@ -174,7 +174,6 @@
 #include <QValidator>
 #include <QIntValidator>
 #include <QDoubleValidator>
-#include <QRegExpValidator>
 #include <QRegularExpressionValidator>
 #include <QSyntaxHighlighter>
 #include <QTextDocument>

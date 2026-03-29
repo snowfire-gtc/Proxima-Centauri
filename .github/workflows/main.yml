@@ -17,22 +17,30 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Free up disk space
+    - name: Free up disk space (build-compiler)
       run: |
         sudo apt-get clean
         sudo rm -rf /var/lib/apt/lists/*
+        sudo rm -rf /var/cache/apt/archives/*
         sudo rm -rf /usr/share/dotnet
         sudo rm -rf /opt/ghc
         sudo rm -rf "/usr/local/share/boost"
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        sudo rm -rf /usr/share/android-sdk
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /usr/share/swift
+        sudo docker rmi $(docker images -q) 2>/dev/null || true
+        sudo rm -rf /tmp/*
         df -h
 
     - name: Install minimal LLVM dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends \
-          llvm-dev \
+          llvm-14 \
+          llvm-14-dev \
           libllvm14 \
+          libzstd-dev \
           cmake \
           build-essential
         sudo apt-get clean
@@ -41,7 +49,7 @@ jobs:
     - name: Configure
       run: |
         mkdir build && cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON -DLLVM_CONFIG_EXECUTABLE=/usr/bin/llvm-config-14
 
     - name: Build Proxima
       run: |
@@ -70,14 +78,20 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Free up disk space
+    - name: Free up disk space (build-ide)
       run: |
         sudo apt-get clean
         sudo rm -rf /var/lib/apt/lists/*
+        sudo rm -rf /var/cache/apt/archives/*
         sudo rm -rf /usr/share/dotnet
         sudo rm -rf /opt/ghc
         sudo rm -rf "/usr/local/share/boost"
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        sudo rm -rf /usr/share/android-sdk
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /usr/share/swift
+        sudo docker rmi $(docker images -q) 2>/dev/null || true
+        sudo rm -rf /tmp/*
         df -h
 
     - name: Install minimal Qt6 dependencies
@@ -85,8 +99,11 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends \
           qt6-base-dev \
+          qt6-base-private-dev \
           libqt6widgets6 \
           libqt6network6 \
+          libqt6gui6 \
+          libqt6core6 \
           cmake \
           build-essential
         sudo apt-get clean
@@ -95,7 +112,7 @@ jobs:
     - name: Configure
       run: |
         mkdir build && cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release
+        cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=/usr/lib/x86_64-linux-gnu/cmake/Qt6
 
     - name: Build Centauri
       run: |
