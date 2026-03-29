@@ -11,88 +11,13 @@
 #include <mutex>
 #include <condition_variable>
 #include <stdexcept>
-#include <QStandardPaths>
-#include <QDir>
-#include <QFile>
-#include <QTextStream>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonArray>
-#include <QCryptographicHash>
-#include <QDateTime>
-#include <QPrinter>
-#include <QTextDocument>
-#include <QPrintDialog>
-#include <QBuffer>
-#include <QXmlStreamWriter>
-#include <QXmlStreamReader>
-#include <QRegularExpression>
-#include <QRegularExpressionMatch>
-#include <QThread>
-#include <QMutex>
-#include <QWaitCondition>
-#include <QSemaphore>
-#include <QReadWriteLock>
-#include <QAtomicInt>
-#include <QScopedPointer>
-#include <QSharedPointer>
-#include <QWeakPointer>
-#include <QDataStream>
-#include <QDebug>
-#include <QElapsedTimer>
-#include <QSet>
-#include <QHash>
-#include <QMultiHash>
-#include <QMultiMap>
-#include <QPair>
-#include <QMetaType>
-#include <QMetaObject>
-#include <QMetaProperty>
-#include <QMetaEnum>
-#include <QMetaMethod>
-#include <QMetaClassInfo>
-#include <QScriptEngine>
-#include <QScriptValue>
-#include <QScriptValueIterator>
-#include <QScriptable>
-#include <QScriptContext>
-#include <QScriptContextInfo>
-#include <QSyntaxHighlighter>
-#include <QTextCharFormat>
-#include <QTextBlockFormat>
-#include <QTextListFormat>
-#include <QTextTableFormat>
-#include <QTextFrameFormat>
-#include <QTextImageFormat>
-#include <QTextObject>
-#include <QTextObjectInterface>
-#include <QAbstractTextDocumentLayout>
-#include <QTextDocumentFragment>
-#include <QTextDocumentWriter>
-#include <QPdfWriter>
-#include <QPrinter>
-#include <QPrintDialog>
-#include <QPrintPreviewDialog>
-#include <QPrintPreviewWidget>
-#include <QPageSetupDialog>
-#include <QFontInfo>
-#include <QFontMetrics>
-#include <QFontDatabase>
-#include <QStyle>
-#include <QStyleFactory>
-#include <QStylePainter>
-#include <QStyleOption>
-#include <QVariantAnimation>
-#include <QPropertyAnimation>
-#include <QSequentialAnimationGroup>
-#include <QParallelAnimationGroup>
-#include <QPauseAnimation>
-#include <QEasingCurve>
-#include <QGraphicsEffect>
-#include <QGraphicsBlurEffect>
-#include <QGraphicsDropShadowEffect>
-#include <QGraphicsOpacityEffect>
-#include <QGraphicsColorizeEffect>
+#include <ctime>
+#include <cstdint>
+#include <map>
+#include <set>
+#include <algorithm>
+#include <cmath>
+#include <iomanip>
 #include "utils/Logger.h"
 #include "stdlib/IO.h"
 #include "stdlib/Math.h"
@@ -1099,12 +1024,12 @@ int Runtime::getMatrixCols(const std::vector<std::vector<RuntimeValue>>& matrix)
 // Runtime GEM Methods
 // ============================================================================
 
-GEM* Runtime::createGEMObject(const QString& type, const QString& name) {
+GEM* Runtime::createGEMObject(const std::string& type, const std::string& name) {
     GEM* object = new GEM(name);
     object->set_type(type);
 
-    LOG_INFO("GEM object created: " + type.toStdString() +
-             " (" + name.toStdString() + ")");
+    LOG_INFO("GEM object created: " + type +
+             " (" + name + ")");
 
     return object;
 }

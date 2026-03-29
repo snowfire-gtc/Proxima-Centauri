@@ -1,9 +1,11 @@
 #include "REPL.h"
-#include <QDateTime>
-#include <QDir>
-#include <QFile>
-#include <QTextStream>
-#include <QRegularExpression>
+#include <chrono>
+#include <ctime>
+#include <fstream>
+#include <sstream>
+#include <iomanip>
+#include <regex>
+#include <sys/stat.h>
 #include "utils/Logger.h"
 #include "stdlib/Collection.h"
 #include "stdlib/Math.h"
@@ -15,9 +17,8 @@ namespace proxima {
 // Конструктор/Деструктор
 // ============================================================================
 
-REPL::REPL(QObject *parent)
-    : QObject(parent)
-    , initialized(false)
+REPL::REPL()
+    : initialized(false)
     , running(false)
     , echoInput(true)
     , prompt(">> ")
@@ -28,7 +29,11 @@ REPL::REPL(QObject *parent)
     , startTime(0)
     , commandCount(0) {
     
-    currentPath = QDir::currentPath();
+    // Получение текущей директории
+    char cwd[1024];
+    if (getcwd(cwd, sizeof(cwd)) != nullptr) {
+        currentPath = std::string(cwd);
+    }
     
     // Регистрация команд
     commands["help"] = REPLCommand::HELP;
@@ -69,7 +74,7 @@ bool REPL::initialize() {
     
     // Инициализация runtime
     if (!runtime) {
-        runtime = new Runtime(this);
+        runtime = new Runtime();
         runtime->initialize();
     }
     
@@ -81,14 +86,16 @@ bool REPL::initialize() {
     // Инициализация workspace
     initializeWorkspace();
     
-    // Загрузка истории
-    QString historyPath = QStandardPaths::writableLocation(
-        QStandardPaths::AppDataLocation) + "/repl_history.prx";
+    // Загрузка истории из домашней директории
+    std::string homeDir = getenv("HOME") ? getenv("HOME") : ".";
+    std::string historyPath = homeDir + "/.proxima/repl_history.prx";
     loadHistory(historyPath);
     
     initialized = true;
     running = true;
-    startTime = QDateTime::currentMSecsSinceEpoch();
+    auto now = std::chrono::system_clock::now();
+    startTime = std::chrono::duration_cast<std::chrono::milliseconds>(
+        now.time_since_epoch()).count();
     commandCount = 0;
     
     print("Proxima REPL v1.0.0\n");
@@ -100,8 +107,6 @@ bool REPL::initialize() {
     print("  >> m = rand(10, 10)   # матрица\n");
     print("  >> whos               # список переменных\n\n");
     
-    emit promptDisplayed();
-    
     LOG_INFO("REPL started (Proxima-native mode)");
     return true;
 }
@@ -109,13 +114,14 @@ bool REPL::initialize() {
 void REPL::shutdown() {
     if (!initialized) return;
     
-    // Сохранение истории
-    QString historyPath = QStandardPaths::writableLocation(
-        QStandardPaths::AppDataLocation) + "/repl_history.prx";
+    // Сохранение истории в домашнюю директорию
+    std::string homeDir = getenv("HOME") ? getenv("HOME") : ".";
+    std::string historyPath = homeDir + "/.proxima/repl_history.prx";
     saveHistory(historyPath);
     
     // Сохранение workspace
-    saveCommand(QStringList() << "workspace.prx");
+    std::vector<std::string> args = {"workspace.prx"};
+    saveCommand(args);
     
     clearVariables();
     
@@ -129,70 +135,83 @@ void REPL::shutdown() {
 // Выполнение кода Proxima
 // ============================================================================
 
-QString REPL::execute(const QString& input) {
+std::string REPL::execute(const std::string& input) {
     if (!initialized) {
         return "Error: REPL not initialized.\n";
     }
     
-    QString trimmedInput = input.trimmed();
+    // Trim whitespace
+    std::string trimmedInput = input;
+    size_t start = trimmedInput.find_first_not_of(" \t\n\r");
+    size_t end = trimmedInput.find_last_not_of(" \t\n\r");
+    if (start == std::string::npos) {
+        return "";
+    }
+    trimmedInput = trimmedInput.substr(start, end - start + 1);
     
     // Пустой ввод
-    if (trimmedInput.isEmpty()) {
-        emit promptDisplayed();
+    if (trimmedInput.empty()) {
         return "";
     }
     
     // Комментарии
-    if (trimmedInput.startsWith("//") || trimmedInput.startsWith("#")) {
-        emit promptDisplayed();
+    if (trimmedInput.rfind("//", 0) == 0 || trimmedInput.rfind("#", 0) == 0) {
         return "";
     }
     
-    // Проверка на команду REPL
-    QStringList tokens = trimmedInput.split(QRegularExpression("\\s+"));
-    if (!tokens.isEmpty()) {
-        QString firstToken = tokens.first().toLower();
+    // Проверка на команду REPL - разбиваем по пробелам
+    std::vector<std::string> tokens;
+    std::istringstream iss(trimmedInput);
+    std::string token;
+    while (iss >> token) {
+        tokens.push_back(token);
+    }
+    
+    if (!tokens.empty()) {
+        std::string firstToken = tokens[0];
+        // Convert to lowercase
+        for (auto& c : firstToken) {
+            c = std::tolower(c);
+        }
         
-        // Проверка на команду (без "!" префикса - это Proxima-native)
-        if (commands.contains(firstToken)) {
-            // Это команда REPL, а не код Proxima
-            REPLCommand cmd = commands[firstToken];
-            tokens.removeFirst();
-            QString result = executeCommand(cmd, tokens);
+        // Проверка на команду
+        auto it = commands.find(firstToken);
+        if (it != commands.end()) {
+            // Это команда REPL
+            REPLCommand cmd = it->second;
+            tokens.erase(tokens.begin());
+            std::string result = executeCommand(cmd, tokens);
             
-            addToHistory(trimmedInput, result, result.contains("Error"));
+            addToHistory(trimmedInput, result, result.find("Error") != std::string::npos);
             commandCount++;
             
-            emit promptDisplayed();
             return result;
         }
     }
     
     // Выполнение как код Proxima
-    QString result = executeProximaCode(trimmedInput);
+    std::string result = executeProximaCode(trimmedInput);
     
-    addToHistory(trimmedInput, result, result.contains("Error"));
+    addToHistory(trimmedInput, result, result.find("Error") != std::string::npos);
     commandCount++;
-    
-    emit promptDisplayed();
     
     return result;
 }
 
-QString REPL::executeProximaCode(const QString& code) {
+std::string REPL::executeProximaCode(const std::string& code) {
     auto startTime = std::chrono::high_resolution_clock::now();
     
-    QString output;
+    std::string output;
     
     try {
         // Парсинг кода Proxima
-        std::vector<Token> tokens = parser.tokenize(code.toStdString());
+        std::vector<Token> tokens = parser.tokenize(code);
         ProgramNodePtr ast = parser.parse(tokens);
         
         // Семантический анализ
         analyzer.analyze(ast);
         
-        // Проверка на присваивание (для обновления переменных)
+        // Проверка на присваивание
         if (ast->statements.size() > 0) {
             auto stmt = ast->statements[0];
             if (stmt->nodeType == NodeType::ASSIGNMENT) {
@@ -204,11 +223,10 @@ QString REPL::executeProximaCode(const QString& code) {
                     RuntimeValue value = evaluateExpression(assign->right);
                     
                     // Обновление переменной
-                    updateVariable(QString::fromStdString(ident->name), value);
+                    updateVariable(ident->name, value);
                     
-                    // Вывод имени переменной (как в Matlab/Octave)
-                    output = QString::fromStdString(ident->name) + " = " + 
-                             formatOutput(value) + "\n";
+                    // Вывод имени переменной
+                    output = ident->name + " = " + formatOutput(value) + "\n";
                 }
             } else {
                 // Выполнение выражения без присваивания
@@ -222,37 +240,39 @@ QString REPL::executeProximaCode(const QString& code) {
         }
         
     } catch (const std::exception& e) {
-        output = "Error: " + QString::fromUtf8(e.what()) + "\n";
+        output = "Error: " + std::string(e.what()) + "\n";
         printError(output);
     }
     
     auto endTime = std::chrono::high_resolution_clock::now();
     double elapsed = std::chrono::duration<double>(endTime - startTime).count();
     
-    output += QString("Execution time: %1 ms\n").arg(elapsed * 1000, 0, 'f', 2);
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(2);
+    oss << "Execution time: " << (elapsed * 1000) << " ms\n";
+    output += oss.str();
     
     return output;
 }
 
 RuntimeValue REPL::evaluateExpression(StatementNodePtr stmt) {
     // В полной реализации - выполнение через Interpreter
-    // Для примера - заглушка
     return RuntimeValue();
 }
 
-void REPL::print(const QString& output) {
-    emit outputReceived(output);
+void REPL::print(const std::string& output) {
+    std::cout << output;
 }
 
-void REPL::printError(const QString& error) {
-    emit errorReceived(error);
+void REPL::printError(const std::string& error) {
+    std::cerr << error;
 }
 
 // ============================================================================
 // Команды REPL (минимальный набор)
 // ============================================================================
 
-QString REPL::executeCommand(REPLCommand cmd, const QStringList& args) {
+std::string REPL::executeCommand(REPLCommand cmd, const std::vector<std::string>& args) {
     switch (cmd) {
         case REPLCommand::HELP:
             return helpCommand(args);
@@ -291,8 +311,8 @@ QString REPL::executeCommand(REPLCommand cmd, const QStringList& args) {
     }
 }
 
-QString REPL::helpCommand(const QStringList& args) {
-    QString help;
+std::string REPL::helpCommand(const std::vector<std::string>& args) {
+    std::string help;
     help += "Proxima REPL Commands\n";
     help += "=====================\n\n";
     help += "Все команды REPL выполняют код Proxima напрямую.\n";
@@ -314,74 +334,80 @@ QString REPL::helpCommand(const QStringList& args) {
     help += "  version        - версия\n";
     help += "  exit           - выход\n\n";
     
-    if (!args.isEmpty()) {
-        help += "Подробная справка по команде '" + args.first() + "'\n";
+    if (!args.empty()) {
+        help += "Подробная справка по команде '" + args[0] + "'\n";
         // Детальная справка по команде
     }
     
     return help;
 }
 
-QString REPL::whoisCommand(const QStringList& args) {
-    if (args.isEmpty()) {
+std::string REPL::whoisCommand(const std::vector<std::string>& args) {
+    if (args.empty()) {
         return "Usage: whois <variable_name>\n"
                "Показывает детальную информацию о переменной.\n";
     }
     
-    QString varName = args.first();
+    std::string varName = args[0];
     
     if (!variables.contains(varName)) {
         return "Variable '" + varName + "' not found.\n";
     }
     
-    const REPLVariable& var = variables[varName];
+    const REPLVariable& var = variables.at(varName);
     
-    QString info;
+    std::string info;
     info += "Variable Information\n";
     info += "====================\n\n";
-    info += QString("Name: %1\n").arg(var.name);
-    info += QString("Type: %1\n").arg(var.type);
-    info += QString("Size: %1\n").arg(var.size);
-    info += QString("Bytes: %1\n").arg(var.bytes);
-    info += QString("Modified: %1\n").arg(var.lastModified.toString());
+    info += "Name: " + var.name + "\n";
+    info += "Type: " + var.type + "\n";
+    info += "Size: " + std::to_string(var.size) + "\n";
+    info += "Bytes: " + std::to_string(var.bytes) + "\n";
     
     // Использование Proxima show() для значения (language.txt #46)
-    info += QString("Value: %1\n").arg(formatOutput(var.value));
+    info += "Value: " + formatOutput(var.value) + "\n";
     
     return info;
 }
 
-QString REPL::whosCommand(const QStringList& args) {
-    if (variables.isEmpty()) {
+std::string REPL::whosCommand(const std::vector<std::string>& args) {
+    if (variables.empty()) {
         return "No variables defined.\n";
     }
     
-    QString output;
+    std::string output;
     output += "Variable Name    Type          Size      Bytes\n";
     output += "=============    ====          ====      =====\n";
     
     // Фильтрация по паттерну (Proxima-style)
-    QString pattern = args.isEmpty() ? "*" : args.first();
+    std::string pattern = args.empty() ? "*" : args[0];
     
-    for (auto it = variables.begin(); it != variables.end(); ++it) {
-        if (pattern == "*" || it.key().contains(pattern)) {
-            const REPLVariable& var = it.value();
-            output += QString("%1%2%3%4\n")
-                .arg(var.name, -16)
-                .arg(var.type, -14)
-                .arg(QString::number(var.size), -10)
-                .arg(QString::number(var.bytes), -8);
+    for (const auto& pair : variables) {
+        const std::string& varName = pair.first;
+        const REPLVariable& var = pair.second;
+        
+        bool matches = (pattern == "*");
+        if (!matches) {
+            // Простая проверка на вхождение подстроки
+            matches = (varName.find(pattern) != std::string::npos);
+        }
+        
+        if (matches) {
+            char buffer[256];
+            snprintf(buffer, sizeof(buffer), "%-16s %-14s %-10d %-8d\n",
+                     var.name.c_str(), var.type.c_str(), var.size, var.bytes);
+            output += buffer;
         }
     }
     
     output += "\n";
-    output += QString("Total: %1 variables\n").arg(variables.size());
+    output += "Total: " + std::to_string(variables.size()) + " variables\n";
     
     return output;
 }
 
-QString REPL::showCommand(const QStringList& args) {
-    if (args.isEmpty()) {
+std::string REPL::showCommand(const std::vector<std::string>& args) {
+    if (args.empty()) {
         return "Usage: show <variable_name>\n"
                "Визуализация переменной через IDE (language.txt #46).\n"
                "  vector  -> график\n"
@@ -391,62 +417,65 @@ QString REPL::showCommand(const QStringList& args) {
                "  class   -> инспектор объекта\n";
     }
     
-    QString varName = args.first();
+    std::string varName = args[0];
     
-    if (!variables.contains(varName)) {
+    auto it = variables.find(varName);
+    if (it == variables.end()) {
         return "Variable '" + varName + "' not found.\n";
     }
     
-    const REPLVariable& var = variables[varName];
+    const REPLVariable& var = it->second;
     
     // Запрос к IDE на визуализацию (интеграция с language.txt #46)
-    QString visType = "auto";
-    if (var.type.contains("vector")) visType = "plot";
-    else if (var.type.contains("matrix")) visType = "image";
-    else if (var.type.contains("layer")) visType = "3d";
-    else if (var.type.contains("collection")) visType = "table";
-    else if (var.type.contains("class")) visType = "inspect";
+    std::string visType = "auto";
+    if (var.type.find("vector") != std::string::npos) visType = "plot";
+    else if (var.type.find("matrix") != std::string::npos) visType = "image";
+    else if (var.type.find("layer") != std::string::npos) visType = "3d";
+    else if (var.type.find("collection") != std::string::npos) visType = "table";
+    else if (var.type.find("class") != std::string::npos) visType = "inspect";
     
-    // Отправка запроса в IDE
-    emit visualizationRequested(varName, visType);
+    // Отправка запроса в IDE через callback
+    emitVisualizationRequested(varName, visType);
     
     return "Opening visualizer for '" + varName + "' (" + visType + ")...\n";
 }
 
-QString REPL::typeCommand(const QStringList& args) {
-    if (args.isEmpty()) {
+std::string REPL::typeCommand(const std::vector<std::string>& args) {
+    if (args.empty()) {
         return "Usage: type <variable_name>\n";
     }
     
-    QString varName = args.first();
+    std::string varName = args[0];
     
-    if (!variables.contains(varName)) {
+    auto it = variables.find(varName);
+    if (it == variables.end()) {
         return "Variable '" + varName + "' not found.\n";
     }
     
-    return "Type of " + varName + ": " + variables[varName].type + "\n";
+    return "Type of " + varName + ": " + it->second.type + "\n";
 }
 
-QString REPL::sizeCommand(const QStringList& args) {
-    if (args.isEmpty()) {
+std::string REPL::sizeCommand(const std::vector<std::string>& args) {
+    if (args.empty()) {
         return "Usage: size <variable_name>\n";
     }
     
-    QString varName = args.first();
+    std::string varName = args[0];
     
-    if (!variables.contains(varName)) {
+    auto it = variables.find(varName);
+    if (it == variables.end()) {
         return "Variable '" + varName + "' not found.\n";
     }
     
-    return "Size of " + varName + ": " + QString::number(variables[varName].size) + "\n";
+    return "Size of " + varName + ": " + std::to_string(it->second.size) + "\n";
 }
 
-QString REPL::methodsCommand(const QStringList& args) {
-    if (args.isEmpty()) {
+std::string REPL::methodsCommand(const std::vector<std::string>& args) {
+    if (args.empty()) {
         return "Usage: methods <class_name>\n";
     }
     
-    QString className = args.first();
+    std::string className = args[0];
     
     if (!typeChecker) {
         return "Error: TypeChecker not initialized.\n";
@@ -458,32 +487,41 @@ QString REPL::methodsCommand(const QStringList& args) {
     
     TypeInfo info = typeChecker->getType(className);
     
-    if (info.methods.isEmpty()) {
+    if (info.methods.empty()) {
         return "No methods defined for " + className + ".\n";
     }
     
-    QString output;
+    std::string output;
     output += "Methods of " + className + ":\n";
     output += "========================\n\n";
     
-    for (auto it = info.methods.begin(); it != info.methods.end(); ++it) {
-        output += it.key() + "(";
-        QStringList params;
-        for (const auto& param : it->parameters) {
-            params.append(param.first + ": " + param.second);
+    for (const auto& pair : info.methods) {
+        const std::string& methodName = pair.first;
+        const MethodInfo& method = pair.second;
+        
+        output += methodName + "(";
+        std::vector<std::string> params;
+        for (const auto& param : method.parameters) {
+            params.push_back(param.first + ": " + param.second);
         }
-        output += params.join(", ") + ") : " + it->returnType + "\n";
+        
+        // Join params with ", "
+        for (size_t i = 0; i < params.size(); ++i) {
+            if (i > 0) output += ", ";
+            output += params[i];
+        }
+        output += ") : " + method.returnType + "\n";
     }
     
     return output;
 }
 
-QString REPL::fieldsCommand(const QStringList& args) {
-    if (args.isEmpty()) {
+std::string REPL::fieldsCommand(const std::vector<std::string>& args) {
+    if (args.empty()) {
         return "Usage: fields <class_name>\n";
     }
     
-    QString className = args.first();
+    std::string className = args[0];
     
     if (!typeChecker) {
         return "Error: TypeChecker not initialized.\n";
@@ -495,140 +533,169 @@ QString REPL::fieldsCommand(const QStringList& args) {
     
     TypeInfo info = typeChecker->getType(className);
     
-    if (info.fields.isEmpty()) {
+    if (info.fields.empty()) {
         return "No fields defined for " + className + ".\n";
     }
     
-    QString output;
+    std::string output;
     output += "Fields of " + className + ":\n";
     output += "========================\n\n";
     
-    for (auto it = info.fields.begin(); it != info.fields.end(); ++it) {
-        output += it.key() + ": " + it.value() + "\n";
+    for (const auto& pair : info.fields) {
+        output += pair.first + ": " + pair.second + "\n";
     }
     
     return output;
 }
 
-QString REPL::exitCommand(const QStringList& args) {
+std::string REPL::exitCommand(const std::vector<std::string>& args) {
     print("Exiting REPL...\n");
     shutdown();
     return "";
 }
 
-QString REPL::versionCommand(const QStringList& args) {
-    QString output;
+std::string REPL::versionCommand(const std::vector<std::string>& args) {
+    std::string output;
     output += "Proxima REPL v1.0.0\n";
     output += "===================\n\n";
     output += "Language: Proxima 1.0.0\n";
     output += "IDE: Centauri 1.0.0\n";
     output += "License: GPLv3\n\n";
-    output += "Build: " + QString(__DATE__) + " " + QString(__TIME__) + "\n";
-    output += "Qt: " + QString(QT_VERSION_STR) + "\n";
-    output += "LLVM: " + QString(LLVM_VERSION_STRING) + "\n";
+    output += "Build: " + std::string(__DATE__) + " " + std::string(__TIME__) + "\n";
+    output += "LLVM: " + std::string(LLVM_VERSION_STRING) + "\n";
     
     return output;
 }
 
-QString REPL::clearCommand(const QStringList& args) {
-    if (args.contains("-variables") || args.contains("-vars")) {
+std::string REPL::clearCommand(const std::vector<std::string>& args) {
+    // Проверка флагов
+    bool clearVars = false;
+    bool clearHist = false;
+    
+    for (const auto& arg : args) {
+        if (arg == "-variables" || arg == "-vars") {
+            clearVars = true;
+        }
+        if (arg == "-history" || arg == "-hist") {
+            clearHist = true;
+        }
+    }
+    
+    if (clearVars) {
         clearVariables();
         return "Variables cleared.\n";
     }
     
-    if (args.contains("-history") || args.contains("-hist")) {
+    if (clearHist) {
         clearHistory();
         return "History cleared.\n";
     }
     
     // Очистка консоли (ANSI escape codes)
-    emit outputReceived("\033[2J\033[H");
+    print("\033[2J\033[H");
     return "";
 }
 
-QString REPL::historyCommand(const QStringList& args) {
+std::string REPL::historyCommand(const std::vector<std::string>& args) {
     int count = 20;
-    if (!args.isEmpty()) {
-        bool ok;
-        int parsed = args.first().toInt(&ok);
-        if (ok && parsed > 0) {
-            count = qMin(parsed, history.size());
+    if (!args.empty()) {
+        try {
+            int parsed = std::stoi(args[0]);
+            if (parsed > 0) {
+                count = std::min(parsed, static_cast<int>(history.size()));
+            }
+        } catch (...) {
+            // Игнорируем ошибки парсинга
         }
     }
     
-    if (history.isEmpty()) {
+    if (history.empty()) {
         return "History is empty.\n";
     }
     
-    QString output;
+    std::string output;
     output += "Command History\n";
     output += "===============\n\n";
     
-    int start = qMax(0, history.size() - count);
-    for (int i = start; i < history.size(); i++) {
+    int start = std::max(0, static_cast<int>(history.size()) - count);
+    for (size_t i = start; i < history.size(); ++i) {
         const REPLHistoryEntry& entry = history[i];
-        QString marker = entry.hasError ? "! " : "  ";
-        output += QString("%1%2: %3\n")
-            .arg(marker)
-            .arg(i + 1, 4)
-            .arg(entry.code);
+        std::string marker = entry.hasError ? "! " : "  ";
+        char buffer[512];
+        snprintf(buffer, sizeof(buffer), "%s%4zu: %s\n", marker.c_str(), i + 1, entry.code.c_str());
+        output += buffer;
     }
     
     return output;
 }
 
-QString REPL::loadCommand(const QStringList& args) {
-    if (args.isEmpty()) {
+std::string REPL::loadCommand(const std::vector<std::string>& args) {
+    if (args.empty()) {
         return "Usage: load <filename.prx>\n"
                "Загружает и выполняет файл Proxima.\n";
     }
     
-    QString filename = args.first();
-    QFile file(filename);
+    std::string filename = args[0];
+    std::ifstream file(filename);
     
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    if (!file.is_open()) {
         return "Error: Cannot open file '" + filename + "'\n";
     }
     
-    QTextStream in(&file);
-    QString content = in.readAll();
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string content = buffer.str();
     file.close();
     
     print("Loading " + filename + "...\n");
     
     // Выполнение содержимого файла как кода Proxima
-    QStringList lines = content.split("\n");
-    for (const QString& line : lines) {
-        if (!line.trimmed().isEmpty() && !line.trimmed().startsWith("//")) {
-            QString result = execute(line);
-            if (!result.isEmpty()) {
-                print(result);
-            }
+    std::vector<std::string> lines;
+    std::istringstream iss(content);
+    std::string line;
+    while (std::getline(iss, line)) {
+        lines.push_back(line);
+    }
+    
+    for (const std::string& l : lines) {
+        // Trim whitespace
+        size_t start = l.find_first_not_of(" \t\r\n");
+        if (start == std::string::npos) continue;
+        size_t end = l.find_last_not_of(" \t\r\n");
+        std::string trimmed = l.substr(start, end - start + 1);
+        
+        // Пропускаем пустые строки и комментарии
+        if (trimmed.empty() || trimmed.rfind("//", 0) == 0 || trimmed.rfind("#", 0) == 0) {
+            continue;
+        }
+        
+        std::string result = execute(trimmed);
+        if (!result.empty()) {
+            print(result);
         }
     }
     
     return "File loaded successfully.\n";
 }
 
-QString REPL::saveCommand(const QStringList& args) {
-    if (args.isEmpty()) {
+std::string REPL::saveCommand(const std::vector<std::string>& args) {
+    if (args.empty()) {
         return "Usage: save <filename.prx>\n"
                "Сохраняет переменные workspace в файл Proxima.\n";
     }
     
-    QString filename = args.first();
-    QFile file(filename);
+    std::string filename = args[0];
+    std::ofstream file(filename);
     
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    if (!file.is_open()) {
         return "Error: Cannot create file '" + filename + "'\n";
     }
     
-    QTextStream out(&file);
-    out << "// Proxima Workspace\n";
-    out << "// Saved: " << QDateTime::currentDateTime().toString() << "\n\n";
+    file << "// Proxima Workspace\n";
+    file << "// Saved: " << std::time(nullptr) << "\n\n";
     
-    for (auto it = variables.begin(); it != variables.end(); ++it) {
-        out << it->name << " = " << formatOutput(it->value) << ";\n";
+    for (const auto& pair : variables) {
+        file << pair.first << " = " << formatOutput(pair.second.value) << ";\n";
     }
     
     file.close();
@@ -636,20 +703,20 @@ QString REPL::saveCommand(const QStringList& args) {
     return "Workspace saved to " + filename + ".\n";
 }
 
-QString REPL::configCommand(const QStringList& args) {
-    if (args.isEmpty()) {
-        QString output;
+std::string REPL::configCommand(const std::vector<std::string>& args) {
+    if (args.empty()) {
+        std::string output;
         output += "REPL Configuration\n";
         output += "==================\n\n";
-        output += QString("Prompt: %1\n").arg(prompt);
-        output += QString("Echo Input: %1\n").arg(echoInput ? "on" : "off");
-        output += QString("Current Path: %1\n").arg(currentPath);
+        output += "Prompt: " + prompt + "\n";
+        output += "Echo Input: " + std::string(echoInput ? "on" : "off") + "\n";
+        output += "Current Path: " + currentPath + "\n";
         return output;
     }
     
     if (args.size() >= 2) {
-        QString key = args.first();
-        QString value = args[1];
+        std::string key = args[0];
+        std::string value = args[1];
         
         if (key == "prompt") {
             prompt = value;
@@ -657,18 +724,18 @@ QString REPL::configCommand(const QStringList& args) {
         }
         if (key == "echo") {
             echoInput = (value == "on" || value == "true");
-            return "Echo set to: " + (echoInput ? "on" : "off") + "\n";
+            return "Echo set to: " + (std::string)(echoInput ? "on" : "off") + "\n";
         }
     }
     
     return "Usage: config <key> <value>\n";
 }
 
-QString REPL::resetCommand(const QStringList& args) {
+std::string REPL::resetCommand(const std::vector<std::string>& args) {
     clearVariables();
     clearHistory();
     commandCount = 0;
-    startTime = QDateTime::currentMSecsSinceEpoch();
+    startTime = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     
     return "REPL reset.\n";
 }
@@ -677,70 +744,75 @@ QString REPL::resetCommand(const QStringList& args) {
 // Визуализация (интеграция с language.txt #46)
 // ============================================================================
 
-void REPL::showVariable(const QString& varName) {
-    showCommand(QStringList() << varName);
+void REPL::showVariable(const std::string& varName) {
+    showCommand(std::vector<std::string>{varName});
 }
 
-void REPL::plotVector(const QString& varName) {
-    if (!variables.contains(varName)) return;
+void REPL::plotVector(const std::string& varName) {
+    auto it = variables.find(varName);
+    if (it == variables.end()) return;
     
-    const REPLVariable& var = variables[varName];
-    if (!var.type.contains("vector")) {
+    const REPLVariable& var = it->second;
+    if (var.type.find("vector") == std::string::npos) {
         printError("Variable '" + varName + "' is not a vector.\n");
         return;
     }
     
-    emit visualizationRequested(varName, "plot");
+    emitVisualizationRequested(varName, "plot");
 }
 
-void REPL::showMatrix(const QString& varName) {
-    if (!variables.contains(varName)) return;
+void REPL::showMatrix(const std::string& varName) {
+    auto it = variables.find(varName);
+    if (it == variables.end()) return;
     
-    const REPLVariable& var = variables[varName];
-    if (!var.type.contains("matrix")) {
+    const REPLVariable& var = it->second;
+    if (var.type.find("matrix") == std::string::npos) {
         printError("Variable '" + varName + "' is not a matrix.\n");
         return;
     }
     
-    emit visualizationRequested(varName, "image");
+    emitVisualizationRequested(varName, "image");
 }
 
-void REPL::showLayer3D(const QString& varName) {
-    if (!variables.contains(varName)) return;
+void REPL::showLayer3D(const std::string& varName) {
+    auto it = variables.find(varName);
+    if (it == variables.end()) return;
     
-    const REPLVariable& var = variables[varName];
-    if (!var.type.contains("layer")) {
+    const REPLVariable& var = it->second;
+    if (var.type.find("layer") == std::string::npos) {
         printError("Variable '" + varName + "' is not a layer.\n");
         return;
     }
     
-    emit visualizationRequested(varName, "3d");
+    emitVisualizationRequested(varName, "3d");
 }
 
-void REPL::showCollection(const QString& varName) {
-    if (!variables.contains(varName)) return;
+void REPL::showCollection(const std::string& varName) {
+    auto it = variables.find(varName);
+    if (it == variables.end()) return;
     
-    const REPLVariable& var = variables[varName];
-    if (!var.type.contains("collection")) {
+    const REPLVariable& var = it->second;
+    if (var.type.find("collection") == std::string::npos) {
         printError("Variable '" + varName + "' is not a collection.\n");
         return;
     }
     
-    emit visualizationRequested(varName, "table");
+    emitVisualizationRequested(varName, "table");
 }
 
-void REPL::inspectObject(const QString& varName) {
-    if (!variables.contains(varName)) return;
+void REPL::inspectObject(const std::string& varName) {
+    auto it = variables.find(varName);
+    if (it == variables.end()) return;
     
-    emit visualizationRequested(varName, "inspect");
+    emitVisualizationRequested(varName, "inspect");
 }
 
 // ============================================================================
 // Управление переменными
 // ============================================================================
 
-bool REPL::hasVariable(const QString& name) const {
-    return variables.contains(name);
+bool REPL::hasVariable(const std::string& name) const {
+    return variables.find(name) != variables.end();
 }
 
 void REPL::clearVariables() {
@@ -755,21 +827,21 @@ void REPL::clearVariables() {
     updateVariable("ninf", "double", RuntimeValue(-std::numeric_limits<double>::infinity()));
 }
 
-void REPL::updateVariable(const QString& name, const RuntimeValue& value) {
+void REPL::updateVariable(const std::string& name, const RuntimeValue& value) {
     REPLVariable var;
     var.name = name;
     var.type = getTypeName(value);
     var.value = value;
     var.size = getValueSize(value);
     var.bytes = getValueBytes(value);
-    var.lastModified = QDateTime::currentDateTime();
+    var.lastModified = std::time(nullptr);
     
     variables[name] = var;
     
-    emit variableChanged(name);
+    variableChanged(name);
 }
 
-QString REPL::getTypeName(const RuntimeValue& value) const {
+std::string REPL::getTypeName(const RuntimeValue& value) const {
     // Определение типа из RuntimeValue
     if (std::holds_alternative<int64_t>(value)) return "int64";
     if (std::holds_alternative<double>(value)) return "double";
@@ -792,26 +864,35 @@ int REPL::getValueBytes(const RuntimeValue& value) const {
     return sizeof(value) * getValueSize(value);
 }
 
-QString REPL::formatOutput(const RuntimeValue& value) const {
+std::string REPL::formatOutput(const RuntimeValue& value) const {
     if (std::holds_alternative<int64_t>(value)) {
-        return QString::number(std::get<int64_t>(value));
+        return std::to_string(std::get<int64_t>(value));
     }
     if (std::holds_alternative<double>(value)) {
-        return QString::number(std::get<double>(value), 'f', 6);
+        char buffer[64];
+        snprintf(buffer, sizeof(buffer), "%.6f", std::get<double>(value));
+        return std::string(buffer);
     }
     if (std::holds_alternative<std::string>(value)) {
-        return "\"" + QString::fromStdString(std::get<std::string>(value)) + "\"";
+        return "\"" + std::get<std::string>(value) + "\"";
     }
     if (std::holds_alternative<bool>(value)) {
         return std::get<bool>(value) ? "true" : "false";
     }
     if (std::holds_alternative<std::vector<RuntimeValue>>(value)) {
         const auto& vec = std::get<std::vector<RuntimeValue>>(value);
-        QStringList items;
+        std::vector<std::string> items;
         for (const auto& item : vec) {
-            items.append(formatOutput(item));
+            items.push_back(formatOutput(item));
         }
-        return "[" + items.join(", ") + "]";
+        
+        std::string result = "[";
+        for (size_t i = 0; i < items.size(); ++i) {
+            if (i > 0) result += ", ";
+            result += items[i];
+        }
+        result += "]";
+        return result;
     }
     if (std::holds_alternative<std::vector<std::vector<RuntimeValue>>>(value)) {
         return "[matrix]";
@@ -823,52 +904,50 @@ QString REPL::formatOutput(const RuntimeValue& value) const {
 // История
 // ============================================================================
 
-void REPL::addToHistory(const QString& code, const QString& output, bool hasError) {
+void REPL::addToHistory(const std::string& code, const std::string& output, bool hasError) {
     REPLHistoryEntry entry;
     entry.code = code;
     entry.output = output;
-    entry.timestamp = QDateTime::currentDateTime();
+    entry.timestamp = std::time(nullptr);
     entry.hasError = hasError;
     entry.executionTime = 0;
     
-    history.append(entry);
+    history.push_back(entry);
     
     // Ограничение размера
     while (history.size() > 1000) {
-        history.removeFirst();
+        history.erase(history.begin());
     }
     
-    emit historyChanged();
+    historyChanged();
 }
 
 void REPL::clearHistory() {
     history.clear();
 }
 
-void REPL::saveHistory(const QString& path) {
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) return;
+void REPL::saveHistory(const std::string& path) {
+    std::ofstream file(path);
+    if (!file.is_open()) return;
     
-    QTextStream out(&file);
     for (const REPLHistoryEntry& entry : history) {
-        out << entry.code << "\n";
+        file << entry.code << "\n";
     }
     
     file.close();
 }
 
-void REPL::loadHistory(const QString& path) {
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+void REPL::loadHistory(const std::string& path) {
+    std::ifstream file(path);
+    if (!file.is_open()) return;
     
-    QTextStream in(&file);
-    while (!in.atEnd()) {
-        QString line = in.readLine();
-        if (!line.isEmpty()) {
+    std::string line;
+    while (std::getline(file, line)) {
+        if (!line.empty()) {
             REPLHistoryEntry entry;
             entry.code = line;
-            entry.timestamp = QDateTime::currentDateTime();
-            history.append(entry);
+            entry.timestamp = std::time(nullptr);
+            history.push_back(entry);
         }
     }
     
@@ -891,11 +970,11 @@ void REPL::setTypeChecker(TypeChecker* checker) {
     typeChecker = checker;
 }
 
-void REPL::setIDEInterface(QObject* ide) {
+void REPL::setIDEInterface(void* ide) {
     ideInterface = ide;
 }
 
-void REPL::setPrompt(const QString& newPrompt) {
+void REPL::setPrompt(const std::string& newPrompt) {
     prompt = newPrompt;
 }
 
@@ -907,36 +986,113 @@ void REPL::setEchoInput(bool enable) {
 // Автодополнение
 // ============================================================================
 
-QStringList REPL::getCompletions(const QString& prefix) const {
-    QStringList completions;
+std::vector<std::string> REPL::getCompletions(const std::string& prefix) const {
+    std::vector<std::string> completions;
     
     // Автодополнение команд
-    for (auto it = commands.begin(); it != commands.end(); ++it) {
-        if (it.key().startsWith(prefix)) {
-            completions.append(it.key());
+    for (const auto& pair : commands) {
+        const std::string& cmdName = pair.first;
+        if (cmdName.size() >= prefix.size() && 
+            cmdName.compare(0, prefix.size(), prefix) == 0) {
+            completions.push_back(cmdName);
         }
     }
     
     // Автодополнение переменных
-    for (auto it = variables.begin(); it != variables.end(); ++it) {
-        if (it.key().startsWith(prefix)) {
-            completions.append(it.key());
+    for (const auto& pair : variables) {
+        const std::string& varName = pair.first;
+        if (varName.size() >= prefix.size() && 
+            varName.compare(0, prefix.size(), prefix) == 0) {
+            completions.push_back(varName);
         }
     }
     
     // Автодополнение ключевых слов Proxima
-    QStringList keywords = {"if", "else", "elseif", "end", "for", "in", 
+    std::vector<std::string> keywords = {"if", "else", "elseif", "end", "for", "in", 
                            "while", "do", "switch", "case", "return", 
                            "break", "continue", "class", "interface", 
                            "function", "vector", "matrix", "layer"};
     
-    for (const QString& kw : keywords) {
-        if (kw.startsWith(prefix)) {
-            completions.append(kw);
+    for (const std::string& kw : keywords) {
+        if (kw.size() >= prefix.size() && 
+            kw.compare(0, prefix.size(), prefix) == 0) {
+            completions.push_back(kw);
         }
     }
     
     return completions;
+}
+
+// ============================================================================
+// Callback registration (Qt-free signals)
+// ============================================================================
+
+void REPL::onVisualizationRequested(VisualizationCallback callback) {
+    visualizationCallback_ = callback;
+}
+
+void REPL::onVariableChanged(VariableChangedCallback callback) {
+    variableChangedCallback_ = callback;
+}
+
+void REPL::onHistoryChanged(HistoryChangedCallback callback) {
+    historyChangedCallback_ = callback;
+}
+
+void REPL::onOutputReceived(OutputCallback callback) {
+    outputCallback_ = callback;
+}
+
+void REPL::onErrorReceived(ErrorCallback callback) {
+    errorCallback_ = callback;
+}
+
+void REPL::onPromptDisplayed(PromptCallback callback) {
+    promptCallback_ = callback;
+}
+
+// ============================================================================
+// Signal emission helpers (Qt-free)
+// ============================================================================
+
+void REPL::emitVisualizationRequested(const std::string& varName, const std::string& type) {
+    if (visualizationCallback_) {
+        visualizationCallback_(varName, type);
+    }
+}
+
+void REPL::emitVariableChanged(const std::string& varName) {
+    if (variableChangedCallback_) {
+        variableChangedCallback_(varName);
+    }
+}
+
+void REPL::emitHistoryChanged() {
+    if (historyChangedCallback_) {
+        historyChangedCallback_();
+    }
+}
+
+void REPL::emitOutputReceived(const std::string& output) {
+    if (outputCallback_) {
+        outputCallback_(output);
+    } else {
+        print(output);  // Fallback to default print
+    }
+}
+
+void REPL::emitErrorReceived(const std::string& error) {
+    if (errorCallback_) {
+        errorCallback_(error);
+    } else {
+        printError(error);  // Fallback to default printError
+    }
+}
+
+void REPL::emitPromptDisplayed() {
+    if (promptCallback_) {
+        promptCallback_();
+    }
 }
 
 } // namespace proxima

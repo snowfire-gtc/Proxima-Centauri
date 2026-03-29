@@ -7,9 +7,13 @@
 #include "../codegen/LLVMCodeGen.h"
 #include "../runtime/Runtime.h"
 #include "../runtime/Debugger.h"
-#include <QString>
-#include <QVector>
-#include <QMap>
+#include <string>
+#include <vector>
+#include <map>
+#include <chrono>
+#include <ctime>
+#include <functional>
+#include <memory>
 
 namespace proxima {
 
@@ -35,27 +39,34 @@ enum class REPLCommand {
 };
 
 struct REPLHistoryEntry {
-    QString code;           // Код Proxima
-    QString output;         // Результат выполнения
-    QDateTime timestamp;
+    std::string code;           // Код Proxima
+    std::string output;         // Результат выполнения
+    std::time_t timestamp;
     bool hasError;
-    qint64 executionTime;
+    int64_t executionTime;
 };
 
 struct REPLVariable {
-    QString name;
-    QString type;
+    std::string name;
+    std::string type;
     RuntimeValue value;     // RuntimeValue из Interpreter
     int size;
     int bytes;
-    QDateTime lastModified;
+    std::time_t lastModified;
 };
 
-class REPL : public QObject {
-    Q_OBJECT
+// Callback types for REPL events (Qt-free signal replacement)
+using VisualizationCallback = std::function<void(const std::string& varName, const std::string& type)>;
+using VariableChangedCallback = std::function<void(const std::string& varName)>;
+using HistoryChangedCallback = std::function<void()>;
+using OutputCallback = std::function<void(const std::string& output)>;
+using ErrorCallback = std::function<void(const std::string& error)>;
+using PromptCallback = std::function<void()>;
+
+class REPL {
     
 public:
-    explicit REPL(QObject *parent = nullptr);
+    REPL();
     ~REPL();
     
     // Инициализация
@@ -64,99 +75,122 @@ public:
     bool isInitialized() const { return initialized; }
     
     // Выполнение кода Proxima
-    QString execute(const QString& code);
-    QString evaluate(const QString& expression);
+    std::string execute(const std::string& code);
+    std::string evaluate(const std::string& expression);
     
     // REPL команды (минимальный набор)
-    REPLCommand parseCommand(const QString& input);
-    QString executeCommand(REPLCommand cmd, const QStringList& args);
+    REPLCommand parseCommand(const std::string& input);
+    std::string executeCommand(REPLCommand cmd, const std::vector<std::string>& args);
     
     // Визуализация (интеграция с language.txt #46)
-    void showVariable(const QString& varName);
-    void plotVector(const QString& varName);
-    void showMatrix(const QString& varName);
-    void showLayer3D(const QString& varName);
-    void showCollection(const QString& varName);
-    void inspectObject(const QString& varName);
+    void showVariable(const std::string& varName);
+    void plotVector(const std::string& varName);
+    void showMatrix(const std::string& varName);
+    void showLayer3D(const std::string& varName);
+    void showCollection(const std::string& varName);
+    void inspectObject(const std::string& varName);
     
     // Управление переменными
-    QMap<QString, REPLVariable> getVariables() const { return variables; }
-    bool hasVariable(const QString& name) const;
+    std::map<std::string, REPLVariable> getVariables() const { return variables; }
+    bool hasVariable(const std::string& name) const;
     void clearVariables();
     
     // История
-    void addToHistory(const QString& code, const QString& output, bool hasError);
+    void addToHistory(const std::string& code, const std::string& output, bool hasError);
     void clearHistory();
-    void saveHistory(const QString& path);
-    void loadHistory(const QString& path);
+    void saveHistory(const std::string& path);
+    void loadHistory(const std::string& path);
     
     // Конфигурация
-    void setPrompt(const QString& prompt);
-    QString getPrompt() const { return prompt; }
+    void setPrompt(const std::string& prompt);
+    std::string getPrompt() const { return prompt; }
     void setEchoInput(bool enable);
     
     // Интеграция
     void setRuntime(Runtime* runtime);
     void setDebugger(Debugger* debugger);
     void setTypeChecker(TypeChecker* checker);
-    void setIDEInterface(QObject* ide);  // Для связи с визуализаторами IDE
+    void setIDEInterface(void* ide);  // Для связи с визуализаторами IDE
+    
+    // Callback registration (Qt-free signals)
+    void onVisualizationRequested(VisualizationCallback callback);
+    void onVariableChanged(VariableChangedCallback callback);
+    void onHistoryChanged(HistoryChangedCallback callback);
+    void onOutputReceived(OutputCallback callback);
+    void onErrorReceived(ErrorCallback callback);
+    void onPromptDisplayed(PromptCallback callback);
     
     // Автодополнение
-    QStringList getCompletions(const QString& prefix) const;
-    
-signals:
-    void outputReceived(const QString& output);
-    void errorReceived(const QString& error);
-    void promptDisplayed();
-    void visualizationRequested(const QString& varName, const QString& visType);
-    void variableChanged(const QString& name);
+    std::vector<std::string> getCompletions(const std::string& prefix) const;
     
 private:
     void registerBuiltinFunctions();
     void initializeWorkspace();
-    QString executeProximaCode(const QString& code);
-    QString formatOutput(const RuntimeValue& value) const;
-    void updateVariable(const QString& name, const RuntimeValue& value);
+    std::string executeProximaCode(const std::string& code);
+    std::string formatOutput(const RuntimeValue& value) const;
+    void updateVariable(const std::string& name, const RuntimeValue& value);
+    std::string getTypeName(const RuntimeValue& value) const;
+    
+    // Вспомогательные функции
+    void print(const std::string& output);
+    void printError(const std::string& error);
+    RuntimeValue evaluateExpression(StatementNodePtr stmt);
+    
+    // Signal emission helpers (Qt-free)
+    void emitVisualizationRequested(const std::string& varName, const std::string& type);
+    void emitVariableChanged(const std::string& varName);
+    void emitHistoryChanged();
+    void emitOutputReceived(const std::string& output);
+    void emitErrorReceived(const std::string& error);
+    void emitPromptDisplayed();
     
     // Команды
-    QString helpCommand(const QStringList& args);
-    QString whoisCommand(const QStringList& args);
-    QString whosCommand(const QStringList& args);
-    QString showCommand(const QStringList& args);
-    QString typeCommand(const QStringList& args);
-    QString sizeCommand(const QStringList& args);
-    QString methodsCommand(const QStringList& args);
-    QString fieldsCommand(const QStringList& args);
-    QString exitCommand(const QStringList& args);
-    QString versionCommand(const QStringList& args);
-    QString clearCommand(const QStringList& args);
-    QString historyCommand(const QStringList& args);
-    QString loadCommand(const QStringList& args);
-    QString saveCommand(const QStringList& args);
-    QString configCommand(const QStringList& args);
-    QString resetCommand(const QStringList& args);
+    std::string helpCommand(const std::vector<std::string>& args);
+    std::string whoisCommand(const std::vector<std::string>& args);
+    std::string whosCommand(const std::vector<std::string>& args);
+    std::string showCommand(const std::vector<std::string>& args);
+    std::string typeCommand(const std::vector<std::string>& args);
+    std::string sizeCommand(const std::vector<std::string>& args);
+    std::string methodsCommand(const std::vector<std::string>& args);
+    std::string fieldsCommand(const std::vector<std::string>& args);
+    std::string exitCommand(const std::vector<std::string>& args);
+    std::string versionCommand(const std::vector<std::string>& args);
+    std::string clearCommand(const std::vector<std::string>& args);
+    std::string historyCommand(const std::vector<std::string>& args);
+    std::string loadCommand(const std::vector<std::string>& args);
+    std::string saveCommand(const std::vector<std::string>& args);
+    std::string configCommand(const std::vector<std::string>& args);
+    std::string resetCommand(const std::vector<std::string>& args);
     
     bool initialized;
     bool running;
     bool echoInput;
     
-    QString prompt;
-    QString currentPath;
+    std::string prompt;
+    std::string currentPath;
     
     Runtime* runtime;
     Debugger* debugger;
     TypeChecker* typeChecker;
-    QObject* ideInterface;  // Связь с IDE для визуализации
+    void* ideInterface;  // Связь с IDE для визуализации
     
     Parser parser;
     SemanticAnalyzer analyzer;
     LLVMCodeGen codeGen;
     
-    QVector<REPLHistoryEntry> history;
-    QMap<QString, REPLVariable> variables;
-    QMap<QString, REPLCommand> commands;
+    std::vector<REPLHistoryEntry> history;
+    std::map<std::string, REPLVariable> variables;
+    std::map<std::string, REPLCommand> commands;
     
-    qint64 startTime;
+    // Callback storage (Qt-free signals)
+    VisualizationCallback visualizationCallback_;
+    VariableChangedCallback variableChangedCallback_;
+    HistoryChangedCallback historyChangedCallback_;
+    OutputCallback outputCallback_;
+    ErrorCallback errorCallback_;
+    PromptCallback promptCallback_;
+    
+    int64_t startTime;
     int commandCount;
 };
 

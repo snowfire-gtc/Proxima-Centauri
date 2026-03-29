@@ -1,19 +1,23 @@
 #ifndef PROXIMA_ARGUMENT_VALIDATOR_H
 #define PROXIMA_ARGUMENT_VALIDATOR_H
 
-#include <QObject>
-#include <QString>
-#include <QVector>
-#include <QMap>
-#include <QPair>
-#include <QVariant>
-#include <QRegularExpression>
-#include <QDateTime>
+#include <string>
+#include <vector>
+#include <map>
+#include <variant>
+#include <regex>
+#include <chrono>
+#include <ctime>
+#include <functional>
+#include <any>
 #include "parser/AST.h"
 #include "semantic/TypeChecker.h"
 #include "utils/Logger.h"
 
 namespace proxima {
+
+// Forward declaration
+class Value;
 
 /**
  * @brief Типы валидаторов аргументов
@@ -49,18 +53,31 @@ enum class ValidatorType {
 };
 
 /**
+ * @brief Вариант значения для валидации (аналог QVariant)
+ */
+using ValidationValue = std::variant<
+    std::monostate,     // null/none
+    bool,               // логическое
+    int,                // целое число
+    double,             // вещественное число
+    std::string,        // строка
+    std::vector<ValidationValue>,  // вектор/список
+    std::map<std::string, ValidationValue>  // ассоциативный массив
+>;
+
+/**
  * @brief Структура правила валидации
  */
 struct ValidationRule {
-    QString argumentName;       // Имя аргумента
-    ValidatorType validator;    // Тип валидатора
-    QString validatorName;      // Имя валидатора (для custom)
-    QVariant parameters;        // Параметры валидатора
-    QString errorMessage;       // Сообщение об ошибке
-    bool isOptional;            // Необязательный аргумент
-    QVariant defaultValue;      // Значение по умолчанию
-    int line;                   // Номер строки
-    int column;                 // Номер колонки
+    std::string argumentName;       // Имя аргумента
+    ValidatorType validator;        // Тип валидатора
+    std::string validatorName;      // Имя валидатора (для custom)
+    ValidationValue parameters;     // Параметры валидатора
+    std::string errorMessage;       // Сообщение об ошибке
+    bool isOptional;                // Необязательный аргумент
+    ValidationValue defaultValue;   // Значение по умолчанию
+    int line;                       // Номер строки
+    int column;                     // Номер колонки
     
     ValidationRule() : validator(ValidatorType::Custom), isOptional(false), 
                        line(0), column(0) {}
@@ -71,14 +88,14 @@ struct ValidationRule {
  */
 struct ValidationResult {
     bool isValid;               // Успешная валидация
-    QString argumentName;       // Имя аргумента
-    QString errorMessage;       // Сообщение об ошибке
-    QVariant validatedValue;    // Валидированное значение
+    std::string argumentName;   // Имя аргумента
+    std::string errorMessage;   // Сообщение об ошибке
+    ValidationValue validatedValue;    // Валидированное значение
     ValidatorType validator;    // Использованный валидатор
     
     ValidationResult() : isValid(true), validator(ValidatorType::Custom) {}
     
-    static ValidationResult success(const QString& argName, const QVariant& value) {
+    static ValidationResult success(const std::string& argName, const ValidationValue& value) {
         ValidationResult result;
         result.isValid = true;
         result.argumentName = argName;
@@ -86,7 +103,7 @@ struct ValidationResult {
         return result;
     }
     
-    static ValidationResult failure(const QString& argName, const QString& error, 
+    static ValidationResult failure(const std::string& argName, const std::string& error, 
                                    ValidatorType validator = ValidatorType::Custom) {
         ValidationResult result;
         result.isValid = false;
@@ -104,11 +121,10 @@ struct ValidationResult {
  * - language.txt пункт 26 - конструкция arguments для валидации
  * - language.txt пункт 27 - стандартные функции валидации
  */
-class ArgumentValidator : public QObject {
-    Q_OBJECT
+class ArgumentValidator {
     
 public:
-    explicit ArgumentValidator(QObject *parent = nullptr);
+    ArgumentValidator();
     ~ArgumentValidator();
     
     // ========================================================================
@@ -121,7 +137,7 @@ public:
      * @param functionNode Узел функции
      * @return Вектор правил валидации
      */
-    QVector<ValidationRule> parseArgumentsBlock(
+    std::vector<ValidationRule> parseArgumentsBlock(
         ArgumentsNodePtr argumentsNode,
         FunctionDeclNodePtr functionNode);
     
@@ -131,9 +147,9 @@ public:
      * @param argName Имя аргумента
      * @return Вектор правил валидации
      */
-    QVector<ValidationRule> parseValidationAnnotations(
-        const QString& commentText,
-        const QString& argName);
+    std::vector<ValidationRule> parseValidationAnnotations(
+        const std::string& commentText,
+        const std::string& argName);
     
     // ========================================================================
     // Валидация аргументов
@@ -146,10 +162,10 @@ public:
      * @param argNames Имена аргументов
      * @return Результаты валидации
      */
-    QVector<ValidationResult> validateArguments(
-        const QVector<ValidationRule>& rules,
-        const QVector<QVariant>& actualValues,
-        const QStringList& argNames);
+    std::vector<ValidationResult> validateArguments(
+        const std::vector<ValidationRule>& rules,
+        const std::vector<ValidationValue>& actualValues,
+        const std::vector<std::string>& argNames);
     
     /**
      * @brief Валидация отдельного аргумента
@@ -157,7 +173,7 @@ public:
      * @param value Значение аргумента
      * @return Результат валидации
      */
-    ValidationResult validateArgument(const ValidationRule& rule, const QVariant& value);
+    ValidationResult validateArgument(const ValidationRule& rule, const ValidationValue& value);
     
     // ========================================================================
     // Стандартные валидаторы
@@ -168,112 +184,112 @@ public:
      * @param value Значение
      * @return true если логическое
      */
-    static bool isLogical(const QVariant& value);
+    static bool isLogical(const ValidationValue& value);
     
     /**
      * @brief Проверка на положительное число
      * @param value Значение
      * @return true если положительное
      */
-    static bool isPositive(const QVariant& value);
+    static bool isPositive(const ValidationValue& value);
     
     /**
      * @brief Проверка на отрицательное число
      * @param value Значение
      * @return true если отрицательное
      */
-    static bool isNegative(const QVariant& value);
+    static bool isNegative(const ValidationValue& value);
     
     /**
      * @brief Проверка на неотрицательное число
      * @param value Значение
      * @return true если неотрицательное
      */
-    static bool isNonNegative(const QVariant& value);
+    static bool isNonNegative(const ValidationValue& value);
     
     /**
      * @brief Проверка на целое число
      * @param value Значение
      * @return true если целое
      */
-    static bool isInteger(const QVariant& value);
+    static bool isInteger(const ValidationValue& value);
     
     /**
      * @brief Проверка на вещественное число
      * @param value Значение
      * @return true если вещественное
      */
-    static bool isReal(const QVariant& value);
+    static bool isReal(const ValidationValue& value);
     
     /**
      * @brief Проверка на числовое значение
      * @param value Значение
      * @return true если числовое
      */
-    static bool isNumeric(const QVariant& value);
+    static bool isNumeric(const ValidationValue& value);
     
     /**
      * @brief Проверка на строку
      * @param value Значение
      * @return true если строка
      */
-    static bool isString(const QVariant& value);
+    static bool isString(const ValidationValue& value);
     
     /**
      * @brief Проверка на вектор
      * @param value Значение
      * @return true если вектор
      */
-    static bool isVector(const QVariant& value);
+    static bool isVector(const ValidationValue& value);
     
     /**
      * @brief Проверка на матрицу
      * @param value Значение
      * @return true если матрица
      */
-    static bool isMatrix(const QVariant& value);
+    static bool isMatrix(const ValidationValue& value);
     
     /**
      * @brief Проверка на слой
      * @param value Значение
      * @return true если слой
      */
-    static bool isLayer(const QVariant& value);
+    static bool isLayer(const ValidationValue& value);
     
     /**
      * @brief Проверка на коллекцию
      * @param value Значение
      * @return true если коллекция
      */
-    static bool isCollection(const QVariant& value);
+    static bool isCollection(const ValidationValue& value);
     
     /**
      * @brief Проверка на пустоту
      * @param value Значение
      * @return true если пустое
      */
-    static bool isEmpty(const QVariant& value);
+    static bool isEmpty(const ValidationValue& value);
     
     /**
      * @brief Проверка на непустоту
      * @param value Значение
      * @return true если не пустое
      */
-    static bool isNotEmpty(const QVariant& value);
+    static bool isNotEmpty(const ValidationValue& value);
     
     /**
      * @brief Проверка на наличие длины
      * @param value Значение
      * @return true если имеет длину
      */
-    static bool hasLength(const QVariant& value);
+    static bool hasLength(const ValidationValue& value);
     
     /**
      * @brief Проверка на наличие размера
      * @param value Значение
      * @return true если имеет размер
      */
-    static bool hasSize(const QVariant& value);
+    static bool hasSize(const ValidationValue& value);
     
     /**
      * @brief Проверка на диапазон
@@ -282,7 +298,7 @@ public:
      * @param max Максимальное значение
      * @return true если в диапазоне
      */
-    static bool isInRange(const QVariant& value, double min, double max);
+    static bool isInRange(const ValidationValue& value, double min, double max);
     
     /**
      * @brief Проверка на одно из значений
@@ -290,7 +306,7 @@ public:
      * @param allowedValues Разрешённые значения
      * @return true если одно из разрешённых
      */
-    static bool isOneOf(const QVariant& value, const QVector<QVariant>& allowedValues);
+    static bool isOneOf(const ValidationValue& value, const std::vector<ValidationValue>& allowedValues);
     
     /**
      * @brief Проверка на соответствие шаблону
@@ -298,7 +314,7 @@ public:
      * @param pattern Регулярное выражение
      * @return true если соответствует
      */
-    static bool matchesPattern(const QVariant& value, const QString& pattern);
+    static bool matchesPattern(const ValidationValue& value, const std::string& pattern);
     
     /**
      * @brief Проверка на класс
@@ -306,7 +322,7 @@ public:
      * @param className Имя класса
      * @return true если экземпляр класса
      */
-    static bool isClass(const QVariant& value, const QString& className);
+    static bool isClass(const ValidationValue& value, const std::string& className);
     
     /**
      * @brief Проверка на интерфейс
@@ -314,21 +330,21 @@ public:
      * @param interfaceName Имя интерфейса
      * @return true если экземпляр интерфейса
      */
-    static bool isInterface(const QVariant& value, const QString& interfaceName);
+    static bool isInterface(const ValidationValue& value, const std::string& interfaceName);
     
     /**
      * @brief Проверка на вызываемость
      * @param value Значение
      * @return true если вызываемое
      */
-    static bool isCallable(const QVariant& value);
+    static bool isCallable(const ValidationValue& value);
     
     /**
      * @brief Проверка на итерируемость
      * @param value Значение
      * @return true если итерируемое
      */
-    static bool isIterable(const QVariant& value);
+    static bool isIterable(const ValidationValue& value);
     
     // ========================================================================
     // Регистрация пользовательских валидаторов
@@ -339,15 +355,15 @@ public:
      * @param name Имя валидатора
      * @param validatorFunc Функция валидатора
      */
-    void registerCustomValidator(const QString& name, 
-                                 std::function<bool(const QVariant&)> validatorFunc);
+    void registerCustomValidator(const std::string& name, 
+                                 std::function<bool(const ValidationValue&)> validatorFunc);
     
     /**
      * @brief Проверка наличия пользовательского валидатора
      * @param name Имя валидатора
      * @return true если зарегистрирован
      */
-    bool hasCustomValidator(const QString& name) const;
+    bool hasCustomValidator(const std::string& name) const;
     
     /**
      * @brief Выполнение пользовательского валидатора
@@ -355,7 +371,7 @@ public:
      * @param value Значение
      * @return true если валидация успешна
      */
-    bool executeCustomValidator(const QString& name, const QVariant& value);
+    bool executeCustomValidator(const std::string& name, const ValidationValue& value);
     
     // ========================================================================
     // Генерация сообщений об ошибках
@@ -367,27 +383,21 @@ public:
      * @param value Фактическое значение
      * @return Сообщение об ошибке
      */
-    QString generateErrorMessage(const ValidationRule& rule, const QVariant& value);
+    std::string generateErrorMessage(const ValidationRule& rule, const ValidationValue& value);
     
     /**
      * @brief Получение описания валидатора
      * @param type Тип валидатора
      * @return Описание
      */
-    static QString getValidatorDescription(ValidatorType type);
+    static std::string getValidatorDescription(ValidatorType type);
     
     /**
      * @brief Получение имени валидатора
      * @param type Тип валидатора
      * @return Имя
      */
-    static QString getValidatorName(ValidatorType type);
-    
-signals:
-    void validationStarted(const QString& functionName);
-    void validationCompleted(const QString& functionName, bool success);
-    void validationFailed(const QString& functionName, const QString& argument, 
-                         const QString& error);
+    static std::string getValidatorName(ValidatorType type);
     
 private:
     /**
@@ -395,31 +405,31 @@ private:
      * @param annotationText Текст аннотации
      * @return Правило валидации
      */
-    ValidationRule parseValidationAnnotation(const QString& annotationText);
+    ValidationRule parseValidationAnnotation(const std::string& annotationText);
     
     /**
      * @brief Извлечение параметров из аннотации
      * @param annotationText Текст аннотации
      * @return Параметры
      */
-    QVariant extractAnnotationParameters(const QString& annotationText);
+    ValidationValue extractAnnotationParameters(const std::string& annotationText);
     
     /**
      * @brief Преобразование строки в тип валидатора
      * @param validatorName Имя валидатора
      * @return Тип валидатора
      */
-    ValidatorType stringToValidatorType(const QString& validatorName);
+    ValidatorType stringToValidatorType(const std::string& validatorName);
     
     /**
      * @brief Преобразование типа валидатора в строку
      * @param type Тип валидатора
      * @return Имя валидатора
      */
-    QString validatorTypeToString(ValidatorType type);
+    std::string validatorTypeToString(ValidatorType type);
     
     // Пользовательские валидаторы
-    QMap<QString, std::function<bool(const QVariant&)>> customValidators;
+    std::map<std::string, std::function<bool(const ValidationValue&)>> customValidators;
     
     // Статистика
     int validationCount;

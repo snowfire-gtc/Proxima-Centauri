@@ -1,9 +1,9 @@
 #ifndef PROXIMA_GEM_H
 #define PROXIMA_GEM_H
 
-#include <QString>
-#include <QDateTime>
-#include <QElapsedTimer>
+#include <string>
+#include <chrono>
+#include <ctime>
 #include "stdlib/Time.h"
 #include "stdlib/Collection.h"
 #include "utils/Logger.h"
@@ -27,7 +27,7 @@ public:
      * @brief Конструктор
      * @param name Имя объекта (по умолчанию пустое)
      */
-    inline GEM(const QString& name = QString()) 
+    inline GEM(const std::string& name = "") 
         : objectName_(name)
         , objectType_("gem")
         , initialized_(false)
@@ -40,7 +40,8 @@ public:
         , successCount_(0)
         , failureCount_(0) {
         
-        createdAt_ = QDateTime::currentDateTime();
+        auto now = std::chrono::system_clock::now();
+        createdAt_ = std::chrono::system_clock::to_time_t(now);
         updatedAt_ = createdAt_;
     }
     
@@ -111,25 +112,25 @@ public:
      * @brief Получение имени
      * @return Имя объекта
      */
-    inline QString get_name() const { return objectName_; }
+    inline std::string get_name() const { return objectName_; }
     
     /**
      * @brief Установка имени
      * @param name Имя объекта
      */
-    inline void set_name(const QString& name) { objectName_ = name; }
+    inline void set_name(const std::string& name) { objectName_ = name; }
     
     /**
      * @brief Получение типа
      * @return Тип объекта
      */
-    inline QString get_type() const { return objectType_; }
+    inline std::string get_type() const { return objectType_; }
     
     /**
      * @brief Установка типа
      * @param type Тип объекта
      */
-    inline void set_type(const QString& type) { objectType_ = type; }
+    inline void set_type(const std::string& type) { objectType_ = type; }
     
     /**
      * @brief Проверка инициализации
@@ -191,13 +192,13 @@ public:
      * @brief Получение времени создания
      * @return Время
      */
-    inline QDateTime get_created_at() const { return createdAt_; }
+    inline std::time_t get_created_at() const { return createdAt_; }
     
     /**
      * @brief Получение времени последнего обновления
      * @return Время
      */
-    inline QDateTime get_updated_at() const { return updatedAt_; }
+    inline std::time_t get_updated_at() const { return updatedAt_; }
     
     // ========================================================================
     // Методы публикации и сохранения (опциональные)
@@ -223,16 +224,16 @@ public:
     
 protected:
     // Данные объекта (минимальный набор)
-    QString objectName_;        ///< Имя объекта
-    QString objectType_;        ///< Тип объекта
+    std::string objectName_;        ///< Имя объекта
+    std::string objectType_;        ///< Тип объекта
     bool initialized_;          ///< Флаг инициализации
     bool alive_;                ///< Флаг активности
     int updateCount_;           ///< Счётчик обновлений
     
     // Временные метки
     Time lastUpdateTime_;       ///< Время последнего обновления
-    QDateTime createdAt_;       ///< Время создания
-    QDateTime updatedAt_;       ///< Время последнего обновления
+    std::time_t createdAt_;       ///< Время создания
+    std::time_t updatedAt_;       ///< Время последнего обновления
     
     // Статистика выполнения (только double, без QMap)
     double execTime_;           ///< Время последнего выполнения (мс)
@@ -242,15 +243,12 @@ protected:
     int successCount_;          ///< Количество успешных выполнений
     int failureCount_;          ///< Количество неудачных выполнений
     
-    // Таймер (один на объект)
-    mutable QElapsedTimer timer_;
-    
     /**
      * @brief Логирование
      * @param message Сообщение
      * @param level Уровень (0=error, 1=warning, 2=info, 3=debug)
      */
-    inline void log(const QString& message, int level = 2) const;
+    inline void log(const std::string& message, int level = 2) const;
     
     /**
      * @brief Обновление статистики при ошибке

@@ -7,8 +7,6 @@
 *.so
 *.a
 *.out
-build/
-dist/
 
 # Dependencies
 node_modules/
@@ -17,6 +15,8 @@ venv/
 __pycache__/
 .mypy_cache/
 .pytest_cache/
+dist/
+build/
 target/
 .gradle/
 
@@ -35,7 +35,7 @@ target/
 .vscode/
 .idea/
 
-# System files
+# System
 .DS_Store
 Thumbs.db
 
