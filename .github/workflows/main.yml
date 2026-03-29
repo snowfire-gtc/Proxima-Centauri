@@ -94,7 +94,7 @@ jobs:
 
     - name: Configure
       run: |
-        cd build
+        mkdir build && cd build
         cmake .. -DCMAKE_BUILD_TYPE=Release
 
     - name: Build Centauri
