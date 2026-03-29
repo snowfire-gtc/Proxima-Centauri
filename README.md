@@ -43,7 +43,7 @@ Proxima is a MATLAB-compatible programming language with full OOP support, GPU a
 - **CMake** 3.15+
 - **C++ Compiler** (GCC 9+, Clang 10+, MSVC 2019+)
 - **LLVM** 14+
-- **Qt** 5.15.2+
+- **Qt** 6+
 - **Git**
 
 Optional:
@@ -182,7 +182,7 @@ ctest
 - [x] 20. Пиктографическое меню (7 разделов)
 - [x] 21. Один проект в экземпляре IDE
 - [x] 22. Название IDE - Centauri
-- [x] 23. Qt 5.15.2/C++
+- [x] 23. Qt6/C++
 - [x] 24. Простой, понятный, задокументированный код
 - [x] 25. Режимы (Edit, Runtime, Pause)
 - [x] 26. Схемы запуска (6 вариантов)
