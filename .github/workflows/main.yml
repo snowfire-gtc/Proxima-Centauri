@@ -40,19 +40,21 @@ jobs:
 
     - name: Configure
       run: |
-        cd proxima
         mkdir build && cd build
         cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
+      working-directory: proxima
 
     - name: Build
       run: |
-        cd proxima/build
+        cd build
         make -j$(nproc)
+      working-directory: proxima
 
     - name: Test
       run: |
-        cd proxima/build
+        cd build
         ctest --output-on-failure
+      working-directory: proxima
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
@@ -95,14 +97,15 @@ jobs:
 
     - name: Configure
       run: |
-        cd centauri
         mkdir build && cd build
         cmake .. -DCMAKE_BUILD_TYPE=Release
+      working-directory: centauri
 
     - name: Build
       run: |
-        cd centauri/build
+        cd build
         make -j$(nproc)
+      working-directory: centauri
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
