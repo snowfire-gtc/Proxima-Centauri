@@ -1,70 +1,68 @@
 ```
-# Build directories
-build/
-build_test/
-
-# CMake files
-CMakeCache.txt
-CMakeFiles/
-cmake_install.cmake
-CPackConfig.cmake
-CPackSourceConfig.cmake
-compile_commands.json
-
-# Qt autogen files
-*_autogen/
-
-# Compiled object files
+# Compiled and build artifacts
 *.o
 *.obj
-*.a
-*.lib
-*.so
-*.dylib
-*.dll
-
-# Executables
 *.exe
+*.dll
+*.so
+*.a
 *.out
 
-# Temporary files
-*.tmp
-*.swp
-*~
+# Dependencies
+node_modules/
+venv/
+.venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+target/
+.gradle/
 
-# Logs
+# Logs and temp files
 *.log
-
-# IDE files
-.vscode/
-.idea/
+*.tmp
 *.swp
 *.swo
 
-# Environment files
+# Environment
 .env
 .env.local
 *.env.*
 
-# Coverage reports
+# Editors
+.vscode/
+.idea/
+
+# Coverage
 coverage/
 htmlcov/
 .coverage
 
-# Python specific
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.so
+# System files
+.DS_Store
+Thumbs.db
 
-# Distribution / packaging
-.dist/
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
 *.tar.gz
-*.whl
-
-# Testing
-*.pytest_cache/
-.mypy_cache/
+*.tar.bz2
+*.tar.xz
+*.tar.zst
 ```

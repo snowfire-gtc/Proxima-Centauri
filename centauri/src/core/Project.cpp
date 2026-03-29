@@ -224,6 +224,14 @@ bool Project::saveManifest() {
         return false;
     }
 
+    // Auto-generate build hash and timestamp if set to "auto"
+    if (buildHash.isEmpty() || buildHash == "auto") {
+        calculateBuildHash();
+    }
+    if (buildTimestamp.isEmpty() || buildTimestamp == "auto") {
+        buildTimestamp = generateBuildTimestamp();
+    }
+
     QTextStream out(&manifest);
     out << "[\n";
     out << "    \"name\", \"" << info.name << "\",\n";
@@ -233,8 +241,8 @@ bool Project::saveManifest() {
     out << "    \"capabilities\", " << info.capabilities.join(", ") << ",\n";
     out << "    \"license\", \"" << info.license << "\",\n";
     out << "    \"authors\", " << info.authors.join(", ") << ",\n";
-    out << "    \"build_hash\", \"" << (buildHash.isEmpty() ? "auto" : buildHash) << "\",\n";
-    out << "    \"build_timestamp\", \"" << (buildTimestamp.isEmpty() ? "auto" : buildTimestamp) << "\"\n";
+    out << "    \"build_hash\", \"" << buildHash << "\",\n";
+    out << "    \"build_timestamp\", \"" << buildTimestamp << "\"\n";
     out << "]\n";
 
     manifest.close();
