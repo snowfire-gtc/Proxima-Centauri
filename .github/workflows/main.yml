@@ -40,25 +40,24 @@ jobs:
 
     - name: Configure
       run: |
-        cd proxima
         mkdir build && cd build
         cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON
 
-    - name: Build
+    - name: Build Proxima
       run: |
-        cd proxima/build
-        make -j$(nproc)
+        cd build
+        make -j$(nproc) proxima
 
-    - name: Test
+    - name: Test Proxima
       run: |
-        cd proxima/build
-        ctest --output-on-failure
+        cd build
+        ctest --output-on-failure --tests-regex "proxima.*"
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: proxima-${{ matrix.os }}
-        path: proxima/build/proxima
+        path: build/proxima/proxima
 
   build-ide:
     runs-on: ${{ matrix.os }}
@@ -95,20 +94,19 @@ jobs:
 
     - name: Configure
       run: |
-        cd centauri
         mkdir build && cd build
         cmake .. -DCMAKE_BUILD_TYPE=Release
 
-    - name: Build
+    - name: Build Centauri
       run: |
-        cd centauri/build
-        make -j$(nproc)
+        cd build
+        make -j$(nproc) centauri
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
         name: centauri-${{ matrix.os }}
-        path: centauri/build/centauri
+        path: build/centauri/centauri
 
   release:
     runs-on: ubuntu-latest

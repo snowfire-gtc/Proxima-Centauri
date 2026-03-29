@@ -1,1 +1,4 @@
-Nothing should be ignored since the changes only include source code files (.cpp, .h) and no build artifacts, dependencies, or temporary files.
+```yaml
+# Configuration and workflow files
+.github/
+```
