@@ -1111,7 +1111,7 @@ void SemanticAnalyzer::validateArgumentsBlock(
     LOG_DEBUG("Validating arguments block for function: " + functionNode->name);
 
     // Парсинг правил валидации
-    QVector<ValidationRule> rules = argumentValidator.parseArgumentsBlock(
+    std::vector<ValidationRule> rules = argumentValidator.parseArgumentsBlock(
         argumentsNode, functionNode);
 
     // Сохранение правил для функции
@@ -1147,11 +1147,11 @@ void SemanticAnalyzer::validateArgumentsBlock(
 }
 
 void SemanticAnalyzer::validateFunctionCall(
-    const QVector<ValidationRule>& rules,
+    const std::vector<ValidationRule>& rules,
     const std::vector<ExpressionNodePtr>& args,
     const Token& token) {
 
-    if (rules.isEmpty()) {
+    if (rules.empty()) {
         return;
     }
 

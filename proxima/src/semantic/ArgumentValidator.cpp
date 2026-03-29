@@ -1,25 +1,8 @@
 #include "ArgumentValidator.h"
-#include <QVariantList>
-#include <QVariantMap>
-#include <QVector>
-#include <QStringList>
-#include <QRegularExpressionMatch>
-#include <QMetaType>
-#include <QMetaObject>
-#include <QMetaMethod>
-#include <QMetaProperty>
-#include <QScriptEngine>
-#include <QScriptValue>
-#include <QScriptValueIterator>
-#include <QDateTime>
-#include <QUrl>
-#include <QRegularExpression>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonArray>
 #include <algorithm>
 #include <cmath>
 #include <typeinfo>
+#include <sstream>
 
 namespace proxima {
 
@@ -27,43 +10,38 @@ namespace proxima {
 // Конструктор/Деструктор
 // ============================================================================
 
-ArgumentValidator::ArgumentValidator(QObject *parent)
-    : QObject(parent)
-    , validationCount(0)
+ArgumentValidator::ArgumentValidator()
+    : validationCount(0)
     , successCount(0)
     , failureCount(0) {
     
     // Регистрация стандартных валидаторов
-    registerCustomValidator("isemail", [](const QVariant& value) {
-        if (!value.canConvert<QString>()) return false;
-        QString email = value.toString();
-        QRegularExpression re(R"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})");
-        return re.match(email).hasMatch();
+    registerCustomValidator("isemail", [](const AnyValue& value) {
+        const std::string* str = std::any_cast<std::string>(&value);
+        if (!str) return false;
+        std::regex email_re(R"([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})");
+        return std::regex_match(*str, email_re);
     });
     
-    registerCustomValidator("isurl", [](const QVariant& value) {
-        if (!value.canConvert<QString>()) return false;
-        QUrl url(value.toString());
-        return url.isValid() && !url.isEmpty();
+    registerCustomValidator("isurl", [](const AnyValue& value) {
+        const std::string* str = std::any_cast<std::string>(&value);
+        if (!str) return false;
+        // Простая проверка URL
+        return str->find("http://") == 0 || str->find("https://") == 0;
     });
     
-    registerCustomValidator("isdate", [](const QVariant& value) {
-        return value.canConvert<QDateTime>();
+    registerCustomValidator("isuuid", [](const AnyValue& value) {
+        const std::string* str = std::any_cast<std::string>(&value);
+        if (!str) return false;
+        std::regex uuid_re(R"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", std::regex::icase);
+        return std::regex_match(*str, uuid_re);
     });
     
-    registerCustomValidator("isuuid", [](const QVariant& value) {
-        if (!value.canConvert<QString>()) return false;
-        QString uuid = value.toString();
-        QRegularExpression re(R"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})",
-                             QRegularExpression::CaseInsensitiveOption);
-        return re.match(uuid).hasMatch();
-    });
-    
-    registerCustomValidator("ishex", [](const QVariant& value) {
-        if (!value.canConvert<QString>()) return false;
-        QString hex = value.toString();
-        QRegularExpression re(R"(^0x[0-9a-fA-F]+$|^#[0-9a-fA-F]+$)");
-        return re.match(hex).hasMatch();
+    registerCustomValidator("ishex", [](const AnyValue& value) {
+        const std::string* str = std::any_cast<std::string>(&value);
+        if (!str) return false;
+        std::regex hex_re(R"(^0x[0-9a-fA-F]+$|^#[0-9a-fA-F]+$)");
+        return std::regex_match(*str, hex_re);
     });
     
     LOG_INFO("ArgumentValidator initialized");
@@ -77,11 +55,11 @@ ArgumentValidator::~ArgumentValidator() {
 // Парсинг конструкции arguments
 // ============================================================================
 
-QVector<ValidationRule> ArgumentValidator::parseArgumentsBlock(
+std::vector<std::any> ArgumentValidator::parseArgumentsBlock(
     ArgumentsNodePtr argumentsNode,
     FunctionDeclNodePtr functionNode) {
     
-    QVector<ValidationRule> rules;
+    std::vector<std::any> rules;
     
     if (!argumentsNode) {
         return rules;
@@ -105,7 +83,7 @@ QVector<ValidationRule> ArgumentValidator::parseArgumentsBlock(
                 validatorRule.errorMessage = validator.errorMessage;
             }
             
-            rules.append(validatorRule);
+            rules.push_back(validatorRule);
         }
         
         // Проверка на обязательность
@@ -116,7 +94,7 @@ QVector<ValidationRule> ArgumentValidator::parseArgumentsBlock(
             rule.defaultValue = directive.defaultValue;
         }
         
-        rules.append(rule);
+        rules.push_back(rule);
     }
     
     LOG_DEBUG("Parsed " + QString::number(rules.size()) + " validation rules");
@@ -124,31 +102,31 @@ QVector<ValidationRule> ArgumentValidator::parseArgumentsBlock(
     return rules;
 }
 
-QVector<ValidationRule> ArgumentValidator::parseValidationAnnotations(
-    const QString& commentText,
-    const QString& argName) {
+std::vector<std::any> ArgumentValidator::parseValidationAnnotations(
+    const std::string& commentText,
+    const std::string& argName) {
     
-    QVector<ValidationRule> rules;
+    std::vector<std::any> rules;
     
     // Поиск аннотаций валидации в комментариях
     // Формат: @validate argName: validator1, validator2(param1, param2)
     QRegularExpression re(R"(@validate\s+(\w+):\s*([^\n]+))");
-    QRegularExpressionMatchIterator i = re.globalMatch(commentText);
+    std::sregex_iterator i = re(std::sregex_iterator(commentText.begin(), commentText.end(), regex), std::sregex_iterator());
     
     while (i.hasNext()) {
-        QRegularExpressionMatch match = i.next();
+        std::smatch match = i.next();
         
-        if (match.captured(1) == argName) {
-            QString validators = match.captured(2);
-            QStringList validatorList = validators.split(",", Qt::SkipEmptyParts);
+        if (matchmatch[1].str() == argName) {
+            std::string validators = matchmatch[2].str();
+            Qvector<string> validatorList = validators.empty() ? std::vector<std::string>() : parse_csv_line;
             
-            for (const QString& validator : validatorList) {
+            for (const std::string& validator : validatorList) {
                 ValidationRule rule;
                 rule.argumentName = argName;
                 
-                ValidationRule parsedRule = parseValidationAnnotation(validator.trimmed());
+                ValidationRule parsedRule = parseValidationAnnotation(validator);
                 if (parsedRule.validator != ValidatorType::Custom) {
-                    rules.append(parsedRule);
+                    rules.push_back(parsedRule);
                 }
             }
         }
@@ -158,60 +136,60 @@ QVector<ValidationRule> ArgumentValidator::parseValidationAnnotations(
 }
 
 ArgumentValidator::ValidationRule ArgumentValidator::parseValidationAnnotation(
-    const QString& annotationText) {
+    const std::string& annotationText) {
     
     ValidationRule rule;
     
     // Парсинг валидатора с параметрами
     // Формат: validatorName(param1, param2) или validatorName
     QRegularExpression re(R"((\w+)(?:\(([^)]*)\))?)");
-    QRegularExpressionMatch match = re.match(annotationText);
+    std::smatch match = re.match(annotationText);
     
     if (match.hasMatch()) {
-        rule.validatorName = match.captured(1);
+        rule.validatorName = matchmatch[1].str();
         rule.validator = stringToValidatorType(rule.validatorName);
         
-        if (match.captured(2).size() > 0) {
-            rule.parameters = extractAnnotationParameters(match.captured(2));
+        if (matchmatch[2].str().size() > 0) {
+            rule.parameters = extractAnnotationParameters(matchmatch[2].str());
         }
     }
     
     return rule;
 }
 
-QVariant ArgumentValidator::extractAnnotationParameters(const QString& annotationText) {
+AnyValue ArgumentValidator::extractAnnotationParameters(const std::string& annotationText) {
     // Парсинг параметров из строки
     // Формат: param1, param2, "string", 123, true
-    QStringList params = annotationText.split(",", Qt::SkipEmptyParts);
+    Qvector<string> params = annotationText.empty() ? std::vector<std::string>() : parse_csv_line;
     
     if (params.size() == 1) {
-        QString param = params[0].trimmed();
+        std::string param = params[0];
         
         // Проверка типа
-        if (param == "true") return QVariant(true);
-        if (param == "false") return QVariant(false);
+        if (param == "true") return AnyValue(true);
+        if (param == "false") return AnyValue(false);
         
         bool okInt;
         int intVal = param.toInt(&okInt);
-        if (okInt) return QVariant(intVal);
+        if (okInt) return AnyValue(intVal);
         
         bool okDouble;
         double doubleVal = param.toDouble(&okDouble);
-        if (okDouble) return QVariant(doubleVal);
+        if (okDouble) return AnyValue(doubleVal);
         
         // Строка (в кавычках)
         if (param.startsWith("\"") && param.endsWith("\"")) {
-            return QVariant(param.mid(1, param.size() - 2));
+            return AnyValue(param.mid(1, param.size() - 2));
         }
         
-        return QVariant(param);
+        return AnyValue(param);
     } else {
         // Несколько параметров
-        QVariantList list;
-        for (const QString& param : params) {
-            list.append(extractAnnotationParameters(param.trimmed()));
+        AnyValueList list;
+        for (const std::string& param : params) {
+            list.push_back(extractAnnotationParameters(param));
         }
-        return QVariant(list);
+        return AnyValue(list);
     }
 }
 
@@ -219,19 +197,18 @@ QVariant ArgumentValidator::extractAnnotationParameters(const QString& annotatio
 // Валидация аргументов
 // ============================================================================
 
-QVector<ValidationResult> ArgumentValidator::validateArguments(
-    const QVector<ValidationRule>& rules,
-    const QVector<QVariant>& actualValues,
-    const QStringList& argNames) {
+std::vector<std::any> ArgumentValidator::validateArguments(
+    const std::vector<std::any>& rules,
+    const std::vector<std::any>& actualValues,
+    const Qvector<string>& argNames) {
     
-    QVector<ValidationResult> results;
+    std::vector<std::any> results;
     validationCount++;
     
-    emit validationStarted("function");
-    
+        
     for (int i = 0; i < rules.size() && i < actualValues.size(); i++) {
         const ValidationRule& rule = rules[i];
-        QVariant value = actualValues[i];
+        AnyValue value = actualValues[i];
         
         // Применение значения по умолчанию
         if (value.isNull() && rule.defaultValue.isValid()) {
@@ -240,48 +217,45 @@ QVector<ValidationResult> ArgumentValidator::validateArguments(
         
         // Проверка на обязательность
         if (value.isNull() && !rule.isOptional) {
-            results.append(ValidationResult::failure(
+            results.push_back(ValidationResult::failure(
                 rule.argumentName,
                 "Argument '" + rule.argumentName + "' is required",
                 rule.validator));
             failureCount++;
-            emit validationFailed("function", rule.argumentName, "Required argument missing");
-            continue;
+                        continue;
         }
         
         // Пропуск необязательных пустых аргументов
         if (value.isNull() && rule.isOptional) {
-            results.append(ValidationResult::success(rule.argumentName, QVariant()));
+            results.push_back(ValidationResult::success(rule.argumentName, AnyValue()));
             successCount++;
             continue;
         }
         
         // Валидация
         ValidationResult result = validateArgument(rule, value);
-        results.append(result);
+        results.push_back(result);
         
         if (result.isValid) {
             successCount++;
         } else {
             failureCount++;
-            emit validationFailed("function", rule.argumentName, result.errorMessage);
-        }
+                    }
     }
     
     bool allValid = std::all_of(results.begin(), results.end(),
         [](const ValidationResult& r) { return r.isValid; });
     
-    emit validationCompleted("function", allValid);
-    
-    LOG_DEBUG("Validation completed: " + QString::number(successCount) + 
-              "/" + QString::number(validationCount) + " successful");
+        
+    LOG_DEBUG("Validation completed: " + std::to_string(successCount) + 
+              "/" + std::to_string(validationCount) + " successful");
     
     return results;
 }
 
 ArgumentValidator::ValidationResult ArgumentValidator::validateArgument(
     const ValidationRule& rule,
-    const QVariant& value) {
+    const AnyValue& value) {
     
     switch (rule.validator) {
         case ValidatorType::IsLogical:
@@ -383,7 +357,7 @@ ArgumentValidator::ValidationResult ArgumentValidator::validateArgument(
             break;
             
         case ValidatorType::IsInRange: {
-            QVariantList params = rule.parameters.toList();
+            AnyValueList params = rule.parameters.toList();
             if (params.size() >= 2) {
                 double min = params[0].toDouble();
                 double max = params[1].toDouble();
@@ -396,7 +370,7 @@ ArgumentValidator::ValidationResult ArgumentValidator::validateArgument(
         }
         
         case ValidatorType::IsOneOf: {
-            QVariantList allowedValues = ruleParameters.toList();
+            AnyValueList allowedValues = ruleParameters.toList();
             if (!isOneOf(value, allowedValues)) {
                 return ValidationResult::failure(rule.argumentName,
                     generateErrorMessage(rule, value), rule.validator);
@@ -405,7 +379,7 @@ ArgumentValidator::ValidationResult ArgumentValidator::validateArgument(
         }
         
         case ValidatorType::MatchesPattern: {
-            QString pattern = rule.parameters.toString();
+            std::string pattern = rule.parameters.toString();
             if (!matchesPattern(value, pattern)) {
                 return ValidationResult::failure(rule.argumentName,
                     generateErrorMessage(rule, value), rule.validator);
@@ -434,129 +408,129 @@ ArgumentValidator::ValidationResult ArgumentValidator::validateArgument(
 // Стандартные валидаторы
 // ============================================================================
 
-bool ArgumentValidator::isLogical(const QVariant& value) {
+bool ArgumentValidator::isLogical(const AnyValue& value) {
     return value.canConvert<bool>();
 }
 
-bool ArgumentValidator::isPositive(const QVariant& value) {
+bool ArgumentValidator::isPositive(const AnyValue& value) {
     if (!isNumeric(value)) return false;
     return value.toDouble() > 0;
 }
 
-bool ArgumentValidator::isNegative(const QVariant& value) {
+bool ArgumentValidator::isNegative(const AnyValue& value) {
     if (!isNumeric(value)) return false;
     return value.toDouble() < 0;
 }
 
-bool ArgumentValidator::isNonNegative(const QVariant& value) {
+bool ArgumentValidator::isNonNegative(const AnyValue& value) {
     if (!isNumeric(value)) return false;
     return value.toDouble() >= 0;
 }
 
-bool ArgumentValidator::isInteger(const QVariant& value) {
+bool ArgumentValidator::isInteger(const AnyValue& value) {
     if (!isNumeric(value)) return false;
     double d = value.toDouble();
     return d == static_cast<int>(d);
 }
 
-bool ArgumentValidator::isReal(const QVariant& value) {
+bool ArgumentValidator::isReal(const AnyValue& value) {
     return value.canConvert<double>();
 }
 
-bool ArgumentValidator::isNumeric(const QVariant& value) {
+bool ArgumentValidator::isNumeric(const AnyValue& value) {
     return value.canConvert<int>() || value.canConvert<double>() ||
            value.canConvert<float>() || value.canConvert<qlonglong>();
 }
 
-bool ArgumentValidator::isString(const QVariant& value) {
+bool ArgumentValidator::isString(const AnyValue& value) {
     return value.canConvert<QString>();
 }
 
-bool ArgumentValidator::isVector(const QVariant& value) {
-    return value.canConvert<QVariantList>();
+bool ArgumentValidator::isVector(const AnyValue& value) {
+    return value.canConvert<AnyValueList>();
 }
 
-bool ArgumentValidator::isMatrix(const QVariant& value) {
-    if (!value.canConvert<QVariantList>()) return false;
-    QVariantList list = value.toList();
+bool ArgumentValidator::isMatrix(const AnyValue& value) {
+    if (!value.canConvert<AnyValueList>()) return false;
+    AnyValueList list = value.toList();
     if (list.isEmpty()) return false;
-    return list[0].canConvert<QVariantList>();
+    return list[0].canConvert<AnyValueList>();
 }
 
-bool ArgumentValidator::isLayer(const QVariant& value) {
-    if (!value.canConvert<QVariantList>()) return false;
-    QVariantList list = value.toList();
+bool ArgumentValidator::isLayer(const AnyValue& value) {
+    if (!value.canConvert<AnyValueList>()) return false;
+    AnyValueList list = value.toList();
     if (list.isEmpty()) return false;
-    if (!list[0].canConvert<QVariantList>()) return false;
-    QVariantList list2d = list[0].toList();
+    if (!list[0].canConvert<AnyValueList>()) return false;
+    AnyValueList list2d = list[0].toList();
     if (list2d.isEmpty()) return false;
-    return list2d[0].canConvert<QVariantList>();
+    return list2d[0].canConvert<AnyValueList>();
 }
 
-bool ArgumentValidator::isCollection(const QVariant& value) {
-    return value.canConvert<QVariantMap>();
+bool ArgumentValidator::isCollection(const AnyValue& value) {
+    return value.canConvert<AnyValueMap>();
 }
 
-bool ArgumentValidator::isEmpty(const QVariant& value) {
+bool ArgumentValidator::isEmpty(const AnyValue& value) {
     if (value.isNull()) return true;
     if (value.canConvert<QString>()) return value.toString().isEmpty();
-    if (value.canConvert<QVariantList>()) return value.toList().isEmpty();
-    if (value.canConvert<QVariantMap>()) return value.toMap().isEmpty();
+    if (value.canConvert<AnyValueList>()) return value.toList().isEmpty();
+    if (value.canConvert<AnyValueMap>()) return value.toMap().isEmpty();
     return false;
 }
 
-bool ArgumentValidator::isNotEmpty(const QVariant& value) {
+bool ArgumentValidator::isNotEmpty(const AnyValue& value) {
     return !isEmpty(value);
 }
 
-bool ArgumentValidator::hasLength(const QVariant& value) {
+bool ArgumentValidator::hasLength(const AnyValue& value) {
     if (value.canConvert<QString>()) return true;
-    if (value.canConvert<QVariantList>()) return true;
+    if (value.canConvert<AnyValueList>()) return true;
     return false;
 }
 
-bool ArgumentValidator::hasSize(const QVariant& value) {
+bool ArgumentValidator::hasSize(const AnyValue& value) {
     return hasLength(value) || isMatrix(value) || isLayer(value);
 }
 
-bool ArgumentValidator::isInRange(const QVariant& value, double min, double max) {
+bool ArgumentValidator::isInRange(const AnyValue& value, double min, double max) {
     if (!isNumeric(value)) return false;
     double d = value.toDouble();
     return d >= min && d <= max;
 }
 
-bool ArgumentValidator::isOneOf(const QVariant& value, const QVector<QVariant>& allowedValues) {
-    for (const QVariant& allowed : allowedValues) {
+bool ArgumentValidator::isOneOf(const AnyValue& value, const std::vector<std::any>& allowedValues) {
+    for (const AnyValue& allowed : allowedValues) {
         if (value == allowed) return true;
     }
     return false;
 }
 
-bool ArgumentValidator::matchesPattern(const QVariant& value, const QString& pattern) {
+bool ArgumentValidator::matchesPattern(const AnyValue& value, const std::string& pattern) {
     if (!value.canConvert<QString>()) return false;
     QRegularExpression re(pattern);
     return re.match(value.toString()).hasMatch();
 }
 
-bool ArgumentValidator::isClass(const QVariant& value, const QString& className) {
+bool ArgumentValidator::isClass(const AnyValue& value, const std::string& className) {
     // В полной реализации - проверка типа объекта
     return false;
 }
 
-bool ArgumentValidator::isInterface(const QVariant& value, const QString& interfaceName) {
+bool ArgumentValidator::isInterface(const AnyValue& value, const std::string& interfaceName) {
     // В полной реализации - проверка реализации интерфейса
     return false;
 }
 
-bool ArgumentValidator::isCallable(const QVariant& value) {
+bool ArgumentValidator::isCallable(const AnyValue& value) {
     // В полной реализации - проверка на функцию/метод
     return value.canConvert<QFunctionPointer>();
 }
 
-bool ArgumentValidator::isIterable(const QVariant& value) {
-    return value.canConvert<QVariantList>() || 
+bool ArgumentValidator::isIterable(const AnyValue& value) {
+    return value.canConvert<AnyValueList>() || 
            value.canConvert<QString>() ||
-           value.canConvert<QVariantMap>();
+           value.canConvert<AnyValueMap>();
 }
 
 // ============================================================================
@@ -564,20 +538,20 @@ bool ArgumentValidator::isIterable(const QVariant& value) {
 // ============================================================================
 
 void ArgumentValidator::registerCustomValidator(
-    const QString& name,
-    std::function<bool(const QVariant&)> validatorFunc) {
+    const std::string& name,
+    std::function<bool(const AnyValue&)> validatorFunc) {
     
     customValidators[name] = validatorFunc;
-    LOG_DEBUG("Custom validator registered: " + name.toStdString());
+    LOG_DEBUG("Custom validator registered: " + name);
 }
 
-bool ArgumentValidator::hasCustomValidator(const QString& name) const {
+bool ArgumentValidator::hasCustomValidator(const std::string& name) const {
     return customValidators.contains(name);
 }
 
-bool ArgumentValidator::executeCustomValidator(const QString& name, const QVariant& value) {
+bool ArgumentValidator::executeCustomValidator(const std::string& name, const AnyValue& value) {
     if (!hasCustomValidator(name)) {
-        LOG_WARNING("Custom validator not found: " + name.toStdString());
+        LOG_WARNING("Custom validator not found: " + name);
         return false;
     }
     
@@ -588,15 +562,15 @@ bool ArgumentValidator::executeCustomValidator(const QString& name, const QVaria
 // Генерация сообщений об ошибках
 // ============================================================================
 
-QString ArgumentValidator::generateErrorMessage(
+std::string ArgumentValidator::generateErrorMessage(
     const ValidationRule& rule,
-    const QVariant& value) {
+    const AnyValue& value) {
     
     if (!rule.errorMessage.isEmpty()) {
         return rule.errorMessage;
     }
     
-    QString errorMsg = "Argument '" + rule.argumentName + "' validation failed: ";
+    std::string errorMsg = "Argument '" + rule.argumentName + "' validation failed: ";
     
     switch (rule.validator) {
         case ValidatorType::IsLogical:
@@ -642,7 +616,7 @@ QString ArgumentValidator::generateErrorMessage(
             errorMsg += "expected non-empty value";
             break;
         case ValidatorType::IsInRange: {
-            QVariantList params = rule.parameters.toList();
+            AnyValueList params = rule.parameters.toList();
             if (params.size() >= 2) {
                 errorMsg += QString("expected value in range [%1, %2]")
                     .arg(params[0].toDouble())
@@ -664,7 +638,7 @@ QString ArgumentValidator::generateErrorMessage(
     return errorMsg;
 }
 
-QString ArgumentValidator::getValidatorDescription(ValidatorType type) {
+std::string ArgumentValidator::getValidatorDescription(ValidatorType type) {
     switch (type) {
         case ValidatorType::IsLogical: return "Проверка на логическое значение";
         case ValidatorType::IsPositive: return "Проверка на положительное число";
@@ -689,7 +663,7 @@ QString ArgumentValidator::getValidatorDescription(ValidatorType type) {
     }
 }
 
-QString ArgumentValidator::getValidatorName(ValidatorType type) {
+std::string ArgumentValidator::getValidatorName(ValidatorType type) {
     switch (type) {
         case ValidatorType::IsLogical: return "islogical";
         case ValidatorType::IsPositive: return "ispositive";
@@ -715,9 +689,9 @@ QString ArgumentValidator::getValidatorName(ValidatorType type) {
 }
 
 ArgumentValidator::ValidatorType ArgumentValidator::stringToValidatorType(
-    const QString& validatorName) {
+    const std::string& validatorName) {
     
-    QString name = validatorName.toLower();
+    std::string name = validatorName.toLower();
     
     if (name == "islogical") return ValidatorType::IsLogical;
     if (name == "ispositive") return ValidatorType::IsPositive;
@@ -742,7 +716,7 @@ ArgumentValidator::ValidatorType ArgumentValidator::stringToValidatorType(
     return ValidatorType::Custom;
 }
 
-QString ArgumentValidator::validatorTypeToString(ValidatorType type) {
+std::string ArgumentValidator::validatorTypeToString(ValidatorType type) {
     return getValidatorName(type);
 }
 

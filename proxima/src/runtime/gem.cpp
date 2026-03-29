@@ -1,4 +1,8 @@
 #include "gem.h"
+#include <chrono>
+#include <ctime>
+#include <iomanip>
+#include <sstream>
 
 namespace proxima {
 
@@ -7,14 +11,15 @@ namespace proxima {
 // ============================================================================
 
 bool GEM::init() {
-    timer_.start();
+    startTime_ = std::chrono::steady_clock::now();
     
     initialized_ = true;
     alive_ = true;
     lastUpdateTime_ = Time::now();
-    updatedAt_ = QDateTime::currentDateTime();
+    updatedAt_ = std::chrono::system_clock::now();
     
-    execTime_ = timer_.elapsed() / 1000.0;
+    auto end = std::chrono::steady_clock::now();
+    execTime_ = std::chrono::duration<double, std::milli>(end - startTime_).count();
     
     log("Initialized", 2);
     
@@ -22,7 +27,7 @@ bool GEM::init() {
 }
 
 bool GEM::reset() {
-    timer_.start();
+    startTime_ = std::chrono::steady_clock::now();
     
     // Сброс счётчиков
     updateCount_ = 0;
@@ -36,9 +41,10 @@ bool GEM::reset() {
     // Сброс состояния
     initialized_ = false;
     alive_ = true;
-    updatedAt_ = QDateTime::currentDateTime();
+    updatedAt_ = std::chrono::system_clock::now();
     
-    execTime_ = timer_.elapsed() / 1000.0;
+    auto end = std::chrono::steady_clock::now();
+    execTime_ = std::chrono::duration<double, std::milli>(end - startTime_).count();
     
     log("Reset", 2);
     
@@ -46,13 +52,14 @@ bool GEM::reset() {
 }
 
 Collection GEM::update(const Time& currentTime) {
-    timer_.start();
+    startTime_ = std::chrono::steady_clock::now();
     
     lastUpdateTime_ = currentTime;
     updateCount_++;
-    updatedAt_ = QDateTime::currentDateTime();
+    updatedAt_ = std::chrono::system_clock::now();
     
-    execTime_ = timer_.elapsed() / 1000.0;
+    auto end = std::chrono::steady_clock::now();
+    execTime_ = std::chrono::duration<double, std::milli>(end - startTime_).count();
     totalExecTime_ += execTime_;
     
     if (updateCount_ == 1) {
@@ -74,8 +81,8 @@ Collection GEM::update(const Time& currentTime) {
 }
 
 void GEM::show() {
-    LOG_INFO("GEM: " + objectName_.toStdString() + 
-             " [" + objectType_.toStdString() + "]" +
+    LOG_INFO("GEM: " + objectName_ + 
+             " [" + objectType_ + "]" +
              " updates=" + std::to_string(updateCount_) +
              " alive=" + (alive_ ? "true" : "false"));
 }
@@ -101,8 +108,16 @@ Collection GEM::get_metrics() const {
     metrics.set("total_exec_time", Collection::fromNumber(totalExecTime_));
     
     // Временные метки
-    metrics.set("created_at", Collection::fromString(createdAt_.toString(Qt::ISODate)));
-    metrics.set("updated_at", Collection::fromString(updatedAt_.toString(Qt::ISODate)));
+    auto time_t_created = std::chrono::system_clock::to_time_t(createdAt_);
+    auto time_t_updated = std::chrono::system_clock::to_time_t(updatedAt_);
+    std::tm* tm_created = std::gmtime(&time_t_created);
+    std::tm* tm_updated = std::gmtime(&time_t_updated);
+    char buf_created[32], buf_updated[32];
+    std::strftime(buf_created, sizeof(buf_created), "%Y-%m-%dT%H:%M:%SZ", tm_created);
+    std::strftime(buf_updated, sizeof(buf_updated), "%Y-%m-%dT%H:%M:%SZ", tm_updated);
+    
+    metrics.set("created_at", Collection::fromString(std::string(buf_created)));
+    metrics.set("updated_at", Collection::fromString(std::string(buf_updated)));
     
     return metrics;
 }
@@ -114,7 +129,6 @@ Collection GEM::metrics() const {
 }
 
 void GEM::set_params(const Collection& params) {
-    Q_UNUSED(params);
     // Базовая реализация пустая
     // Переопределите в наследнике для обработки параметров
 }
@@ -126,7 +140,6 @@ Collection GEM::get_params() const {
 }
 
 void GEM::publish(const Collection& doc) {
-    Q_UNUSED(doc);
     // Базовая реализация пустая
     // Переопределите в наследнике для публикации
 }
@@ -145,16 +158,16 @@ void GEM::restore(const Collection& state) {
     objectType_ = state.get("type").toString();
     initialized_ = state.get("initialized").toBoolean();
     updateCount_ = state.get("update_count").toNumber();
-    updatedAt_ = QDateTime::currentDateTime();
+    updatedAt_ = std::chrono::system_clock::now();
 }
 
 // ============================================================================
 // Protected Methods
 // ============================================================================
 
-void GEM::log(const QString& message, int level) const {
+void GEM::log(const std::string& message, int level) const {
     if (level <= 2) {  // Только error, warning, info
-        LOG_INFO("[GEM:" + objectName_.toStdString() + "] " + message.toStdString());
+        LOG_INFO("[GEM:" + objectName_ + "] " + message);
     }
 }
 

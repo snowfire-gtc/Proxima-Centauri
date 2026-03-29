@@ -17,7 +17,8 @@ void Collection::addRow(const std::vector<CollectionValue>& values) {
     if (values.size() != header.size()) {
         throw std::runtime_error("Column count mismatch");
     }
-    data.push_back(values);
+    auto row = std::make_shared<CollectionValueArray>(values);
+    data.push_back(row);
 }
 
 void Collection::removeRow(size_t index) {
@@ -36,7 +37,7 @@ void Collection::addColumn(const std::string& name) {
     
     // Add null values to existing rows
     for (auto& row : data) {
-        row.push_back(int64_t(0));
+        row->push_back(int64_t(0));
     }
 }
 
@@ -47,7 +48,7 @@ void Collection::removeColumn(const std::string& name) {
         header.erase(header.begin() + index);
         
         for (auto& row : data) {
-            row.erase(row.begin() + index);
+            row->erase(row->begin() + index);
         }
         
         // Rebuild index
@@ -68,7 +69,7 @@ void Collection::setHeader(const std::vector<std::string>& hdr) {
 
 CollectionValue Collection::get(size_t row, size_t col) const {
     if (row < data.size() && col < header.size()) {
-        return data[row][col];
+        return (*data[row])[col];
     }
     return int64_t(0);
 }
@@ -80,7 +81,7 @@ CollectionValue Collection::get(size_t row, const std::string& colName) const {
 
 void Collection::set(size_t row, size_t col, const CollectionValue& value) {
     if (row < data.size() && col < header.size()) {
-        data[row][col] = value;
+        (*data[row])[col] = value;
     }
 }
 
@@ -128,8 +129,8 @@ bool Collection::readCSV(const std::string& filename) {
             // First line is header
             std::vector<std::string> hdr;
             for (const auto& val : row) {
-                if (std::holds_alternative<std::string>(val)) {
-                    hdr.push_back(std::get<std::string>(val));
+                if (val.isString()) {
+                    hdr.push_back(val.asString());
                 }
             }
             setHeader(hdr);
@@ -155,15 +156,16 @@ bool Collection::writeCSV(const std::string& filename) const {
     
     // Write data
     for (const auto& row : data) {
-        for (size_t i = 0; i < row.size(); i++) {
-            if (std::holds_alternative<std::string>(row[i])) {
-                file << std::get<std::string>(row[i]);
-            } else if (std::holds_alternative<double>(row[i])) {
-                file << std::get<double>(row[i]);
-            } else if (std::holds_alternative<int64_t>(row[i])) {
-                file << std::get<int64_t>(row[i]);
+        for (size_t i = 0; i < row->size(); i++) {
+            const auto& cell = (*row)[i];
+            if (cell.isString()) {
+                file << cell.asString();
+            } else if (std::holds_alternative<double>(cell.value)) {
+                file << std::get<double>(cell.value);
+            } else if (std::holds_alternative<int64_t>(cell.value)) {
+                file << std::get<int64_t>(cell.value);
             }
-            if (i < row.size() - 1) file << ",";
+            if (i < row->size() - 1) file << ",";
         }
         file << "\n";
     }
@@ -188,14 +190,15 @@ std::string Collection::toString() const {
     
     // Data
     for (const auto& row : data) {
-        for (size_t i = 0; i < row.size(); i++) {
+        for (size_t i = 0; i < row->size(); i++) {
             std::string cell;
-            if (std::holds_alternative<std::string>(row[i])) {
-                cell = std::get<std::string>(row[i]);
-            } else if (std::holds_alternative<double>(row[i])) {
-                cell = std::to_string(std::get<double>(row[i]));
-            } else if (std::holds_alternative<int64_t>(row[i])) {
-                cell = std::to_string(std::get<int64_t>(row[i]));
+            const auto& val = (*row)[i];
+            if (val.isString()) {
+                cell = val.asString();
+            } else if (std::holds_alternative<double>(val.value)) {
+                cell = std::to_string(std::get<double>(val.value));
+            } else if (std::holds_alternative<int64_t>(val.value)) {
+                cell = std::to_string(std::get<int64_t>(val.value));
             }
             oss << std::setw(15) << cell;
         }
@@ -214,13 +217,13 @@ std::vector<std::vector<std::string>> Collection::toTable() const {
     // Add data
     for (const auto& row : data) {
         std::vector<std::string> stringRow;
-        for (const auto& val : row) {
-            if (std::holds_alternative<std::string>(val)) {
-                stringRow.push_back(std::get<std::string>(val));
-            } else if (std::holds_alternative<double>(val)) {
-                stringRow.push_back(std::to_string(std::get<double>(val)));
-            } else if (std::holds_alternative<int64_t>(val)) {
-                stringRow.push_back(std::to_string(std::get<int64_t>(val)));
+        for (const auto& val : *row) {
+            if (val.isString()) {
+                stringRow.push_back(val.asString());
+            } else if (std::holds_alternative<double>(val.value)) {
+                stringRow.push_back(std::to_string(std::get<double>(val.value)));
+            } else if (std::holds_alternative<int64_t>(val.value)) {
+                stringRow.push_back(std::to_string(std::get<int64_t>(val.value)));
             } else {
                 stringRow.push_back("");
             }
@@ -243,12 +246,12 @@ Collection Collection::sort(const std::string& columnName, bool ascending) const
     size_t col = getColumnIndex(columnName);
     
     std::sort(result.data.begin(), result.data.end(),
-        [col, ascending](const std::vector<CollectionValue>& a, 
-                        const std::vector<CollectionValue>& b) {
+        [col, ascending](const std::shared_ptr<CollectionValueArray>& a, 
+                        const std::shared_ptr<CollectionValueArray>& b) {
             if (ascending) {
-                return a[col] < b[col];
+                return (*a)[col].value < (*b)[col].value;
             } else {
-                return a[col] > b[col];
+                return (*a)[col].value > (*b)[col].value;
             }
         });
     
@@ -262,7 +265,7 @@ Collection Collection::select(const std::vector<std::string>& columns) const {
         std::vector<CollectionValue> newRow;
         for (const auto& col : columns) {
             size_t colIndex = getColumnIndex(col);
-            newRow.push_back(row[colIndex]);
+            newRow.push_back((*row)[colIndex]);
         }
         result.addRow(newRow);
     }

@@ -7,9 +7,10 @@
 #include "../codegen/LLVMCodeGen.h"
 #include "../runtime/Runtime.h"
 #include "../runtime/Debugger.h"
-#include <QString>
-#include <QVector>
-#include <QMap>
+#include <string>
+#include <vector>
+#include <map>
+#include <chrono>
 
 namespace proxima {
 
@@ -35,129 +36,80 @@ enum class REPLCommand {
 };
 
 struct REPLHistoryEntry {
-    QString code;           // Код Proxima
-    QString output;         // Результат выполнения
-    QDateTime timestamp;
+    std::string code;           // Код Proxima
+    std::string output;         // Результат выполнения
+    std::time_t timestamp;
     bool hasError;
-    qint64 executionTime;
+    long long executionTime;
 };
 
 struct REPLVariable {
-    QString name;
-    QString type;
+    std::string name;
+    std::string type;
     RuntimeValue value;     // RuntimeValue из Interpreter
     int size;
     int bytes;
-    QDateTime lastModified;
 };
 
-class REPL : public QObject {
-    Q_OBJECT
-    
+class REPL {
 public:
-    explicit REPL(QObject *parent = nullptr);
+    REPL(Interpreter& interpreter);
     ~REPL();
     
-    // Инициализация
-    bool initialize();
-    void shutdown();
-    bool isInitialized() const { return initialized; }
+    // Запуск REPL
+    void start();
     
-    // Выполнение кода Proxima
-    QString execute(const QString& code);
-    QString evaluate(const QString& expression);
+    // Остановка REPL
+    void stop();
     
-    // REPL команды (минимальный набор)
-    REPLCommand parseCommand(const QString& input);
-    QString executeCommand(REPLCommand cmd, const QStringList& args);
+    // Обработка команды
+    std::string handleCommand(const std::string& input);
     
-    // Визуализация (интеграция с language.txt #46)
-    void showVariable(const QString& varName);
-    void plotVector(const QString& varName);
-    void showMatrix(const QString& varName);
-    void showLayer3D(const QString& varName);
-    void showCollection(const QString& varName);
-    void inspectObject(const QString& varName);
+    // Выполнение кода
+    std::string executeCode(const std::string& code);
     
-    // Управление переменными
-    QMap<QString, REPLVariable> getVariables() const { return variables; }
-    bool hasVariable(const QString& name) const;
-    void clearVariables();
+    // Парсинг команды
+    REPLCommand parseCommand(const std::string& input);
     
-    // История
-    void addToHistory(const QString& code, const QString& output, bool hasError);
+    // Добавление в историю
+    void addToHistory(const std::string& code, const std::string& output, bool hasError, long long execTime);
+    
+    // Получение истории
+    const std::vector<REPLHistoryEntry>& getHistory() const;
+    
+    // Очистка истории
     void clearHistory();
-    void saveHistory(const QString& path);
-    void loadHistory(const QString& path);
     
-    // Конфигурация
-    void setPrompt(const QString& prompt);
-    QString getPrompt() const { return prompt; }
-    void setEchoInput(bool enable);
+    // Список переменных
+    std::vector<REPLVariable> getVariables() const;
     
-    // Интеграция
-    void setRuntime(Runtime* runtime);
-    void setDebugger(Debugger* debugger);
-    void setTypeChecker(TypeChecker* checker);
-    void setIDEInterface(QObject* ide);  // Для связи с визуализаторами IDE
-    
-    // Автодополнение
-    QStringList getCompletions(const QString& prefix) const;
-    
-signals:
-    void outputReceived(const QString& output);
-    void errorReceived(const QString& error);
-    void promptDisplayed();
-    void visualizationRequested(const QString& varName, const QString& visType);
-    void variableChanged(const QString& name);
+    // Информация о переменной
+    REPLVariable getVariableInfo(const std::string& name) const;
     
 private:
-    void registerBuiltinFunctions();
-    void initializeWorkspace();
-    QString executeProximaCode(const QString& code);
-    QString formatOutput(const RuntimeValue& value) const;
-    void updateVariable(const QString& name, const RuntimeValue& value);
-    
-    // Команды
-    QString helpCommand(const QStringList& args);
-    QString whoisCommand(const QStringList& args);
-    QString whosCommand(const QStringList& args);
-    QString showCommand(const QStringList& args);
-    QString typeCommand(const QStringList& args);
-    QString sizeCommand(const QStringList& args);
-    QString methodsCommand(const QStringList& args);
-    QString fieldsCommand(const QStringList& args);
-    QString exitCommand(const QStringList& args);
-    QString versionCommand(const QStringList& args);
-    QString clearCommand(const QStringList& args);
-    QString historyCommand(const QStringList& args);
-    QString loadCommand(const QStringList& args);
-    QString saveCommand(const QStringList& args);
-    QString configCommand(const QStringList& args);
-    QString resetCommand(const QStringList& args);
-    
-    bool initialized;
+    Interpreter& interpreter;
+    Debugger debugger;
     bool running;
-    bool echoInput;
+    std::vector<REPLHistoryEntry> history;
+    std::map<std::string, REPLVariable> variables;
     
-    QString prompt;
-    QString currentPath;
-    
-    Runtime* runtime;
-    Debugger* debugger;
-    TypeChecker* typeChecker;
-    QObject* ideInterface;  // Связь с IDE для визуализации
-    
-    Parser parser;
-    SemanticAnalyzer analyzer;
-    LLVMCodeGen codeGen;
-    
-    QVector<REPLHistoryEntry> history;
-    QMap<QString, REPLVariable> variables;
-    QMap<QString, REPLCommand> commands;
-    
-    qint64 startTime;
-    int commandCount;
+    // Вспомогательные методы
+    std::string handleHelp();
+    std::string handleExit();
+    std::string handleClear();
+    std::string handleHistory();
+    std::string handleLoad(const std::string& filename);
+    std::string handleSave(const std::string& filename);
+    std::string handleWhois(const std::string& varName);
+    std::string handleWhos();
+    std::string handleShow(const std::string& expr);
+    std::string handleType(const std::string& varName);
+    std::string handleSize(const std::string& varName);
+    std::string handleMethods(const std::string& className);
+    std::string handleFields(const std::string& className);
+    std::string handleVersion();
+    std::string handleConfig();
+    std::string handleReset();
 };
 
 } // namespace proxima
