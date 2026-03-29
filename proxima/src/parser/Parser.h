@@ -9,6 +9,19 @@
 
 namespace proxima {
 
+// Forward declarations for pointer types
+class ASTNode;
+class ExpressionNode;
+class StatementNode;
+class DeclarationNode;
+class ProgramNode;
+
+using ASTNodePtr = std::shared_ptr<ASTNode>;
+using ExpressionNodePtr = std::shared_ptr<ExpressionNode>;
+using StatementNodePtr = std::shared_ptr<StatementNode>;
+using DeclarationNodePtr = std::shared_ptr<DeclarationNode>;
+using ProgramNodePtr = std::shared_ptr<ProgramNode>;
+
 /**
  * @brief Синтаксический анализатор языка Proxima
  *
@@ -85,7 +98,7 @@ private:
 
     // Парсинг statement'ов
     StatementNodePtr parseStatement();
-    StatementNodePtr parseIf();
+    StatementNodePtr parseIf(bool isElseIf = false);
     StatementNodePtr parseFor();
     StatementNodePtr parseWhile();
     StatementNodePtr parseReturn();

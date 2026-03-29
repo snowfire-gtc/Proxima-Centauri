@@ -123,9 +123,10 @@ public:
     ExpressionNodePtr left;
     ExpressionNodePtr right;
     std::string op;
+    TokenType opType;
     
     BinaryOpNode(const Token& tok, ExpressionNodePtr l, ExpressionNodePtr r, const std::string& file = "")
-        : ExpressionNode(NodeType::BINARY_OP, tok, file), left(l), right(r), op(tok.value) {}
+        : ExpressionNode(NodeType::BINARY_OP, tok, file), left(l), right(r), op(tok.value), opType(tok.type) {}
     
     std::string toString(int indent = 0) const override;
 };
@@ -146,10 +147,11 @@ class IfNode : public StatementNode {
 public:
     ExpressionNodePtr condition;
     StatementNodePtr thenBranch;
-    StatementNodePtr elseBranch;
+    StatementNodePtr elseBranch;  // nullptr if no else, or next elseif IfNode
+    bool isElseIf;  // true if this is an elseif branch
     
-    IfNode(const Token& tok, ExpressionNodePtr cond, StatementNodePtr thenB, StatementNodePtr elseB, const std::string& file = "")
-        : StatementNode(NodeType::IF_STATEMENT, tok, file), condition(cond), thenBranch(thenB), elseBranch(elseB) {}
+    IfNode(const Token& tok, ExpressionNodePtr cond, StatementNodePtr thenB, StatementNodePtr elseB = nullptr, const std::string& file = "", bool isElseIfFlag = false)
+        : StatementNode(NodeType::IF_STATEMENT, tok, file), condition(cond), thenBranch(thenB), elseBranch(elseB), isElseIf(isElseIfFlag) {}
     
     std::string toString(int indent = 0) const override;
 };
@@ -250,6 +252,115 @@ public:
     
     FixedBlockNode(const Token& tok, StatementNodePtr b, const std::string& file = "")
         : StatementNode(NodeType::FIXED_BLOCK, tok, file), body(b) {}
+    
+    std::string toString(int indent = 0) const override;
+};
+
+// Class and Interface declarations
+class ClassDeclNode : public DeclarationNode {
+public:
+    std::vector<std::string> parentClasses;
+    std::vector<std::pair<std::string, std::string>> members;
+    
+    ClassDeclNode(const Token& tok, const std::string& n, 
+                  const std::vector<std::string>& parents,
+                  const std::vector<std::pair<std::string, std::string>>& mems,
+                  const std::string& file = "")
+        : DeclarationNode(NodeType::CLASS_DECL, tok, n, "", file), 
+          parentClasses(parents), members(mems) {}
+    
+    std::string toString(int indent = 0) const override;
+};
+
+class InterfaceDeclNode : public DeclarationNode {
+public:
+    std::vector<std::string> parentInterfaces;
+    std::vector<std::pair<std::string, std::string>> methods;
+    
+    InterfaceDeclNode(const Token& tok, const std::string& n,
+                      const std::vector<std::string>& parents,
+                      const std::vector<std::pair<std::string, std::string>>& meths,
+                      const std::string& file = "")
+        : DeclarationNode(NodeType::INTERFACE_DECL, tok, n, "", file),
+          parentInterfaces(parents), methods(meths) {}
+    
+    std::string toString(int indent = 0) const override;
+};
+
+// Additional statement nodes
+class ExpressionStatementNode : public StatementNode {
+public:
+    ExpressionNodePtr expression;
+    
+    ExpressionStatementNode(const Token& tok, ExpressionNodePtr expr, const std::string& file = "")
+        : StatementNode(NodeType::EXPRESSION_STATEMENT, tok, file), expression(expr) {}
+    
+    std::string toString(int indent = 0) const override;
+};
+
+class WhileNode : public StatementNode {
+public:
+    ExpressionNodePtr condition;
+    StatementNodePtr body;
+    
+    WhileNode(const Token& tok, ExpressionNodePtr cond, StatementNodePtr b, const std::string& file = "")
+        : StatementNode(NodeType::WHILE_LOOP, tok, file), condition(cond), body(b) {}
+    
+    std::string toString(int indent = 0) const override;
+};
+
+// Additional expression nodes
+class TernaryNode : public ExpressionNode {
+public:
+    ExpressionNodePtr condition;
+    ExpressionNodePtr trueExpr;
+    ExpressionNodePtr falseExpr;
+    
+    TernaryNode(const Token& tok, ExpressionNodePtr cond, 
+                ExpressionNodePtr trueE, ExpressionNodePtr falseE,
+                const std::string& file = "")
+        : ExpressionNode(NodeType::TERNARY, tok, file),
+          condition(cond), trueExpr(trueE), falseExpr(falseE) {}
+    
+    std::string toString(int indent = 0) const override;
+};
+
+class UnaryOpNode : public ExpressionNode {
+public:
+    ExpressionNodePtr operand;
+    std::string op;
+    
+    UnaryOpNode(const Token& tok, ExpressionNodePtr oper, const std::string& file = "")
+        : ExpressionNode(NodeType::UNARY_OP, tok, file), operand(oper), op(tok.value) {}
+    
+    std::string toString(int indent = 0) const override;
+};
+
+class IndexNode : public ExpressionNode {
+public:
+    ExpressionNodePtr object;
+    std::vector<ExpressionNodePtr> indices;
+    std::vector<bool> isSliceIndex;  // true для каждого индекса, который является срезом (:)
+    
+    IndexNode(const Token& tok, ExpressionNodePtr obj, 
+              const std::vector<ExpressionNodePtr>& idxs,
+              const std::vector<bool>& sliceFlags = {},
+              const std::string& file = "")
+        : ExpressionNode(NodeType::INDEX_EXPR, tok, file), 
+          object(obj), indices(idxs), isSliceIndex(sliceFlags) {}
+    
+    std::string toString(int indent = 0) const override;
+};
+
+class MemberAccessNode : public ExpressionNode {
+public:
+    ExpressionNodePtr object;
+    std::string member;
+    
+    MemberAccessNode(const Token& tok, ExpressionNodePtr obj, 
+                     const std::string& mem, const std::string& file = "")
+        : ExpressionNode(NodeType::MEMBER_ACCESS, tok, file),
+          object(obj), member(mem) {}
     
     std::string toString(int indent = 0) const override;
 };
