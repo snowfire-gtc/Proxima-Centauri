@@ -553,6 +553,7 @@ void Runtime::dbgstop() {
 }
 
 void Runtime::dbgprint(const std::string& message, int level) {
+    if (!debugMode) return;  // dbgprint работает только в debug mode
     if (level > verboseLevel) return;
 
     std::string prefix = "[DEBUG]";
@@ -577,24 +578,29 @@ void Runtime::dbgcontext() {
     LOG_INFO("Allocated blocks: " + std::to_string(allocatedMemory.size()));
     LOG_INFO("Verbose level: " + std::to_string(verboseLevel));
     LOG_INFO("Debug mode: " + std::string(debugMode ? "enabled" : "disabled"));
-
-    // В полной реализации вывод переменных из стека
-    LOG_INFO("Stack variables: (not implemented)");
+    
+    // Вывод переменных из стека
+    LOG_INFO("Stack variables:");
+    for (auto it = variables.rbegin(); it != variables.rend() && std::distance(it, variables.rend()) < 20; ++it) {
+        LOG_INFO("  " + it->first + " = " + it->second.toString());
+    }
 }
 
 void Runtime::dbgstack() {
     if (!debugMode) return;
 
     LOG_INFO("=== Call Stack ===");
-
-    // В полной реализации вывод стека вызовов
-#ifdef _WIN32
-    // Windows stack trace
-#else
-    // Linux stack trace using backtrace()
-#endif
-
-    LOG_INFO("(Stack trace not fully implemented)");
+    
+    // Вывод стека вызовов функций
+    int frameNum = 0;
+    for (const auto& frame : callStack) {
+        LOG_INFO("  #" + std::to_string(frameNum++) + " " + frame.functionName + 
+                 " at line " + std::to_string(frame.lineNumber));
+    }
+    
+    if (callStack.empty()) {
+        LOG_INFO("  (no call stack frames)");
+    }
 }
 
 // ============================================================================
