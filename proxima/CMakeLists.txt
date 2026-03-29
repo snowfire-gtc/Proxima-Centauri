@@ -11,13 +11,36 @@ option(ENABLE_CUDA "Enable CUDA support" OFF)
 option(ENABLE_CURL "Enable CURL for LLM" OFF)
 option(BUILD_IDE "Build Centauri IDE" OFF)
 
-# Найти LLVM
-find_package(LLVM REQUIRED CONFIG)
+# Найти LLVM через llvm-config
+find_program(LLVM_CONFIG_EXECUTABLE NAMES llvm-config llvm-config-14)
+if(NOT LLVM_CONFIG_EXECUTABLE)
+    message(FATAL_ERROR "llvm-config not found. Please install llvm-dev package.")
+endif()
+
+execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --version
+    OUTPUT_VARIABLE LLVM_PACKAGE_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --includedir
+    OUTPUT_VARIABLE LLVM_INCLUDE_DIRS
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --libfiles
+    OUTPUT_VARIABLE LLVM_LIB_FILES
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+string(REPLACE " " ";" LLVM_LIBRARIES "${LLVM_LIB_FILES}")
+
+execute_process(COMMAND ${LLVM_CONFIG_EXECUTABLE} --cxxflags
+    OUTPUT_VARIABLE LLVM_CXXFLAGS
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+string(REPLACE " " ";" LLVM_CXXFLAGS_LIST "${LLVM_CXXFLAGS}")
+
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+message(STATUS "LLVM include dir: ${LLVM_INCLUDE_DIRS}")
+message(STATUS "LLVM libraries: ${LLVM_LIBRARIES}")
 
 include_directories(${LLVM_INCLUDE_DIRS})
-add_definitions(${LLVM_DEFINITIONS})
-llvm_map_components_to_libnames(llvm_libs Support Core Passes IR TransformUtils OrcJIT ExecutionEngine)
+add_compile_options(${LLVM_CXXFLAGS_LIST})
 
 # Найти CURL (опционально)
 if(ENABLE_CURL)
@@ -102,8 +125,20 @@ set(LIB_HEADERS
 
 # Создать статическую библиотеку
 add_library(proximalib STATIC ${LIB_SOURCES} ${LIB_HEADERS})
-target_include_directories(proximalib PUBLIC ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(proximalib ${llvm_libs})
+target_include_directories(proximalib PUBLIC 
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/compiler
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/lexer
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/parser
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/semantic
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/codegen
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/runtime
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/stdlib
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/utils
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/services
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+)
+target_link_libraries(proximalib ${LLVM_LIBRARIES})
 if(ENABLE_CURL)
     target_link_libraries(proximalib ${CURL_LIBRARIES})
     target_compile_definitions(proximalib PRIVATE USE_CURL)

@@ -1,0 +1,636 @@
+{
+	"BUILD_DIR" : "/workspace/build_test/centauri/centauri_autogen",
+	"CMAKE_BINARY_DIR" : "/workspace/build_test",
+	"CMAKE_CURRENT_BINARY_DIR" : "/workspace/build_test/centauri",
+	"CMAKE_CURRENT_SOURCE_DIR" : "/workspace/centauri",
+	"CMAKE_EXECUTABLE" : "/usr/bin/cmake",
+	"CMAKE_LIST_FILES" : 
+	[
+		"/workspace/centauri/CMakeLists.txt",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/Qt6ConfigVersion.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/Qt6ConfigVersionImpl.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/Qt6Config.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/Qt6ConfigExtras.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/QtPublicCMakeVersionHelpers.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/Qt6Targets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/Qt6VersionlessTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/QtFeature.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/QtFeatureCommon.cmake",
+		"/usr/share/cmake-3.25/Modules/CheckCXXCompilerFlag.cmake",
+		"/usr/share/cmake-3.25/Modules/CheckCXXSourceCompiles.cmake",
+		"/usr/share/cmake-3.25/Modules/Internal/CheckSourceCompiles.cmake",
+		"/usr/share/cmake-3.25/Modules/Internal/CheckCompilerFlag.cmake",
+		"/usr/share/cmake-3.25/Modules/Internal/CheckFlagCommonConfig.cmake",
+		"/usr/share/cmake-3.25/Modules/Internal/CheckSourceCompiles.cmake",
+		"/usr/share/cmake-3.25/Modules/CMakeCheckCompilerFlagCommonPatterns.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/QtPublicAppleHelpers.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/QtPublicFinalizerHelpers.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/QtPublicPluginHelpers.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/QtPublicTargetHelpers.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/QtPublicWalkLibsHelpers.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/QtPublicFindPackageHelpers.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/QtPublicDependencyHelpers.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/QtPublicTestHelpers.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/QtPublicToolHelpers.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/QtPublicCMakeHelpers.cmake",
+		"/usr/share/cmake-3.25/Modules/CMakeFindDependencyMacro.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/Qt6Dependencies.cmake",
+		"/usr/share/cmake-3.25/Modules/FindThreads.cmake",
+		"/usr/share/cmake-3.25/Modules/CheckLibraryExists.cmake",
+		"/usr/share/cmake-3.25/Modules/CheckIncludeFileCXX.cmake",
+		"/usr/share/cmake-3.25/Modules/CheckCXXSourceCompiles.cmake",
+		"/usr/share/cmake-3.25/Modules/FindPackageHandleStandardArgs.cmake",
+		"/usr/share/cmake-3.25/Modules/FindPackageMessage.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Widgets/Qt6WidgetsConfigVersion.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Widgets/Qt6WidgetsConfigVersionImpl.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Widgets/Qt6WidgetsConfig.cmake",
+		"/usr/share/cmake-3.25/Modules/CMakeFindDependencyMacro.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Widgets/Qt6WidgetsDependencies.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6WidgetsTools/Qt6WidgetsToolsConfigVersion.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6WidgetsTools/Qt6WidgetsToolsConfigVersionImpl.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6WidgetsTools/Qt6WidgetsToolsConfig.cmake",
+		"/usr/share/cmake-3.25/Modules/CMakeFindDependencyMacro.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6WidgetsTools/Qt6WidgetsToolsDependencies.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6CoreTools/Qt6CoreToolsConfigVersion.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6CoreTools/Qt6CoreToolsConfigVersionImpl.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6CoreTools/Qt6CoreToolsConfig.cmake",
+		"/usr/share/cmake-3.25/Modules/CMakeFindDependencyMacro.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6CoreTools/Qt6CoreToolsDependencies.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6CoreTools/Qt6CoreToolsTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6CoreTools/Qt6CoreToolsTargets-none.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6CoreTools/Qt6CoreToolsAdditionalTargetInfo.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6CoreTools/Qt6CoreToolsVersionlessTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6GuiTools/Qt6GuiToolsConfigVersion.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6GuiTools/Qt6GuiToolsConfigVersionImpl.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6GuiTools/Qt6GuiToolsConfig.cmake",
+		"/usr/share/cmake-3.25/Modules/CMakeFindDependencyMacro.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6GuiTools/Qt6GuiToolsDependencies.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6GuiTools/Qt6GuiToolsTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6GuiTools/Qt6GuiToolsTargets-none.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6GuiTools/Qt6GuiToolsAdditionalTargetInfo.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6GuiTools/Qt6GuiToolsVersionlessTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6WidgetsTools/Qt6WidgetsToolsTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6WidgetsTools/Qt6WidgetsToolsTargets-none.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6WidgetsTools/Qt6WidgetsToolsAdditionalTargetInfo.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6WidgetsTools/Qt6WidgetsToolsVersionlessTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Core/Qt6CoreConfigVersion.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Core/Qt6CoreConfigVersionImpl.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Core/Qt6CoreConfig.cmake",
+		"/usr/share/cmake-3.25/Modules/CMakeFindDependencyMacro.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Core/Qt6CoreDependencies.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/FindWrapAtomic.cmake",
+		"/usr/share/cmake-3.25/Modules/CheckCXXSourceCompiles.cmake",
+		"/usr/share/cmake-3.25/Modules/FindPackageHandleStandardArgs.cmake",
+		"/usr/share/cmake-3.25/Modules/FindPackageMessage.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6CoreTools/Qt6CoreToolsConfigVersion.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6CoreTools/Qt6CoreToolsConfigVersionImpl.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6CoreTools/Qt6CoreToolsConfig.cmake",
+		"/usr/share/cmake-3.25/Modules/CMakeFindDependencyMacro.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6CoreTools/Qt6CoreToolsDependencies.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6CoreTools/Qt6CoreToolsTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6CoreTools/Qt6CoreToolsAdditionalTargetInfo.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6CoreTools/Qt6CoreToolsVersionlessTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Core/Qt6CoreTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Core/Qt6CoreTargets-none.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Core/Qt6CoreAdditionalTargetInfo.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Core/Qt6CoreVersionlessTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Core/Qt6CoreMacros.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Core/Qt6CoreConfigExtras.cmake",
+		"/usr/share/cmake-3.25/Modules/GNUInstallDirs.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Gui/Qt6GuiConfigVersion.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Gui/Qt6GuiConfigVersionImpl.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Gui/Qt6GuiConfig.cmake",
+		"/usr/share/cmake-3.25/Modules/CMakeFindDependencyMacro.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Gui/Qt6GuiDependencies.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/FindWrapOpenGL.cmake",
+		"/usr/share/cmake-3.25/Modules/FindOpenGL.cmake",
+		"/usr/share/cmake-3.25/Modules/FindPackageHandleStandardArgs.cmake",
+		"/usr/share/cmake-3.25/Modules/FindPackageMessage.cmake",
+		"/usr/share/cmake-3.25/Modules/FindPackageHandleStandardArgs.cmake",
+		"/usr/share/cmake-3.25/Modules/FindPackageMessage.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/3rdparty/kwin/FindXKB.cmake",
+		"/usr/share/cmake-3.25/Modules/FindPkgConfig.cmake",
+		"/usr/share/cmake-3.25/Modules/FindPackageHandleStandardArgs.cmake",
+		"/usr/share/cmake-3.25/Modules/FindPackageMessage.cmake",
+		"/usr/share/cmake-3.25/Modules/FindPackageHandleStandardArgs.cmake",
+		"/usr/share/cmake-3.25/Modules/FindPackageMessage.cmake",
+		"/usr/share/cmake-3.25/Modules/FeatureSummary.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6/FindWrapVulkanHeaders.cmake",
+		"/usr/share/cmake-3.25/Modules/FindVulkan.cmake",
+		"/usr/share/cmake-3.25/Modules/FindPackageHandleStandardArgs.cmake",
+		"/usr/share/cmake-3.25/Modules/FindPackageMessage.cmake",
+		"/usr/share/cmake-3.25/Modules/FindPackageHandleStandardArgs.cmake",
+		"/usr/share/cmake-3.25/Modules/FindPackageMessage.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6GuiTools/Qt6GuiToolsConfigVersion.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6GuiTools/Qt6GuiToolsConfigVersionImpl.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6GuiTools/Qt6GuiToolsConfig.cmake",
+		"/usr/share/cmake-3.25/Modules/CMakeFindDependencyMacro.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6GuiTools/Qt6GuiToolsDependencies.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6GuiTools/Qt6GuiToolsTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6GuiTools/Qt6GuiToolsAdditionalTargetInfo.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6GuiTools/Qt6GuiToolsVersionlessTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6DBus/Qt6DBusConfigVersion.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6DBus/Qt6DBusConfigVersionImpl.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6DBus/Qt6DBusConfig.cmake",
+		"/usr/share/cmake-3.25/Modules/CMakeFindDependencyMacro.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6DBus/Qt6DBusDependencies.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6DBusTools/Qt6DBusToolsConfigVersion.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6DBusTools/Qt6DBusToolsConfigVersionImpl.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6DBusTools/Qt6DBusToolsConfig.cmake",
+		"/usr/share/cmake-3.25/Modules/CMakeFindDependencyMacro.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6DBusTools/Qt6DBusToolsDependencies.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6DBusTools/Qt6DBusToolsTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6DBusTools/Qt6DBusToolsTargets-none.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6DBusTools/Qt6DBusToolsAdditionalTargetInfo.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6DBusTools/Qt6DBusToolsVersionlessTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6DBus/Qt6DBusTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6DBus/Qt6DBusTargets-none.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6DBus/Qt6DBusAdditionalTargetInfo.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6DBus/Qt6DBusVersionlessTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6DBus/Qt6DBusMacros.cmake",
+		"/usr/share/cmake-3.25/Modules/MacroAddFileDependencies.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Gui/Qt6GuiTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Gui/Qt6GuiTargets-none.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Gui/Qt6GuiAdditionalTargetInfo.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Gui/Qt6GuiVersionlessTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Widgets/Qt6WidgetsTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Widgets/Qt6WidgetsTargets-none.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Widgets/Qt6WidgetsAdditionalTargetInfo.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Widgets/Qt6WidgetsVersionlessTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Widgets/Qt6WidgetsMacros.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Network/Qt6NetworkConfigVersion.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Network/Qt6NetworkConfigVersionImpl.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Network/Qt6NetworkConfig.cmake",
+		"/usr/share/cmake-3.25/Modules/CMakeFindDependencyMacro.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Network/Qt6NetworkDependencies.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Network/Qt6NetworkTargets.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Network/Qt6NetworkTargets-none.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Network/Qt6NetworkAdditionalTargetInfo.cmake",
+		"/usr/lib/x86_64-linux-gnu/cmake/Qt6Network/Qt6NetworkVersionlessTargets.cmake",
+		"/usr/share/cmake-3.25/Modules/CPack.cmake",
+		"/usr/share/cmake-3.25/Modules/CPackComponent.cmake",
+		"/usr/share/cmake-3.25/Templates/CPackConfig.cmake.in",
+		"/usr/share/cmake-3.25/Templates/CPackConfig.cmake.in"
+	],
+	"CMAKE_SOURCE_DIR" : "/workspace",
+	"DEP_FILE" : "",
+	"DEP_FILE_RULE_NAME" : "",
+	"HEADERS" : 
+	[
+		[
+			"/workspace/centauri/src/app/MainWindow.h",
+			"MU",
+			"ISMKEKEPX5/moc_MainWindow.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/app/Settings.h",
+			"MU",
+			"ISMKEKEPX5/moc_Settings.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/core/AutoSaveManager.h",
+			"MU",
+			"PRMOGMWJPH/moc_AutoSaveManager.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/core/CompilerConnector.h",
+			"MU",
+			"PRMOGMWJPH/moc_CompilerConnector.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/core/Module.h",
+			"MU",
+			"PRMOGMWJPH/moc_Module.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/core/Project.h",
+			"MU",
+			"PRMOGMWJPH/moc_Project.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/docs/DocGenerator.h",
+			"MU",
+			"XAMNECFZE3/moc_DocGenerator.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/services/collaboration/CollaborationService.h",
+			"MU",
+			"IQEDRLWTGL/moc_CollaborationService.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/services/git/GitService.h",
+			"MU",
+			"UALMWYHX7O/moc_GitService.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/services/llm/LLMService.h",
+			"MU",
+			"K3FVFLTQVI/moc_LLMService.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/services/network/NetworkAuthService.h",
+			"MU",
+			"RKXIR2AKCL/moc_NetworkAuthService.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/services/plugins/PluginManager.h",
+			"MU",
+			"HRHBUJZG7K/moc_PluginManager.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/testing/TestFramework.h",
+			"MU",
+			"OFOKQ4USI5/moc_TestFramework.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/console/ConsoleTab.h",
+			"MU",
+			"656HGPASFQ/moc_ConsoleTab.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/console/ConsoleWidget.h",
+			"MU",
+			"656HGPASFQ/moc_ConsoleWidget.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/console/REPLConsoleTab.h",
+			"MU",
+			"656HGPASFQ/moc_REPLConsoleTab.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/console/REPLSyntaxHighlighter.h",
+			"MU",
+			"656HGPASFQ/moc_REPLSyntaxHighlighter.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/debugger/BreakpointManager.h",
+			"MU",
+			"PGIQAPQOOQ/moc_BreakpointManager.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/debugger/VariableInspector.h",
+			"MU",
+			"PGIQAPQOOQ/moc_VariableInspector.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/debugger/visualizers/CollectionTable.h",
+			"MU",
+			"VIUPDH5HA6/moc_CollectionTable.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/debugger/visualizers/Layer3DView.h",
+			"MU",
+			"VIUPDH5HA6/moc_Layer3DView.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/debugger/visualizers/MatrixView.h",
+			"MU",
+			"VIUPDH5HA6/moc_MatrixView.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/debugger/visualizers/VectorPlot.h",
+			"MU",
+			"VIUPDH5HA6/moc_VectorPlot.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/dialogs/AdvancedSearchWidget.h",
+			"MU",
+			"IYECXEJARV/moc_AdvancedSearchWidget.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/dialogs/BuildDialog.h",
+			"MU",
+			"IYECXEJARV/moc_BuildDialog.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/dialogs/BuildReportDialog.h",
+			"MU",
+			"IYECXEJARV/moc_BuildReportDialog.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/dialogs/CollaborationDialog.h",
+			"MU",
+			"IYECXEJARV/moc_CollaborationDialog.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/dialogs/CompatibilityReportDialog.h",
+			"MU",
+			"IYECXEJARV/moc_CompatibilityReportDialog.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/dialogs/FoldingSettingsDialog.h",
+			"MU",
+			"IYECXEJARV/moc_FoldingSettingsDialog.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/dialogs/LLMAssistantDialog.h",
+			"MU",
+			"IYECXEJARV/moc_LLMAssistantDialog.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/dialogs/SearchWidget.h",
+			"MU",
+			"IYECXEJARV/moc_SearchWidget.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/dialogs/SettingsDialog.h",
+			"MU",
+			"IYECXEJARV/moc_SettingsDialog.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/dialogs/SnippetManagerDialog.h",
+			"MU",
+			"IYECXEJARV/moc_SnippetManagerDialog.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/editor/CodeEditor.h",
+			"MU",
+			"BUCBP42VD6/moc_CodeEditor.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/editor/CodeFoldingManager.h",
+			"MU",
+			"BUCBP42VD6/moc_CodeFoldingManager.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/editor/CollaborativeTextManager.h",
+			"MU",
+			"BUCBP42VD6/moc_CollaborativeTextManager.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/editor/CompletionProvider.h",
+			"MU",
+			"BUCBP42VD6/moc_CompletionProvider.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/editor/EditorToolbar.h",
+			"MU",
+			"BUCBP42VD6/moc_EditorToolbar.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/editor/RemoteCursorOverlay.h",
+			"MU",
+			"BUCBP42VD6/moc_RemoteCursorOverlay.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/editor/SnippetManager.h",
+			"MU",
+			"BUCBP42VD6/moc_SnippetManager.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/editor/StatusBar.h",
+			"MU",
+			"BUCBP42VD6/moc_StatusBar.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/editor/SyntaxHighlighter.h",
+			"MU",
+			"BUCBP42VD6/moc_SyntaxHighlighter.cpp",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/menu/MainMenu.h",
+			"MU",
+			"AT5PZGD3M4/moc_MainMenu.cpp",
+			null
+		]
+	],
+	"HEADER_EXTENSIONS" : [ "h", "hh", "h++", "hm", "hpp", "hxx", "in", "txx" ],
+	"INCLUDE_DIR" : "/workspace/build_test/centauri/centauri_autogen/include",
+	"MOC_COMPILATION_FILE" : "/workspace/build_test/centauri/centauri_autogen/mocs_compilation.cpp",
+	"MOC_DEFINITIONS" : 
+	[
+		"QT_CORE_LIB",
+		"QT_GUI_LIB",
+		"QT_NETWORK_LIB",
+		"QT_NO_DEBUG",
+		"QT_WIDGETS_LIB"
+	],
+	"MOC_DEPEND_FILTERS" : 
+	[
+		[
+			"Q_PLUGIN_METADATA",
+			"[\n][ \t]*Q_PLUGIN_METADATA[ \t]*\\([^\\)]*FILE[ \t]*\"([^\"]+)\""
+		]
+	],
+	"MOC_INCLUDES" : 
+	[
+		"/workspace/src",
+		"/proxima-compiler/src",
+		"/usr/include/x86_64-linux-gnu/qt6/QtWidgets",
+		"/usr/include/x86_64-linux-gnu/qt6",
+		"/usr/include/x86_64-linux-gnu/qt6/QtCore",
+		"/usr/lib/x86_64-linux-gnu/qt6/mkspecs/linux-g++",
+		"/usr/include/x86_64-linux-gnu/qt6/QtGui",
+		"/usr/include/x86_64-linux-gnu/qt6/QtNetwork",
+		"/usr/include",
+		"/usr/include/c++/12",
+		"/usr/include/x86_64-linux-gnu/c++/12",
+		"/usr/include/c++/12/backward",
+		"/usr/lib/gcc/x86_64-linux-gnu/12/include",
+		"/usr/local/include",
+		"/usr/include/x86_64-linux-gnu"
+	],
+	"MOC_MACRO_NAMES" : 
+	[
+		"Q_OBJECT",
+		"Q_GADGET",
+		"Q_GADGET_EXPORT",
+		"Q_NAMESPACE",
+		"Q_NAMESPACE_EXPORT"
+	],
+	"MOC_OPTIONS" : [],
+	"MOC_PATH_PREFIX" : false,
+	"MOC_PREDEFS_CMD" : 
+	[
+		"/usr/bin/c++",
+		"-dM",
+		"-E",
+		"-c",
+		"/usr/share/cmake-3.25/Modules/CMakeCXXCompilerABI.cpp"
+	],
+	"MOC_PREDEFS_FILE" : "/workspace/build_test/centauri/centauri_autogen/moc_predefs.h",
+	"MOC_RELAXED_MODE" : false,
+	"MOC_SKIP" : [],
+	"MULTI_CONFIG" : false,
+	"PARALLEL" : 2,
+	"PARSE_CACHE_FILE" : "/workspace/build_test/centauri/CMakeFiles/centauri_autogen.dir/ParseCache.txt",
+	"QT_MOC_EXECUTABLE" : "/usr/lib/qt6/libexec/moc",
+	"QT_UIC_EXECUTABLE" : "/usr/lib/qt6/libexec/uic",
+	"QT_VERSION_MAJOR" : 6,
+	"QT_VERSION_MINOR" : 4,
+	"SETTINGS_FILE" : "/workspace/build_test/centauri/CMakeFiles/centauri_autogen.dir/AutogenUsed.txt",
+	"SOURCES" : 
+	[
+		[ "/workspace/centauri/src/app/Application.cpp", "MU", null ],
+		[ "/workspace/centauri/src/app/MainWindow.cpp", "MU", null ],
+		[ "/workspace/centauri/src/app/Settings.cpp", "MU", null ],
+		[ "/workspace/centauri/src/core/AutoSaveManager.cpp", "MU", null ],
+		[ "/workspace/centauri/src/core/CompilerConnector.cpp", "MU", null ],
+		[ "/workspace/centauri/src/core/Module.cpp", "MU", null ],
+		[ "/workspace/centauri/src/core/Project.cpp", "MU", null ],
+		[ "/workspace/centauri/src/docs/DocGenerator.cpp", "MU", null ],
+		[ "/workspace/centauri/src/main.cpp", "MU", null ],
+		[
+			"/workspace/centauri/src/services/collaboration/CollaborationService.cpp",
+			"MU",
+			null
+		],
+		[ "/workspace/centauri/src/services/git/GitService.cpp", "MU", null ],
+		[ "/workspace/centauri/src/services/llm/LLMService.cpp", "MU", null ],
+		[
+			"/workspace/centauri/src/services/network/NetworkAuthService.cpp",
+			"MU",
+			null
+		],
+		[
+			"/workspace/centauri/src/services/plugins/PluginManager.cpp",
+			"MU",
+			null
+		],
+		[ "/workspace/centauri/src/testing/TestFramework.cpp", "MU", null ],
+		[ "/workspace/centauri/src/ui/console/ConsoleTab.cpp", "MU", null ],
+		[ "/workspace/centauri/src/ui/console/ConsoleWidget.cpp", "MU", null ],
+		[ "/workspace/centauri/src/ui/console/REPLConsoleTab.cpp", "MU", null ],
+		[
+			"/workspace/centauri/src/ui/console/REPLSyntaxHighlighter.cpp",
+			"MU",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/debugger/visualizers/CollectionTable.cpp",
+			"MU",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/debugger/visualizers/Layer3DView.cpp",
+			"MU",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/debugger/visualizers/MatrixView.cpp",
+			"MU",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/debugger/visualizers/ObjectInspector.cpp",
+			"MU",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/debugger/visualizers/VectorPlot.cpp",
+			"MU",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/dialogs/AdvancedSearchWidget.cpp",
+			"MU",
+			null
+		],
+		[ "/workspace/centauri/src/ui/dialogs/BuildDialog.cpp", "MU", null ],
+		[
+			"/workspace/centauri/src/ui/dialogs/BuildReportDialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/dialogs/CollaborationDialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/dialogs/CompatibilityReportDialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/dialogs/FoldingSettingsDialog.cpp",
+			"MU",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/dialogs/LLMAssistantDialog.cpp",
+			"MU",
+			null
+		],
+		[ "/workspace/centauri/src/ui/dialogs/SearchWidget.cpp", "MU", null ],
+		[ "/workspace/centauri/src/ui/dialogs/SettingsDialog.cpp", "MU", null ],
+		[
+			"/workspace/centauri/src/ui/dialogs/SnippetManagerDialog.cpp",
+			"MU",
+			null
+		],
+		[ "/workspace/centauri/src/ui/editor/CodeEditor.cpp", "MU", null ],
+		[
+			"/workspace/centauri/src/ui/editor/CodeFoldingManager.cpp",
+			"MU",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/editor/CollaborativeTextManager.cpp",
+			"MU",
+			null
+		],
+		[
+			"/workspace/centauri/src/ui/editor/CompletionProvider.cpp",
+			"MU",
+			null
+		],
+		[ "/workspace/centauri/src/ui/editor/EditorToolbar.cpp", "MU", null ],
+		[
+			"/workspace/centauri/src/ui/editor/RemoteCursorOverlay.cpp",
+			"MU",
+			null
+		],
+		[ "/workspace/centauri/src/ui/editor/SnippetManager.cpp", "MU", null ],
+		[ "/workspace/centauri/src/ui/editor/StatusBar.cpp", "MU", null ],
+		[ "/workspace/centauri/src/ui/editor/SyntaxHighlighter.cpp", "MU", null ],
+		[ "/workspace/centauri/src/ui/menu/MainMenu.cpp", "MU", null ]
+	],
+	"UIC_OPTIONS" : [],
+	"UIC_SEARCH_PATHS" : [],
+	"UIC_SKIP" : [],
+	"UIC_UI_FILES" : [],
+	"VERBOSITY" : 0
+}

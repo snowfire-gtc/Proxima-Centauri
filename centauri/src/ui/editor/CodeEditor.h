@@ -75,7 +75,6 @@
 #include <QValidator>
 #include <QIntValidator>
 #include <QDoubleValidator>
-#include <QRegExpValidator>
 #include <QRegularExpressionValidator>
 #include <QDesktopServices>
 #include <QUrl>

@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/lexer_test.dir/tests/unit/lexer_test.cpp.o -o lexer_test  libproximalib.a 

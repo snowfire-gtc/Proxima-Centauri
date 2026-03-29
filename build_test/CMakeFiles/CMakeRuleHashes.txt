@@ -1,0 +1,2 @@
+# Hashes of file build rules.
+e9f3a6115239ef996f9cf3df58edd1bf centauri/CMakeFiles/centauri_autogen
