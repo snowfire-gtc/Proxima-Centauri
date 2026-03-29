@@ -1,8 +1,8 @@
 #include "TestFramework.h"
-#include <QFile>
-#include <QTextStream>
-#include <QDateTime>
-#include <QFileInfo>
+#include <fstream>
+#include <sstream>
+#include <ctime>
+#include <iomanip>
 #include <cmath>
 #include "utils/Logger.h"
 
@@ -13,9 +13,8 @@ TestFramework& TestFramework::getInstance() {
     return instance;
 }
 
-TestFramework::TestFramework(QObject *parent)
-    : QObject(parent)
-    , running(false)
+TestFramework::TestFramework()
+    : running(false)
     , isVerbose(false)
     , stopOnFailure(false)
     , repeatCount(1)
@@ -23,7 +22,8 @@ TestFramework::TestFramework(QObject *parent)
     , shouldSkip(false) {
     
     report.projectName = "Proxima Tests";
-    report.timestamp = QDateTime::currentDateTime();
+    auto now = std::time(nullptr);
+    report.timestamp = std::chrono::system_clock::from_time_t(now);
     report.totalTests = 0;
     report.totalPassed = 0;
     report.totalFailed = 0;
@@ -34,8 +34,8 @@ TestFramework::TestFramework(QObject *parent)
 
 TestFramework::~TestFramework() {}
 
-void TestFramework::registerSuite(const QString& name) {
-    if (!suites.contains(name)) {
+void TestFramework::registerSuite(const std::string& name) {
+    if (suites.find(name) == suites.end()) {
         TestSuite suite;
         suite.name = name;
         suite.passed = 0;
@@ -47,24 +47,26 @@ void TestFramework::registerSuite(const QString& name) {
     }
 }
 
-void TestFramework::registerTest(const QString& suite, const QString& name,
+void TestFramework::registerTest(const std::string& suite, const std::string& name,
                                  std::function<void()> testFunc) {
-    QString key = suite + "::" + name;
+    std::string key = suite + "::" + name;
     testFunctions[key] = testFunc;
     
-    if (suites.contains(suite)) {
+    auto it = suites.find(suite);
+    if (it != suites.end()) {
         TestCase testCase;
         testCase.name = name;
         testCase.suite = suite;
         testCase.result = TestResult::Skipped;
-        suites[suite].testCases.append(testCase);
+        it->second.testCases.push_back(testCase);
     }
 }
 
 void TestFramework::runAllTests() {
     running = true;
     report = TestReport();
-    report.timestamp = QDateTime::currentDateTime();
+    auto now = std::time(nullptr);
+    report.timestamp = std::chrono::system_clock::from_time_t(now);
     
     int totalTests = 0;
     for (const auto& suite : suites) {
@@ -77,21 +79,18 @@ void TestFramework::runAllTests() {
     for (auto& suitePair : suites) {
         TestSuite& suite = suitePair.second;
         
-        emit suiteStarted(suite.name);
-        
         for (int r = 0; r < repeatCount; r++) {
-            for (int i = 0; i < suite.testCases.size(); i++) {
+            for (size_t i = 0; i < suite.testCases.size(); i++) {
                 TestCase& testCase = suite.testCases[i];
                 
                 // Apply filter
-                if (!testFilter.isEmpty() && 
-                    !testCase.name.contains(testFilter) &&
-                    !suite.name.contains(testFilter)) {
+                if (!testFilter.empty() && 
+                    testCase.name.find(testFilter) == std::string::npos &&
+                    suite.name.find(testFilter) == std::string::npos) {
                     continue;
                 }
                 
                 currentTest++;
-                emit progressChanged(currentTest, report.totalTests);
                 
                 executeTest(testCase);
                 
@@ -101,29 +100,24 @@ void TestFramework::runAllTests() {
                 }
             }
         }
-        
-        emit suiteFinished(suite.name);
     }
     
     calculateStatistics();
     running = false;
     
-    emit allTestsFinished();
-    
-    LOG_INFO("Tests completed: " + QString::number(report.totalPassed) + "/" +
-            QString::number(report.totalTests) + " passed");
+    LOG_INFO("Tests completed: " + std::to_string(report.totalPassed) + "/" +
+            std::to_string(report.totalTests) + " passed");
 }
 
-void TestFramework::runSuite(const QString& suiteName) {
-    if (!suites.contains(suiteName)) {
+void TestFramework::runSuite(const std::string& suiteName) {
+    auto it = suites.find(suiteName);
+    if (it == suites.end()) {
         LOG_ERROR("Test suite not found: " + suiteName);
         return;
     }
     
     running = true;
-    TestSuite& suite = suites[suiteName];
-    
-    emit suiteStarted(suiteName);
+    TestSuite& suite = it->second;
     
     for (TestCase& testCase : suite.testCases) {
         executeTest(testCase);
@@ -133,20 +127,19 @@ void TestFramework::runSuite(const QString& suiteName) {
         }
     }
     
-    emit suiteFinished(suiteName);
-    
     calculateStatistics();
     running = false;
 }
 
-void TestFramework::runTest(const QString& suiteName, const QString& testName) {
-    if (!suites.contains(suiteName)) {
+void TestFramework::runTest(const std::string& suiteName, const std::string& testName) {
+    auto it = suites.find(suiteName);
+    if (it == suites.end()) {
         LOG_ERROR("Test suite not found: " + suiteName);
         return;
     }
     
     running = true;
-    TestSuite& suite = suites[suiteName];
+    TestSuite& suite = it->second;
     
     for (TestCase& testCase : suite.testCases) {
         if (testCase.name == testName) {
@@ -170,58 +163,58 @@ void TestFramework::executeTest(TestCase& testCase) {
     
     testCase.assertions.clear();
     testCase.result = TestResult::Passed;
-    testCase.timestamp = QDateTime::currentDateTime();
+    auto now = std::time(nullptr);
+    testCase.timestamp = std::chrono::system_clock::from_time_t(now);
     shouldSkip = false;
     skipMessage.clear();
     
-    emit testStarted(testCase.suite, testCase.name);
+    auto start = std::chrono::steady_clock::now();
     
-    auto start = QDateTime::currentMSecsSinceEpoch();
-    
-    QString key = testCase.suite + "::" + testCase.name;
-    if (testFunctions.contains(key)) {
+    std::string key = testCase.suite + "::" + testCase.name;
+    auto it = testFunctions.find(key);
+    if (it != testFunctions.end()) {
         try {
-            testFunctions[key]();
+            it->second();
         } catch (const std::exception& e) {
-            recordResult(testCase, TestResult::Error, QString::fromUtf8(e.what()));
+            recordResult(testCase, TestResult::Error, std::string(e.what()));
         } catch (...) {
             recordResult(testCase, TestResult::Error, "Unknown exception");
         }
     }
     
-    auto end = QDateTime::currentMSecsSinceEpoch();
-    testCase.duration = end - start;
+    auto end = std::chrono::steady_clock::now();
+    testCase.duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     
     if (shouldSkip) {
         testCase.result = TestResult::Skipped;
         testCase.message = skipMessage;
     }
     
-    if (testCase.result == TestResult::Passed) {
-        suites[testCase.suite].passed++;
-    } else if (testCase.result == TestResult::Failed) {
-        suites[testCase.suite].failed++;
-    } else if (testCase.result == TestResult::Skipped) {
-        suites[testCase.suite].skipped++;
-    } else {
-        suites[testCase.suite].errors++;
+    auto suiteIt = suites.find(testCase.suite);
+    if (suiteIt != suites.end()) {
+        if (testCase.result == TestResult::Passed) {
+            suiteIt->second.passed++;
+        } else if (testCase.result == TestResult::Failed) {
+            suiteIt->second.failed++;
+        } else if (testCase.result == TestResult::Skipped) {
+            suiteIt->second.skipped++;
+        } else {
+            suiteIt->second.errors++;
+        }
+        
+        suiteIt->second.totalDuration += testCase.duration;
     }
     
-    suites[testCase.suite].totalDuration += testCase.duration;
-    
-    emit testFinished(testCase.suite, testCase.name, testCase.result);
-    
     if (isVerbose) {
-        QString status;
+        std::string status;
         switch (testCase.result) {
             case TestResult::Passed: status = "PASS"; break;
             case TestResult::Failed: status = "FAIL"; break;
             case TestResult::Skipped: status = "SKIP"; break;
             case TestResult::Error: status = "ERROR"; break;
         }
-        LOG_INFO(QString("[%1] %2::%3 (%4ms)")
-            .arg(status, testCase.suite, testCase.name)
-            .arg(testCase.duration));
+        LOG_INFO("[" + status + "] " + testCase.suite + "::" + testCase.name + 
+                " (" + std::to_string(testCase.duration) + "ms)");
     }
     
     currentTestCase = nullptr;
@@ -229,21 +222,17 @@ void TestFramework::executeTest(TestCase& testCase) {
 
 void TestFramework::recordAssertion(const TestAssertion& assertion) {
     if (currentTestCase) {
-        currentTestCase->assertions.append(assertion);
-        
-        if (!assertion.passed) {
-            emit assertionFailed(assertion);
-        }
+        currentTestCase->assertions.push_back(assertion);
     }
 }
 
-void TestFramework::recordResult(TestCase& testCase, TestResult result, const QString& message) {
+void TestFramework::recordResult(TestCase& testCase, TestResult result, const std::string& message) {
     testCase.result = result;
     testCase.message = message;
 }
 
-void TestFramework::assertTrue(bool condition, const QString& message,
-                               const QString& file, int line) {
+void TestFramework::assertTrue(bool condition, const std::string& message,
+                               const std::string& file, int line) {
     TestAssertion assertion;
     assertion.passed = condition;
     assertion.message = message;
@@ -252,20 +241,20 @@ void TestFramework::assertTrue(bool condition, const QString& message,
     assertion.expression = "assertTrue";
     
     if (!condition) {
-        assertion.message = message.isEmpty() ? "Assertion failed" : message;
+        assertion.message = message.empty() ? "Assertion failed" : message;
         recordResult(*currentTestCase, TestResult::Failed, assertion.message);
     }
     
     recordAssertion(assertion);
 }
 
-void TestFramework::assertFalse(bool condition, const QString& message,
-                                const QString& file, int line) {
+void TestFramework::assertFalse(bool condition, const std::string& message,
+                                const std::string& file, int line) {
     assertTrue(!condition, message, file, line);
 }
 
-void TestFramework::assertEquals(const QString& expected, const QString& actual,
-                                 const QString& message, const QString& file, int line) {
+void TestFramework::assertEquals(const std::string& expected, const std::string& actual,
+                                 const std::string& message, const std::string& file, int line) {
     TestAssertion assertion;
     assertion.passed = (expected == actual);
     assertion.file = file;
@@ -273,8 +262,8 @@ void TestFramework::assertEquals(const QString& expected, const QString& actual,
     assertion.expression = "assertEquals";
     
     if (!assertion.passed) {
-        assertion.message = message.isEmpty() ?
-            QString("Expected '%1', got '%2'").arg(expected, actual) : message;
+        assertion.message = message.empty() ?
+            "Expected '" + expected + "', got '" + actual + "'" : message;
         recordResult(*currentTestCase, TestResult::Failed, assertion.message);
     }
     
@@ -282,7 +271,7 @@ void TestFramework::assertEquals(const QString& expected, const QString& actual,
 }
 
 void TestFramework::assertEquals(int expected, int actual,
-                                 const QString& message, const QString& file, int line) {
+                                 const std::string& message, const std::string& file, int line) {
     TestAssertion assertion;
     assertion.passed = (expected == actual);
     assertion.file = file;
@@ -290,8 +279,8 @@ void TestFramework::assertEquals(int expected, int actual,
     assertion.expression = "assertEquals";
     
     if (!assertion.passed) {
-        assertion.message = message.isEmpty() ?
-            QString("Expected %1, got %2").arg(expected).arg(actual) : message;
+        assertion.message = message.empty() ?
+            "Expected " + std::to_string(expected) + ", got " + std::to_string(actual) : message;
         recordResult(*currentTestCase, TestResult::Failed, assertion.message);
     }
     
@@ -299,7 +288,7 @@ void TestFramework::assertEquals(int expected, int actual,
 }
 
 void TestFramework::assertEquals(double expected, double actual, double tolerance,
-                                 const QString& message, const QString& file, int line) {
+                                 const std::string& message, const std::string& file, int line) {
     TestAssertion assertion;
     assertion.passed = (std::abs(expected - actual) <= tolerance);
     assertion.file = file;
@@ -307,17 +296,17 @@ void TestFramework::assertEquals(double expected, double actual, double toleranc
     assertion.expression = "assertEquals";
     
     if (!assertion.passed) {
-        assertion.message = message.isEmpty() ?
-            QString("Expected %1 ± %2, got %3")
-                .arg(expected).arg(tolerance).arg(actual) : message;
+        assertion.message = message.empty() ?
+            "Expected " + std::to_string(expected) + " ± " + std::to_string(tolerance) + 
+            ", got " + std::to_string(actual) : message;
         recordResult(*currentTestCase, TestResult::Failed, assertion.message);
     }
     
     recordAssertion(assertion);
 }
 
-void TestFramework::assertNull(void* pointer, const QString& message,
-                               const QString& file, int line) {
+void TestFramework::assertNull(void* pointer, const std::string& message,
+                               const std::string& file, int line) {
     TestAssertion assertion;
     assertion.passed = (pointer == nullptr);
     assertion.file = file;
@@ -325,15 +314,15 @@ void TestFramework::assertNull(void* pointer, const QString& message,
     assertion.expression = "assertNull";
     
     if (!assertion.passed) {
-        assertion.message = message.isEmpty() ? "Expected null pointer" : message;
+        assertion.message = message.empty() ? "Expected null pointer" : message;
         recordResult(*currentTestCase, TestResult::Failed, assertion.message);
     }
     
     recordAssertion(assertion);
 }
 
-void TestFramework::assertNotNull(void* pointer, const QString& message,
-                                  const QString& file, int line) {
+void TestFramework::assertNotNull(void* pointer, const std::string& message,
+                                  const std::string& file, int line) {
     TestAssertion assertion;
     assertion.passed = (pointer != nullptr);
     assertion.file = file;
@@ -341,17 +330,17 @@ void TestFramework::assertNotNull(void* pointer, const QString& message,
     assertion.expression = "assertNotNull";
     
     if (!assertion.passed) {
-        assertion.message = message.isEmpty() ? "Expected non-null pointer" : message;
+        assertion.message = message.empty() ? "Expected non-null pointer" : message;
         recordResult(*currentTestCase, TestResult::Failed, assertion.message);
     }
     
     recordAssertion(assertion);
 }
 
-void TestFramework::fail(const QString& message, const QString& file, int line) {
+void TestFramework::fail(const std::string& message, const std::string& file, int line) {
     TestAssertion assertion;
     assertion.passed = false;
-    assertion.message = message.isEmpty() ? "Test failed" : message;
+    assertion.message = message.empty() ? "Test failed" : message;
     assertion.file = file;
     assertion.line = line;
     assertion.expression = "fail";
@@ -360,7 +349,7 @@ void TestFramework::fail(const QString& message, const QString& file, int line) 
     recordAssertion(assertion);
 }
 
-void TestFramework::skip(const QString& message) {
+void TestFramework::skip(const std::string& message) {
     shouldSkip = true;
     skipMessage = message;
 }
@@ -375,7 +364,7 @@ void TestFramework::calculateStatistics() {
     
     for (const auto& suitePair : suites) {
         const TestSuite& suite = suitePair.second;
-        report.suites.append(suite);
+        report.suites.push_back(suite);
         report.totalPassed += suite.passed;
         report.totalFailed += suite.failed;
         report.totalSkipped += suite.skipped;
@@ -387,27 +376,28 @@ void TestFramework::calculateStatistics() {
                        report.totalSkipped + report.totalErrors;
 }
 
-QString TestFramework::getReportHTML() const {
-    QString html = "<!DOCTYPE html><html><head><title>Test Report</title>";
-    html += "<style>body{font-family:Arial;margin:20px;} ";
-    html += ".pass{color:green;} .fail{color:red;} .skip{color:orange;} ";
-    html += "table{border-collapse:collapse;width:100%;} ";
-    html += "th,td{border:1px solid #ddd;padding:8px;text-align:left;} ";
-    html += "th{background-color:#4CAF50;color:white;}</style></head><body>";
+std::string TestFramework::getReportHTML() const {
+    std::ostringstream html;
+    html << "<!DOCTYPE html><html><head><title>Test Report</title>";
+    html << "<style>body{font-family:Arial;margin:20px;} ";
+    html << ".pass{color:green;} .fail{color:red;} .skip{color:orange;} ";
+    html << "table{border-collapse:collapse;width:100%;} ";
+    html << "th,td{border:1px solid #ddd;padding:8px;text-align:left;} ";
+    html << "th{background-color:#4CAF50;color:white;}</style></head><body>";
     
-    html += "<h1>Test Report</h1>";
-    html += "<p>Generated: " + report.timestamp.toString() + "</p>";
-    html += "<p>Total: " + QString::number(report.totalTests) + " | ";
-    html += "<span class='pass'>Passed: " + QString::number(report.totalPassed) + "</span> | ";
-    html += "<span class='fail'>Failed: " + QString::number(report.totalFailed) + "</span> | ";
-    html += "<span class='skip'>Skipped: " + QString::number(report.totalSkipped) + "</span></p>";
+    html << "<h1>Test Report</h1>";
+    html << "<p>Generated: " << std::ctime(&report.timestamp) << "</p>";
+    html << "<p>Total: " << report.totalTests << " | ";
+    html << "<span class='pass'>Passed: " << report.totalPassed << "</span> | ";
+    html << "<span class='fail'>Failed: " << report.totalFailed << "</span> | ";
+    html << "<span class='skip'>Skipped: " << report.totalSkipped << "</span></p>";
     
     for (const TestSuite& suite : report.suites) {
-        html += "<h2>" + suite.name + "</h2>";
-        html += "<table><tr><th>Test</th><th>Result</th><th>Duration</th><th>Message</th></tr>";
+        html << "<h2>" << suite.name << "</h2>";
+        html << "<table><tr><th>Test</th><th>Result</th><th>Duration</th><th>Message</th></tr>";
         
         for (const TestCase& test : suite.testCases) {
-            QString cssClass;
+            std::string cssClass;
             switch (test.result) {
                 case TestResult::Passed: cssClass = "pass"; break;
                 case TestResult::Failed: cssClass = "fail"; break;
@@ -415,39 +405,40 @@ QString TestFramework::getReportHTML() const {
                 default: cssClass = "";
             }
             
-            html += "<tr class='" + cssClass + "'>";
-            html += "<td>" + test.name + "</td>";
-            html += "<td>" + QString::number(static_cast<int>(test.result)) + "</td>";
-            html += "<td>" + QString::number(test.duration) + "ms</td>";
-            html += "<td>" + escapeHTML(test.message) + "</td>";
-            html += "</tr>";
+            html << "<tr class='" << cssClass << "'>";
+            html << "<td>" << test.name << "</td>";
+            html << "<td>" << static_cast<int>(test.result) << "</td>";
+            html << "<td>" << test.duration << "ms</td>";
+            html << "<td>" << escapeHTML(test.message) << "</td>";
+            html << "</tr>";
         }
         
-        html += "</table>";
+        html << "</table>";
     }
     
-    html += "</body></html>";
-    return html;
+    html << "</body></html>";
+    return html.str();
 }
 
-QString TestFramework::getReportText() const {
-    QString text = "Test Report\n";
-    text += "============\n\n";
-    text += "Generated: " + report.timestamp.toString() + "\n\n";
-    text += "Summary:\n";
-    text += "  Total:   " + QString::number(report.totalTests) + "\n";
-    text += "  Passed:  " + QString::number(report.totalPassed) + "\n";
-    text += "  Failed:  " + QString::number(report.totalFailed) + "\n";
-    text += "  Skipped: " + QString::number(report.totalSkipped) + "\n";
-    text += "  Errors:  " + QString::number(report.totalErrors) + "\n";
-    text += "  Duration:" + QString::number(report.totalDuration) + "ms\n\n";
+std::string TestFramework::getReportText() const {
+    std::ostringstream text;
+    text << "Test Report\n";
+    text << "============\n\n";
+    text << "Generated: " << std::ctime(&report.timestamp) << "\n\n";
+    text << "Summary:\n";
+    text << "  Total:   " << report.totalTests << "\n";
+    text << "  Passed:  " << report.totalPassed << "\n";
+    text << "  Failed:  " << report.totalFailed << "\n";
+    text << "  Skipped: " << report.totalSkipped << "\n";
+    text << "  Errors:  " << report.totalErrors << "\n";
+    text << "  Duration:" << report.totalDuration << "ms\n\n";
     
     for (const TestSuite& suite : report.suites) {
-        text += "Suite: " + suite.name + "\n";
-        text += QString('-').repeated(40) + "\n";
+        text << "Suite: " << suite.name << "\n";
+        text << "----------------------------------------\n";
         
         for (const TestCase& test : suite.testCases) {
-            QString status;
+            std::string status;
             switch (test.result) {
                 case TestResult::Passed: status = "PASS"; break;
                 case TestResult::Failed: status = "FAIL"; break;
@@ -455,50 +446,64 @@ QString TestFramework::getReportText() const {
                 case TestResult::Error: status = "ERROR"; break;
             }
             
-            text += "  [" + status + "] " + test.name + " (" + 
-                   QString::number(test.duration) + "ms)\n";
+            text << "  [" << status << "] " << test.name << " (" << 
+                   test.duration << "ms)\n";
             
-            if (!test.message.isEmpty()) {
-                text += "    " + test.message + "\n";
+            if (!test.message.empty()) {
+                text << "    " << test.message << "\n";
             }
         }
-        text += "\n";
+        text << "\n";
     }
     
-    return text;
+    return text.str();
 }
 
-void TestFramework::saveReport(const QString& path, const QString& format) {
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly)) {
+void TestFramework::saveReport(const std::string& path, const std::string& format) {
+    std::ofstream file(path);
+    if (!file.is_open()) {
         LOG_ERROR("Failed to save report: " + path);
         return;
     }
     
-    QTextStream out(&file);
-    
     if (format == "html") {
-        out << getReportHTML();
+        file << getReportHTML();
     } else if (format == "xml") {
-        out << getReportXML();
+        file << getReportXML();
     } else {
-        out << getReportText();
+        file << getReportText();
     }
     
     file.close();
     LOG_INFO("Test report saved: " + path);
 }
 
-QString TestFramework::escapeHTML(const QString& text) const {
-    QString escaped = text;
-    escaped.replace("&", "&amp;");
-    escaped.replace("<", "&lt;");
-    escaped.replace(">", "&gt;");
-    escaped.replace("\"", "&quot;");
+std::string TestFramework::escapeHTML(const std::string& text) const {
+    std::string escaped = text;
+    size_t pos = 0;
+    while ((pos = escaped.find("&", pos)) != std::string::npos) {
+        escaped.replace(pos, 1, "&amp;");
+        pos += 5;
+    }
+    pos = 0;
+    while ((pos = escaped.find("<", pos)) != std::string::npos) {
+        escaped.replace(pos, 1, "&lt;");
+        pos += 4;
+    }
+    pos = 0;
+    while ((pos = escaped.find(">", pos)) != std::string::npos) {
+        escaped.replace(pos, 1, "&gt;");
+        pos += 4;
+    }
+    pos = 0;
+    while ((pos = escaped.find("\"", pos)) != std::string::npos) {
+        escaped.replace(pos, 1, "&quot;");
+        pos += 6;
+    }
     return escaped;
 }
 
-QString TestFramework::escapeXML(const QString& text) const {
+std::string TestFramework::escapeXML(const std::string& text) const {
     return escapeHTML(text);
 }
 
