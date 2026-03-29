@@ -1,15 +1,12 @@
 #ifndef PROXIMA_STORYMANAGER_H
 #define PROXIMA_STORYMANAGER_H
 
-#include <QObject>
-#include <QString>
-#include <QVector>
-#include <QMap>
-#include <QDateTime>
-#include <QFile>
-#include <QDir>
-#include <QTextStream>
-#include <QRegularExpression>
+#include <string>
+#include <vector>
+#include <map>
+#include <chrono>
+#include <ctime>
+#include <filesystem>
 #include "utils/CollectionParser.h"
 #include "utils/Logger.h"
 
@@ -24,20 +21,28 @@ enum class EditOperation {
 };
 
 /**
+ * @brief Простая структура цвета для подсветки
+ */
+struct SimpleColor {
+    int r, g, b;
+    SimpleColor(int red = 0, int green = 0, int blue = 0) : r(red), g(green), b(blue) {}
+};
+
+/**
  * @brief Запись истории правок
  * 
  * Формат хранения в .story файле:
  * [<время изменения>, <add/remove>, <текст правки>]
  */
 struct StoryEntry {
-    QDateTime timestamp;        // Время изменения
+    std::time_t timestamp;        // Время изменения (unix timestamp)
     EditOperation operation;    // Операция (add/remove)
-    QString text;               // Текст правки
+    std::string text;               // Текст правки
     int startLine;              // Начальная строка
     int endLine;                // Конечная строка
-    QString checksum;           // Контрольная сумма блока
+    std::string checksum;           // Контрольная сумма блока
     
-    StoryEntry() : operation(EditOperation::Add), startLine(0), endLine(0) {}
+    StoryEntry() : operation(EditOperation::Add), startLine(0), endLine(0), timestamp(0) {}
     
     /**
      * @brief Сериализация в Collection
@@ -45,7 +50,13 @@ struct StoryEntry {
      */
     Collection toCollection() const {
         Collection entry;
-        entry.set("timestamp", Collection::fromString(timestamp.toString("dd/MM/yyyy HH:mm")));
+        // Конвертация timestamp в строку формата dd/MM/yyyy HH:mm
+        std::time_t time = timestamp;
+        std::tm* tm_info = std::localtime(&time);
+        char buffer[20];
+        std::strftime(buffer, sizeof(buffer), "%d/%m/%Y %H:%M", tm_info);
+        entry.set("timestamp", Collection::fromString(std::string(buffer)));
+        
         entry.set("operation", Collection::fromString(operation == EditOperation::Add ? "add" : "remove"));
         entry.set("text", Collection::fromString(text));
         entry.set("startLine", Collection::fromNumber(startLine));
@@ -59,12 +70,17 @@ struct StoryEntry {
      * @param collection Collection данные
      */
     void fromCollection(const Collection& collection) {
-        timestamp = QDateTime::fromString(collection.get("timestamp").toString(), "dd/MM/yyyy HH:mm");
-        QString op = collection.get("operation").toString();
+        std::string timeStr = collection.get("timestamp").toString();
+        std::tm tm = {};
+        std::istringstream ss(timeStr);
+        ss >> std::get_time(&tm, "%d/%m/%Y %H:%M");
+        timestamp = std::mktime(&tm);
+        
+        std::string op = collection.get("operation").toString();
         operation = (op == "add") ? EditOperation::Add : EditOperation::Remove;
         text = collection.get("text").toString();
-        startLine = collection.get("startLine").toNumber();
-        endLine = collection.get("endLine").toNumber();
+        startLine = static_cast<int>(collection.get("startLine").toNumber());
+        endLine = static_cast<int>(collection.get("endLine").toNumber());
         checksum = collection.get("checksum").toString();
     }
     
@@ -72,21 +88,23 @@ struct StoryEntry {
      * @brief Вычисление возраста правки в минутах
      * @return Возраст в минутах
      */
-    qint64 ageInMinutes() const {
-        return timestamp.secsTo(QDateTime::currentDateTime()) / 60;
+    int64_t ageInMinutes() const {
+        auto now = std::chrono::system_clock::now();
+        auto now_time = std::chrono::system_clock::to_time_t(now);
+        return (now_time - timestamp) / 60;
     }
     
     /**
      * @brief Получение цвета на основе возраста
      * @return Цвет для подсветки
      */
-    QColor getAgeColor() const;
+    SimpleColor getAgeColor() const;
     
     /**
      * @brief Получение строкового представления возраста
      * @return Строка с возрастом
      */
-    QString getAgeString() const;
+    std::string getAgeString() const;
 };
 
 /**
@@ -94,8 +112,7 @@ struct StoryEntry {
  * 
  * Хранит историю в папке .proxima/story/<filename>.story
  */
-class StoryManager : public QObject {
-    Q_OBJECT
+class StoryManager {
     
 public:
     static StoryManager& getInstance();
@@ -104,21 +121,21 @@ public:
      * @brief Инициализация менеджера
      * @param projectPath Путь к проекту
      */
-    void initialize(const QString& projectPath);
+    void initialize(const std::string& projectPath);
     
     /**
      * @brief Загрузка истории для файла
      * @param filePath Путь к файлу исходного кода
      * @return true если успешно
      */
-    bool loadStory(const QString& filePath);
+    bool loadStory(const std::string& filePath);
     
     /**
      * @brief Сохранение истории для файла
      * @param filePath Путь к файлу исходного кода
      * @return true если успешно
      */
-    bool saveStory(const QString& filePath);
+    bool saveStory(const std::string& filePath);
     
     /**
      * @brief Добавление записи в историю
@@ -128,15 +145,15 @@ public:
      * @param startLine Начальная строка
      * @param endLine Конечная строка
      */
-    void addEditEntry(const QString& filePath, EditOperation operation, 
-                     const QString& text, int startLine, int endLine);
+    void addEditEntry(const std::string& filePath, EditOperation operation, 
+                     const std::string& text, int startLine, int endLine);
     
     /**
      * @brief Получение всех записей истории для файла
      * @param filePath Путь к файлу
      * @return Вектор записей истории
      */
-    QVector<StoryEntry> getStoryEntries(const QString& filePath) const;
+    std::vector<StoryEntry> getStoryEntries(const std::string& filePath) const;
     
     /**
      * @brief Получение записи истории для строки
@@ -144,74 +161,67 @@ public:
      * @param line Номер строки (1-based)
      * @return Запись истории или nullptr
      */
-    StoryEntry* getEntryForLine(const QString& filePath, int line);
+    StoryEntry* getEntryForLine(const std::string& filePath, int line);
     
     /**
      * @brief Получение информации о возрасте для всех строк
      * @param filePath Путь к файлу
      * @return Карта: номер строки -> время изменения
      */
-    QMap<int, QDateTime> getAgeInfo(const QString& filePath);
+    std::map<int, std::time_t> getAgeInfo(const std::string& filePath);
     
     /**
      * @brief Отмена последней правки
      * @param filePath Путь к файлу
      * @return true если успешно
      */
-    bool undoLastEdit(const QString& filePath);
+    bool undoLastEdit(const std::string& filePath);
     
     /**
      * @brief Возврат правки
      * @param filePath Путь к файлу
      * @return true если успешно
      */
-    bool redoLastEdit(const QString& filePath);
+    bool redoLastEdit(const std::string& filePath);
     
     /**
      * @brief Очистка истории для файла
      * @param filePath Путь к файлу
      */
-    void clearStory(const QString& filePath);
+    void clearStory(const std::string& filePath);
     
     /**
      * @brief Проверка наличия истории для файла
      * @param filePath Путь к файлу
      * @return true если история существует
      */
-    bool hasStory(const QString& filePath) const;
+    bool hasStory(const std::string& filePath) const;
     
     /**
      * @brief Получение пути к файлу истории
      * @param filePath Путь к файлу исходного кода
      * @return Путь к файлу истории
      */
-    QString getStoryFilePath(const QString& filePath) const;
+    std::string getStoryFilePath(const std::string& filePath) const;
     
     /**
      * @brief Вычисление контрольной суммы текста
      * @param text Текст
      * @return Контрольная сумма
      */
-    static QString calculateChecksum(const QString& text);
-    
-signals:
-    void storyLoaded(const QString& filePath);
-    void storySaved(const QString& filePath);
-    void entryAdded(const QString& filePath, const StoryEntry& entry);
-    void editUndone(const QString& filePath);
-    void editRedone(const QString& filePath);
+    static std::string calculateChecksum(const std::string& text);
     
 private:
-    StoryManager(QObject *parent = nullptr);
+    StoryManager();
     ~StoryManager();
     
-    QString projectPath;
-    QString storyDirectory;
-    QMap<QString, QVector<StoryEntry>> stories;  // filePath -> entries
-    QMap<QString, int> currentEntryIndex;  // filePath -> current position for undo/redo
+    std::string projectPath;
+    std::string storyDirectory;
+    std::map<std::string, std::vector<StoryEntry>> stories;  // filePath -> entries
+    std::map<std::string, size_t> currentEntryIndex;  // filePath -> current position for undo/redo
     
     void ensureStoryDirectory();
-    QString getRelativeFilePath(const QString& filePath) const;
+    std::string getRelativeFilePath(const std::string& filePath) const;
 };
 
 } // namespace proxima
