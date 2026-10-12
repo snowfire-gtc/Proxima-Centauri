@@ -93,6 +93,7 @@ runtime_test_EXTERNAL_OBJECTS =
 proxima/runtime_test: proxima/CMakeFiles/runtime_test.dir/tests/unit/runtime_tests.cpp.o
 proxima/runtime_test: proxima/CMakeFiles/runtime_test.dir/build.make
 proxima/runtime_test: proxima/libproximalib.a
+proxima/runtime_test: /usr/lib/llvm-14/lib/libLLVM-14.so
 proxima/runtime_test: proxima/CMakeFiles/runtime_test.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/workspace/build_test/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable runtime_test"
 	cd /workspace/build_test/proxima && $(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/runtime_test.dir/link.txt --verbose=$(VERBOSE)

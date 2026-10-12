@@ -93,6 +93,7 @@ parser_test_EXTERNAL_OBJECTS =
 proxima/parser_test: proxima/CMakeFiles/parser_test.dir/tests/unit/parser_test.cpp.o
 proxima/parser_test: proxima/CMakeFiles/parser_test.dir/build.make
 proxima/parser_test: proxima/libproximalib.a
+proxima/parser_test: /usr/lib/llvm-14/lib/libLLVM-14.so
 proxima/parser_test: proxima/CMakeFiles/parser_test.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/workspace/build_test/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable parser_test"
 	cd /workspace/build_test/proxima && $(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/parser_test.dir/link.txt --verbose=$(VERBOSE)

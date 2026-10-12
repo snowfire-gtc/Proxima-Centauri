@@ -9,7 +9,19 @@ namespace proxima {
 // ============================================================================
 
 Parser::Parser(const std::vector<Token>& tokens, const std::string& filename)
-    : tokens(tokens), pos(0), filename(filename) {
+    : tokens(filterComments(tokens)), pos(0), filename(filename) {
+}
+
+// Комментарии не участвуют в синтаксисе (спецификация 2.1), но сохраняются
+// лексером как токены COMMENT_SINGLE/COMMENT_MULTI — отфильтруем их для парсера.
+std::vector<Token> Parser::filterComments(const std::vector<Token>& in) {
+    std::vector<Token> out;
+    out.reserve(in.size());
+    for (const auto& t : in) {
+        if (t.type == TokenType::COMMENT_SINGLE || t.type == TokenType::COMMENT_MULTI) continue;
+        out.push_back(t);
+    }
+    return out;
 }
 
 // ============================================================================
@@ -572,7 +584,8 @@ ExpressionNodePtr Parser::parseTernary() {
 ExpressionNodePtr Parser::parseOr() {
     auto left = parseAnd();
     
-    while (match(TokenType::OP_OR) || match(TokenType::OP_BIN_OR)) {
+    while (match(TokenType::OP_OR) || match(TokenType::OP_BIN_OR) ||
+           match(TokenType::OP_LOGIC_XOR)) {  // "|" , "||" , "#" (логическое XOR)
         Token opToken = currentToken();
         auto right = parseAnd();
         left = std::make_shared<BinaryOpNode>(opToken, left, right, filename);
@@ -635,7 +648,7 @@ ExpressionNodePtr Parser::parseFactor() {
     auto left = parseUnary();
     
     while (match(TokenType::OP_STAR) || match(TokenType::OP_SLASH) ||
-           match(TokenType::OP_PERCENT)) {
+           match(TokenType::OP_INT_DIV) || match(TokenType::OP_BIN_XOR)) { // "*" "/" "%" "##" (побитовое XOR)
         Token opToken = currentToken();
         auto right = parseUnary();
         left = std::make_shared<BinaryOpNode>(opToken, left, right, filename);

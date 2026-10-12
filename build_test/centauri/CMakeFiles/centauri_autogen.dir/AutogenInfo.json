@@ -178,6 +178,12 @@
 	"HEADERS" : 
 	[
 		[
+			"/workspace/centauri/src/app/Application.h",
+			"MU",
+			"ISMKEKEPX5/moc_Application.cpp",
+			null
+		],
+		[
 			"/workspace/centauri/src/app/MainWindow.h",
 			"MU",
 			"ISMKEKEPX5/moc_MainWindow.cpp",

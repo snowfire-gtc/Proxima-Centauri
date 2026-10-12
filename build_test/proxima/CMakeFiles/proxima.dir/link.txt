@@ -1,1 +1,1 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/proxima.dir/src/main.cpp.o -o proxima  libproximalib.a 
+/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/proxima.dir/src/main.cpp.o -o proxima  -Wl,-rpath,/usr/lib/llvm-14/lib: libproximalib.a /usr/lib/llvm-14/lib/libLLVM-14.so 

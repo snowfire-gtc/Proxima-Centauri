@@ -4,7 +4,7 @@
 # compile CXX with /usr/bin/c++
 CXX_DEFINES = 
 
-CXX_INCLUDES = -I/usr/lib/llvm-14/include -I/workspace/src
+CXX_INCLUDES = -I/usr/lib/llvm-14/include -I/workspace/proxima/src -I/workspace/proxima/src/compiler -I/workspace/proxima/src/lexer -I/workspace/proxima/src/parser -I/workspace/proxima/src/semantic -I/workspace/proxima/src/codegen -I/workspace/proxima/src/runtime -I/workspace/proxima/src/stdlib -I/workspace/proxima/src/utils -I/workspace/proxima/src/services -I/workspace/proxima/src/core
 
 CXX_FLAGS = -O3 -DNDEBUG -I/usr/lib/llvm-14/include -std=c++14 -fno-exceptions -D_GNU_SOURCE -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -std=gnu++17
 
