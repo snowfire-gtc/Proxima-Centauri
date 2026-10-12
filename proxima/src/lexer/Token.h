@@ -96,6 +96,10 @@ enum class TokenType {
     TYPE_POINT2,        // point2
     TYPE_POINT3,        // point3
     TYPE_POINT4,        // point4
+    TYPE_MATRIX22,      // matrix22
+    TYPE_MATRIX33,      // matrix33
+    TYPE_MATRIX44,      // matrix44
+    TYPE_MATRIX34,      // matrix34
     TYPE_TIME,          // time
     TYPE_FILE,          // file
     TYPE_RTTI,          // rtti
@@ -107,7 +111,7 @@ enum class TokenType {
     OP_STAR,            // *
     OP_SLASH,           // /
     OP_BACKSLASH,       // \ (решение линейных уравнений)
-    OP_PERCENT,         // %
+    OP_INT_DIV,         // % (деление нацело)
     OP_CARET,           // ^
     OP_DOT,             // . (доступ к полям)
     OP_COMMA,           // ,
@@ -124,11 +128,11 @@ enum class TokenType {
     OP_GTE,             // >=
     OP_AND,             // &
     OP_OR,              // |
-    OP_XOR,             // %
+    OP_LOGIC_XOR,       // # (логическое исключающее "или")
     OP_NOT,             // !
     OP_BIN_AND,         // &&
     OP_BIN_OR,          // ||
-    OP_BIN_XOR,         // %%
+    OP_BIN_XOR,         // ## (бинарное/побитовое исключающее "или")
     OP_BIN_NOT,         // !!
     OP_SHIFT_LEFT,      // <<
     OP_SHIFT_RIGHT,     // >>
@@ -137,13 +141,15 @@ enum class TokenType {
     OP_DOT_STAR,        // .*
     OP_DOT_SLASH,       // ./
     OP_DOT_CARET,       // .^
-    OP_DOT_EQ,          // .=
+    OP_DOT_EQ,          // .= (поэлементное сравнение значений)
+    OP_DOT_TYPE_EQ,     // .== (поэлементное сравнение типов)
     OP_DOT_LT,          // .<
     OP_DOT_GT,          // .>
     OP_DOT_LTE,         // .<=
     OP_DOT_GTE,         // .>=
     OP_DOT_AND,         // .& (поэлементное "и")
     OP_DOT_OR,          // .| (поэлементное "или")
+    OP_DOT_XOR,         // .# (поэлементное исключающее "или")
     OP_TRANSPOSE,       // ' (апостроф)
     OP_TERNARY,         // ?:
     OP_AMPERSAND,       // @

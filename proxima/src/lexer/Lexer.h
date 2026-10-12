@@ -61,6 +61,7 @@ private:
     int startLine;                  ///< Начальная строка токена
     int startColumn;                ///< Начальная колонка токена
     std::unordered_map<std::string, TokenType> keywords; ///< Ключевые слова
+    std::unordered_map<std::string, TokenType> directives; ///< Директивы '#...' (регистронезависимый поиск)
 
     /**
      * @brief Инициализация ключевых слов
@@ -90,11 +91,6 @@ private:
     void skipWhitespace();
 
     /**
-     * @brief Пропуск комментариев
-     */
-    void skipComment();
-
-    /**
      * @brief Чтение числа
      * @return Токен числа
      */
@@ -105,6 +101,13 @@ private:
      * @return Токен идентификатора
      */
     Token readIdentifier();
+
+    /**
+     * @brief Чтение директивы вида #intent / #generated / #fixed / #region / #endregion
+     * (символ '#' включается в значение, затем ищется в таблице директив)
+     * @return Токен директивы (COMMENT_SINGLE для неизвестных директив)
+     */
+    Token readDirectiveToken();
 
     /**
      * @brief Чтение строки

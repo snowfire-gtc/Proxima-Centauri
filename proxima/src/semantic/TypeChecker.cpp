@@ -350,8 +350,8 @@ std::string TypeChecker::inferBinaryOpType(BinaryOpNodePtr binop) {
         return "auto";
     }
 
-    // Арифметические операторы
-    if (op == "+" || op == "-" || op == "*" || op == "/" || op == "%" || op == "^" || op == "\\") {
+    // Арифметические операторы ("%" - деление нацело, "##" - побитовое XOR)
+    if (op == "+" || op == "-" || op == "*" || op == "/" || op == "%" || op == "##" || op == "^" || op == "\\") {
         return getCommonType(leftType, rightType);
     }
 
@@ -362,8 +362,8 @@ std::string TypeChecker::inferBinaryOpType(BinaryOpNodePtr binop) {
         return "bool";
     }
 
-    // Логические операторы
-    if (op == "&" || op == "|" || op == "%" || op == "&&" || op == "||" || op == "%%") {
+    // Логические операторы ("#" - логическое исключающее "или")
+    if (op == "&" || op == "|" || op == "#" || op == "&&" || op == "||") {
         return "bool";
     }
 
@@ -762,8 +762,8 @@ bool TypeChecker::checkBinaryOperator(const std::string& op, const std::string& 
         return true;
     }
 
-    // Арифметические операторы
-    if (op == "+" || op == "-" || op == "*" || op == "/" || op == "%" || op == "^") {
+    // Арифметические операторы ("%" - деление нацело, "##" - побитовое исключающее "или")
+    if (op == "+" || op == "-" || op == "*" || op == "/" || op == "%" || op == "##" || op == "^") {
         if (!isNumericType(normLeft) || !isNumericType(normRight)) {
             LOG_WARNING("Arithmetic operator requires numeric types: " + op);
             return false;
@@ -789,9 +789,9 @@ bool TypeChecker::checkBinaryOperator(const std::string& op, const std::string& 
         return isCompatible(normLeft, normRight);
     }
 
-    // Логические операторы
-    if (op == "&" || op == "|" || op == "%" ||
-        op == "&&" || op == "||" || op == "%%") {
+    // Логические операторы ("#" - логическое исключающее "или")
+    if (op == "&" || op == "|" || op == "#" ||
+        op == "&&" || op == "||") {
         if (normLeft != "bool" || normRight != "bool") {
             LOG_WARNING("Logical operator requires bool types: " + op);
             return false;

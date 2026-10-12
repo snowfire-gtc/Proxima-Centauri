@@ -1,1 +1,1 @@
-/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/parser_test.dir/tests/unit/parser_test.cpp.o -o parser_test  libproximalib.a 
+/usr/bin/c++ -O3 -DNDEBUG CMakeFiles/parser_test.dir/tests/unit/parser_test.cpp.o -o parser_test  -Wl,-rpath,/usr/lib/llvm-14/lib libproximalib.a /usr/lib/llvm-14/lib/libLLVM-14.so 

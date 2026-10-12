@@ -1,4 +1,5 @@
 #include "Lexer.h"
+#include <algorithm>
 #include <cctype>
 #include <unordered_map>
 #include "utils/Logger.h"
@@ -12,6 +13,20 @@ namespace proxima {
 Lexer::Lexer(const std::string& source, const std::string& filename)
     : source(source), filename(filename), pos(0), line(1), column(1) {
     initKeywords();
+    // Токены-директивы читаются посимвольно (см. readDirectiveToken),
+    // поэтому регистр ключей директив нормализуем:
+    // "#Intent" -> KEYWORD_INTENT, "#REGION" -> KEYWORD_REGION и т.д.
+    // В keywords директивы зарегистрированы без '#' (например "intent"),
+    // а в токене сохраняют исходное написание с '#' (value = "#intent").
+    for (auto& kv : keywords) {
+        if (kv.first == "intent" || kv.first == "generated" || kv.first == "fixed" ||
+            kv.first == "region" || kv.first == "endregion") {
+            std::string lower = kv.first;
+            std::transform(lower.begin(), lower.end(), lower.begin(),
+                           [](unsigned char c) { return std::tolower(c); });
+            directives["#" + lower] = kv.second;
+        }
+    }
 }
 
 // ============================================================================
@@ -78,10 +93,12 @@ void Lexer::initKeywords() {
     keywords["test"] = TokenType::KEYWORD_TEST;
     keywords["assert"] = TokenType::KEYWORD_ASSERT;
 
-    // LLM директивы
-    keywords["#intent"] = TokenType::KEYWORD_INTENT;
-    keywords["#generated"] = TokenType::KEYWORD_GENERATED;
-    keywords["#fixed"] = TokenType::KEYWORD_FIXED;
+    // LLM директивы и маркеры регионов (спецификация 2.10: "#" — оператор,
+    // поэтому директивы регистрируются без '#': "#region" читается как
+    // '#' + "region" -> KEYWORD_REGION)
+    keywords["intent"] = TokenType::KEYWORD_INTENT;
+    keywords["generated"] = TokenType::KEYWORD_GENERATED;
+    keywords["fixed"] = TokenType::KEYWORD_FIXED;
 
     // Типы данных
     keywords["int4"] = TokenType::TYPE_INT4;
@@ -101,6 +118,10 @@ void Lexer::initKeywords() {
     keywords["point2"] = TokenType::TYPE_POINT2;
     keywords["point3"] = TokenType::TYPE_POINT3;
     keywords["point4"] = TokenType::TYPE_POINT4;
+    keywords["matrix22"] = TokenType::TYPE_MATRIX22;
+    keywords["matrix33"] = TokenType::TYPE_MATRIX33;
+    keywords["matrix44"] = TokenType::TYPE_MATRIX44;
+    keywords["matrix34"] = TokenType::TYPE_MATRIX34;
     keywords["time"] = TokenType::TYPE_TIME;
     keywords["file"] = TokenType::TYPE_FILE;
     keywords["rtti"] = TokenType::TYPE_RTTI;
@@ -134,25 +155,6 @@ void Lexer::advance() {
 void Lexer::skipWhitespace() {
     while (std::isspace(currentChar())) {
         advance();
-    }
-}
-
-void Lexer::skipComment() {
-    if (currentChar() == '/' && peekChar() == '/') {
-        // Однострочный комментарий
-        while (currentChar() != '\n' && currentChar() != '\0') {
-            advance();
-        }
-    } else if (currentChar() == '/' && peekChar() == '*') {
-        // Многострочный комментарий
-        advance(); advance();
-        while (currentChar() != '\0') {
-            if (currentChar() == '*' && peekChar() == '/') {
-                advance(); advance();
-                break;
-            }
-            advance();
-        }
     }
 }
 
@@ -200,6 +202,36 @@ Token Lexer::readIdentifier() {
     }
 
     return makeToken(TokenType::IDENTIFIER, value);
+}
+
+Token Lexer::readDirectiveToken() {
+    // Директивы вида #intent, #generated, #fixed, #region, #endregion
+    startLine = line;
+    startColumn = column;
+    std::string value;
+    value += currentChar(); // '#'
+    advance();
+
+    while (std::isalnum(currentChar()) || currentChar() == '_') {
+        value += currentChar();
+        advance();
+    }
+
+    std::string lower = value;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    auto it = directives.find(lower);
+    if (it != directives.end()) {
+        return makeToken(it->second, value);
+    }
+
+    // Неизвестная директива: сохраняем весь текст до конца строки,
+    // чтобы не потерять комментарий-подобную разметку
+    while (currentChar() != '\n' && currentChar() != '\0') {
+        value += currentChar();
+        advance();
+    }
+    return makeToken(TokenType::COMMENT_SINGLE, value);
 }
 
 Token Lexer::readString() {
@@ -272,7 +304,6 @@ Token Lexer::readOperator() {
             return makeToken(TokenType::OP_PLUS, value);
 
         case '-':
-            if (next == '>') { advance(); value += '>'; return makeToken(TokenType::OP_ASSIGN, value); }
             return makeToken(TokenType::OP_MINUS, value);
 
         case '*':
@@ -287,20 +318,42 @@ Token Lexer::readOperator() {
             return makeToken(TokenType::OP_BACKSLASH, value);
 
         case '%':
-            if (next == '%') { advance(); value += '%'; return makeToken(TokenType::OP_BIN_XOR, value); }
-            if (next == '.') { advance(); value += '.'; return makeToken(TokenType::OP_DOT_EQ, value); }
-            return makeToken(TokenType::OP_PERCENT, value);
+            return makeToken(TokenType::OP_INT_DIV, value); // % - деление нацело
+
+        case '#': {
+            // Директивы: "#region", "#endregion" — маркеры регионов (спецификация 2.1.3),
+            // читаются до буквы/подчёркивания после '#'
+            char after = peekChar();
+            char twoAhead = (pos + 2 < source.length()) ? source[pos + 2] : '\0';
+            if ((after == 'r' || after == 'R') && (twoAhead == 'e' || twoAhead == 'E')) {
+                return readDirectiveToken(); // #region / #endregion
+            }
+            // ## - побитовое исключающее "или" (бинарное XOR)
+            // #  - логическое исключающее "или"
+            if (next == '#') { advance(); value += '#'; return makeToken(TokenType::OP_BIN_XOR, value); }
+            return makeToken(TokenType::OP_LOGIC_XOR, value);
+        }
 
         case '^':
             if (next == '.') { advance(); value += '.'; return makeToken(TokenType::OP_DOT_CARET, value); }
             return makeToken(TokenType::OP_CARET, value);
 
         case '.':
-            if (next == '=') { advance(); value += '='; return makeToken(TokenType::OP_DOT_EQ, value); }
+            if (next == '=') {
+                advance();
+                value += '=';
+                if (currentChar() == '=') { // .= и .== различаем по третьему символу
+                    advance();
+                    value += '=';
+                    return makeToken(TokenType::OP_DOT_TYPE_EQ, value); // .==
+                }
+                return makeToken(TokenType::OP_DOT_EQ, value); // .=
+            }
             if (next == '<') { advance(); value += '<'; return makeToken(TokenType::OP_DOT_LT, value); }
             if (next == '>') { advance(); value += '>'; return makeToken(TokenType::OP_DOT_GT, value); }
             if (next == '&') { advance(); value += '&'; return makeToken(TokenType::OP_DOT_AND, value); }
             if (next == '|') { advance(); value += '|'; return makeToken(TokenType::OP_DOT_OR, value); }
+            if (next == '#') { advance(); value += '#'; return makeToken(TokenType::OP_DOT_XOR, value); }
             return makeToken(TokenType::OP_DOT, value);
 
         case ',':
@@ -315,12 +368,12 @@ Token Lexer::readOperator() {
         case '=':
             if (next == '=') {
                 advance();
+                value += '=';
                 if (peekChar() == '=') {
                     advance();
                     value += '=';
                     return makeToken(TokenType::OP_TYPE_EQ, value); // ===
                 }
-                value += '=';
                 return makeToken(TokenType::OP_EQ, value); // ==
             }
             return makeToken(TokenType::OP_ASSIGN, value);
@@ -339,7 +392,7 @@ Token Lexer::readOperator() {
             if (next == '=') {
                 advance();
                 value += '=';
-                if (peekChar() == '=') {
+                if (currentChar() == '=') { // третий символ ещё не потреблён, peekChar() был бы неверен
                     advance();
                     value += '=';
                     return makeToken(TokenType::OP_TYPE_NEQ, value); // !==
@@ -365,6 +418,9 @@ Token Lexer::readOperator() {
 
         case '\'':
             return makeToken(TokenType::OP_TRANSPOSE, value);
+
+        case '@':
+            return makeToken(TokenType::OP_AMPERSAND, value);
 
         case '(':
             return makeToken(TokenType::DELIM_LPAREN, value);
@@ -399,11 +455,40 @@ Token Lexer::makeToken(TokenType type, const std::string& value) {
 
 Token Lexer::nextToken() {
     skipWhitespace();
-    skipComment();
-    skipWhitespace();
 
     startLine = line;
     startColumn = column;
+
+    // Комментарии возвращаем как токены (спецификация 2.1: блочные комментарии
+    // могут быть именованными /*имя ... */имя — информация нужна парсеру/IDE).
+    if (currentChar() == '/' && peekChar() == '/') {
+        std::string value;
+        while (currentChar() != '\n' && currentChar() != '\0') {
+            value += currentChar();
+            advance();
+        }
+        return makeToken(TokenType::COMMENT_SINGLE, value);
+    }
+    if (currentChar() == '/' && peekChar() == '*') {
+        std::string value;
+        value += currentChar(); advance();
+        value += currentChar(); advance();
+        while (currentChar() != '\0') {
+            if (currentChar() == '*' && peekChar() == '/') {
+                value += "*/";
+                advance(); advance();
+                // Имя закрывающего блока (2.1.2.1): читаем идущие сразу символы до конца строки
+                while (currentChar() != '\n' && currentChar() != '\0' && !std::isspace(currentChar())) {
+                    value += currentChar();
+                    advance();
+                }
+                break;
+            }
+            value += currentChar();
+            advance();
+        }
+        return makeToken(TokenType::COMMENT_MULTI, value);
+    }
 
     if (currentChar() == '\0') {
         return makeToken(TokenType::EOF_TOKEN, "");
@@ -411,6 +496,19 @@ Token Lexer::nextToken() {
 
     if (std::isdigit(currentChar())) {
         return readNumber();
+    }
+
+    // LLM директивы (спецификация 7.2/7.3): "#intent ... #end", "#generated", "#fixed".
+    // Читаются только если после '#' идёт буква/подчёркивание, но НЕ 'r'/'R'
+    // ("#region"/"#endregion" — маркеры регионов, обрабатываются в readOperator).
+    // Операторы "##" и ".#" имеют приоритет: директива читается лишь при наличии имени.
+    if (currentChar() == '#' && (std::isalpha(peekChar()) || peekChar() == '_')) {
+        char after = peekChar();
+        char twoAhead = (pos + 2 < source.length()) ? source[pos + 2] : '\0';
+        bool isRegionMarker = (after == 'r' || after == 'R') && (twoAhead == 'e' || twoAhead == 'E');
+        if (!isRegionMarker) {
+            return readDirectiveToken();
+        }
     }
 
     if (std::isalpha(currentChar()) || currentChar() == '_') {

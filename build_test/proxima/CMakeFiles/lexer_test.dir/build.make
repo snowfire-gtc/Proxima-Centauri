@@ -93,6 +93,7 @@ lexer_test_EXTERNAL_OBJECTS =
 proxima/lexer_test: proxima/CMakeFiles/lexer_test.dir/tests/unit/lexer_test.cpp.o
 proxima/lexer_test: proxima/CMakeFiles/lexer_test.dir/build.make
 proxima/lexer_test: proxima/libproximalib.a
+proxima/lexer_test: /usr/lib/llvm-14/lib/libLLVM-14.so
 proxima/lexer_test: proxima/CMakeFiles/lexer_test.dir/link.txt
 	@$(CMAKE_COMMAND) -E cmake_echo_color --switch=$(COLOR) --green --bold --progress-dir=/workspace/build_test/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Linking CXX executable lexer_test"
 	cd /workspace/build_test/proxima && $(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/lexer_test.dir/link.txt --verbose=$(VERBOSE)

@@ -58,6 +58,33 @@ void testOperators() {
     std::cout << "✓ testOperators passed" << std::endl;
 }
 
+void testXorOperators() {
+    // "%" - деление нацело, "#" - логическое XOR, "##" - побитовое XOR, ".#" - поэлементное XOR
+    Lexer lexer("% # ## .#");
+    auto tokens = lexer.tokenize();
+
+    assert(tokens[0].type == TokenType::OP_INT_DIV);   // %
+    assert(tokens[1].type == TokenType::OP_LOGIC_XOR); // #
+    assert(tokens[1].value == "#");
+    assert(tokens[2].type == TokenType::OP_BIN_XOR);   // ##
+    assert(tokens[2].value == "##");
+    assert(tokens[3].type == TokenType::OP_DOT_XOR);   // .#
+    assert(tokens[3].value == ".#");
+
+    // Директивы не конфликтуют с операторами: "#intent" — директива, "a#b" — оператор
+    Lexer lexer2("#intent a#b c##d");
+    auto t2 = lexer2.tokenize();
+    assert(t2[0].value == "#intent");
+    assert(t2[1].type == TokenType::IDENTIFIER && t2[1].value == "a");
+    assert(t2[2].type == TokenType::OP_LOGIC_XOR);
+    assert(t2[3].type == TokenType::IDENTIFIER && t2[3].value == "b");
+    assert(t2[4].type == TokenType::IDENTIFIER && t2[4].value == "c");
+    assert(t2[5].type == TokenType::OP_BIN_XOR);
+    assert(t2[6].type == TokenType::IDENTIFIER && t2[6].value == "d");
+
+    std::cout << "✓ testXorOperators passed" << std::endl;
+}
+
 int main() {
     std::cout << "Running lexer tests..." << std::endl;
     
@@ -65,6 +92,7 @@ int main() {
     testStrings();
     testKeywords();
     testOperators();
+    testXorOperators();
     
     std::cout << "All lexer tests passed!" << std::endl;
     return 0;

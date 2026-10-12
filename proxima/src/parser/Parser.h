@@ -43,6 +43,7 @@ public:
     ProgramNodePtr parse();
 
 private:
+    static std::vector<Token> filterComments(const std::vector<Token>& in);
     std::vector<Token> tokens;    ///< Вектор токенов
     size_t pos;                    ///< Текущая позиция
     std::string filename;          ///< Имя файла

@@ -172,6 +172,18 @@ llvm::Value* LLVMCodeGen::createBinaryOp(const std::string& op, llvm::Value* lef
         }
         return builder->CreateICmpSGT(left, right);
     }
+    if (op == "%") { // деление нацело
+        return builder->CreateSDiv(left, right);
+    }
+    if (op == "##") { // побитовое исключающее "или" (бинарное XOR)
+        return builder->CreateXor(left, right);
+    }
+    if (op == "#") { // логическое исключающее "или": (a|b) & ~(a&b)
+        llvm::Value* orv = builder->CreateOr(left, right);
+        llvm::Value* andv = builder->CreateAnd(left, right);
+        llvm::Value* notand = builder->CreateNot(andv);
+        return builder->CreateAnd(orv, notand);
+    }
     
     return nullptr;
 }
